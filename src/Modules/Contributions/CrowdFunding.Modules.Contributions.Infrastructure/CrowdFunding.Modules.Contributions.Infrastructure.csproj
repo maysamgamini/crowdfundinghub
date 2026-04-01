@@ -1,0 +1,15 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\CrowdFunding.Modules.Contributions.Application\CrowdFunding.Modules.Contributions.Application.csproj" />
+    <ProjectReference Include="..\CrowdFunding.Modules.Contributions.Domain\CrowdFunding.Modules.Contributions.Domain.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\CrowdFunding.BuildingBlocks.Infrastructure\CrowdFunding.BuildingBlocks.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

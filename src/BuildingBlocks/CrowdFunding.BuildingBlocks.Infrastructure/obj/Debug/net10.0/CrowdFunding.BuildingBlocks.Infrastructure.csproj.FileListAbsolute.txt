@@ -1,0 +1,17 @@
+C:\Repos\crowd-funding-hub\crowdfundinghub\src\BuildingBlocks\CrowdFunding.BuildingBlocks.Infrastructure\bin\Debug\net10.0\CrowdFunding.BuildingBlocks.Infrastructure.deps.json
+C:\Repos\crowd-funding-hub\crowdfundinghub\src\BuildingBlocks\CrowdFunding.BuildingBlocks.Infrastructure\bin\Debug\net10.0\CrowdFunding.BuildingBlocks.Infrastructure.dll
+C:\Repos\crowd-funding-hub\crowdfundinghub\src\BuildingBlocks\CrowdFunding.BuildingBlocks.Infrastructure\bin\Debug\net10.0\CrowdFunding.BuildingBlocks.Infrastructure.pdb
+C:\Repos\crowd-funding-hub\crowdfundinghub\src\BuildingBlocks\CrowdFunding.BuildingBlocks.Infrastructure\bin\Debug\net10.0\CrowdFunding.BuildingBlocks.Application.dll
+C:\Repos\crowd-funding-hub\crowdfundinghub\src\BuildingBlocks\CrowdFunding.BuildingBlocks.Infrastructure\bin\Debug\net10.0\CrowdFunding.BuildingBlocks.Domain.dll
+C:\Repos\crowd-funding-hub\crowdfundinghub\src\BuildingBlocks\CrowdFunding.BuildingBlocks.Infrastructure\bin\Debug\net10.0\CrowdFunding.BuildingBlocks.Application.pdb
+C:\Repos\crowd-funding-hub\crowdfundinghub\src\BuildingBlocks\CrowdFunding.BuildingBlocks.Infrastructure\bin\Debug\net10.0\CrowdFunding.BuildingBlocks.Domain.pdb
+C:\Repos\crowd-funding-hub\crowdfundinghub\src\BuildingBlocks\CrowdFunding.BuildingBlocks.Infrastructure\obj\Debug\net10.0\CrowdFunding.BuildingBlocks.Infrastructure.csproj.AssemblyReference.cache
+C:\Repos\crowd-funding-hub\crowdfundinghub\src\BuildingBlocks\CrowdFunding.BuildingBlocks.Infrastructure\obj\Debug\net10.0\CrowdFunding.BuildingBlocks.Infrastructure.GeneratedMSBuildEditorConfig.editorconfig
+C:\Repos\crowd-funding-hub\crowdfundinghub\src\BuildingBlocks\CrowdFunding.BuildingBlocks.Infrastructure\obj\Debug\net10.0\CrowdFunding.BuildingBlocks.Infrastructure.AssemblyInfoInputs.cache
+C:\Repos\crowd-funding-hub\crowdfundinghub\src\BuildingBlocks\CrowdFunding.BuildingBlocks.Infrastructure\obj\Debug\net10.0\CrowdFunding.BuildingBlocks.Infrastructure.AssemblyInfo.cs
+C:\Repos\crowd-funding-hub\crowdfundinghub\src\BuildingBlocks\CrowdFunding.BuildingBlocks.Infrastructure\obj\Debug\net10.0\CrowdFunding.BuildingBlocks.Infrastructure.csproj.CoreCompileInputs.cache
+C:\Repos\crowd-funding-hub\crowdfundinghub\src\BuildingBlocks\CrowdFunding.BuildingBlocks.Infrastructure\obj\Debug\net10.0\CrowdFun.E92AD0A4.Up2Date
+C:\Repos\crowd-funding-hub\crowdfundinghub\src\BuildingBlocks\CrowdFunding.BuildingBlocks.Infrastructure\obj\Debug\net10.0\CrowdFunding.BuildingBlocks.Infrastructure.dll
+C:\Repos\crowd-funding-hub\crowdfundinghub\src\BuildingBlocks\CrowdFunding.BuildingBlocks.Infrastructure\obj\Debug\net10.0\refint\CrowdFunding.BuildingBlocks.Infrastructure.dll
+C:\Repos\crowd-funding-hub\crowdfundinghub\src\BuildingBlocks\CrowdFunding.BuildingBlocks.Infrastructure\obj\Debug\net10.0\CrowdFunding.BuildingBlocks.Infrastructure.pdb
+C:\Repos\crowd-funding-hub\crowdfundinghub\src\BuildingBlocks\CrowdFunding.BuildingBlocks.Infrastructure\obj\Debug\net10.0\ref\CrowdFunding.BuildingBlocks.Infrastructure.dll

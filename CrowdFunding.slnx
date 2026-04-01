@@ -1,0 +1,52 @@
+<Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/src/API/">
+    <Project Path="src/API/CrowdFunding.API/CrowdFunding.API.csproj" />
+  </Folder>
+  <Folder Name="/src/BuildingBlocks/">
+    <Project Path="src/BuildingBlocks/CrowdFunding.BuildingBlocks.Application/CrowdFunding.BuildingBlocks.Application.csproj" />
+    <Project Path="src/BuildingBlocks/CrowdFunding.BuildingBlocks.Domain/CrowdFunding.BuildingBlocks.Domain.csproj" />
+    <Project Path="src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/CrowdFunding.BuildingBlocks.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/" />
+  <Folder Name="/src/Modules/Campaigns/">
+    <Project Path="src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Application/CrowdFunding.Modules.Campaigns.Application.csproj" />
+    <Project Path="src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/CrowdFunding.Modules.Campaigns.Domain.csproj" />
+    <Project Path="src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/CrowdFunding.Modules.Campaigns.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/CampaignUpdates/">
+    <Project Path="src/Modules/CampaignUpdates/CrowdFunding.Modules.CampaignUpdates.Application/CrowdFunding.Modules.CampaignUpdates.Application.csproj" />
+    <Project Path="src/Modules/CampaignUpdates/CrowdFunding.Modules.CampaignUpdates.Domain/CrowdFunding.Modules.CampaignUpdates.Domain.csproj" />
+    <Project Path="src/Modules/CampaignUpdates/CrowdFunding.Modules.CampaignUpdates.Infrastructure/CrowdFunding.Modules.CampaignUpdates.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Contributions/">
+    <Project Path="src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/CrowdFunding.Modules.Contributions.Application.csproj" />
+    <Project Path="src/Modules/Contributions/CrowdFunding.Modules.Contributions.Domain/CrowdFunding.Modules.Contributions.Domain.csproj" />
+    <Project Path="src/Modules/Contributions/CrowdFunding.Modules.Contributions.Infrastructure/CrowdFunding.Modules.Contributions.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Identity/">
+    <Project Path="src/Modules/Identity/CrowdFunding.Modules.Identity.Application/CrowdFunding.Modules.Identity.Application.csproj" />
+    <Project Path="src/Modules/Identity/CrowdFunding.Modules.Identity.Domain/CrowdFunding.Modules.Identity.Domain.csproj" />
+    <Project Path="src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/CrowdFunding.Modules.Identity.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Moderation/">
+    <Project Path="src/Modules/Moderation/CrowdFunding.Modules.Moderation.Application/CrowdFunding.Modules.Moderation.Application.csproj" />
+    <Project Path="src/Modules/Moderation/CrowdFunding.Modules.Moderation.Domain/CrowdFunding.Modules.Moderation.Domain.csproj" />
+    <Project Path="src/Modules/Moderation/CrowdFunding.Modules.Moderation.Infrastructure/CrowdFunding.Modules.Moderation.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Notifications/">
+    <Project Path="src/Modules/Notifications/CrowdFunding.Modules.Notifications.Application/CrowdFunding.Modules.Notifications.Application.csproj" />
+    <Project Path="src/Modules/Notifications/CrowdFunding.Modules.Notifications.Domain/CrowdFunding.Modules.Notifications.Domain.csproj" />
+    <Project Path="src/Modules/Notifications/CrowdFunding.Modules.Notifications.Infrastructure/CrowdFunding.Modules.Notifications.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/" />
+  <Folder Name="/tests/ArchitectureTests/">
+    <Project Path="tests/ArchitectureTests/CrowdFunding.ArchitectureTests/CrowdFunding.ArchitectureTests.csproj" />
+  </Folder>
+  <Folder Name="/tests/IntegrationTests/">
+    <Project Path="tests/IntegrationTests/CrowdFunding.IntegrationTests/CrowdFunding.IntegrationTests.csproj" />
+  </Folder>
+  <Folder Name="/tests/UnitTests/">
+    <Project Path="tests/UnitTests/CrowdFunding.UnitTests/CrowdFunding.UnitTests.csproj" />
+  </Folder>
+</Solution>

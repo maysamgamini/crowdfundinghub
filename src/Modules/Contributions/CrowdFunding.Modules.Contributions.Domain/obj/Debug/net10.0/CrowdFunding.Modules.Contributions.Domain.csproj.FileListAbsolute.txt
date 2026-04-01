@@ -1,0 +1,11 @@
+C:\Repos\crowd-funding-hub\crowdfundinghub\src\Modules\Contributions\CrowdFunding.Modules.Contributions.Domain\bin\Debug\net10.0\CrowdFunding.Modules.Contributions.Domain.deps.json
+C:\Repos\crowd-funding-hub\crowdfundinghub\src\Modules\Contributions\CrowdFunding.Modules.Contributions.Domain\bin\Debug\net10.0\CrowdFunding.Modules.Contributions.Domain.dll
+C:\Repos\crowd-funding-hub\crowdfundinghub\src\Modules\Contributions\CrowdFunding.Modules.Contributions.Domain\bin\Debug\net10.0\CrowdFunding.Modules.Contributions.Domain.pdb
+C:\Repos\crowd-funding-hub\crowdfundinghub\src\Modules\Contributions\CrowdFunding.Modules.Contributions.Domain\obj\Debug\net10.0\CrowdFunding.Modules.Contributions.Domain.GeneratedMSBuildEditorConfig.editorconfig
+C:\Repos\crowd-funding-hub\crowdfundinghub\src\Modules\Contributions\CrowdFunding.Modules.Contributions.Domain\obj\Debug\net10.0\CrowdFunding.Modules.Contributions.Domain.AssemblyInfoInputs.cache
+C:\Repos\crowd-funding-hub\crowdfundinghub\src\Modules\Contributions\CrowdFunding.Modules.Contributions.Domain\obj\Debug\net10.0\CrowdFunding.Modules.Contributions.Domain.AssemblyInfo.cs
+C:\Repos\crowd-funding-hub\crowdfundinghub\src\Modules\Contributions\CrowdFunding.Modules.Contributions.Domain\obj\Debug\net10.0\CrowdFunding.Modules.Contributions.Domain.csproj.CoreCompileInputs.cache
+C:\Repos\crowd-funding-hub\crowdfundinghub\src\Modules\Contributions\CrowdFunding.Modules.Contributions.Domain\obj\Debug\net10.0\CrowdFunding.Modules.Contributions.Domain.dll
+C:\Repos\crowd-funding-hub\crowdfundinghub\src\Modules\Contributions\CrowdFunding.Modules.Contributions.Domain\obj\Debug\net10.0\refint\CrowdFunding.Modules.Contributions.Domain.dll
+C:\Repos\crowd-funding-hub\crowdfundinghub\src\Modules\Contributions\CrowdFunding.Modules.Contributions.Domain\obj\Debug\net10.0\CrowdFunding.Modules.Contributions.Domain.pdb
+C:\Repos\crowd-funding-hub\crowdfundinghub\src\Modules\Contributions\CrowdFunding.Modules.Contributions.Domain\obj\Debug\net10.0\ref\CrowdFunding.Modules.Contributions.Domain.dll
