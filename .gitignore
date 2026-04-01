@@ -1,0 +1,44 @@
+# Build output
+bin/
+obj/
+
+# IDE and editor folders
+.vs/
+.vscode/
+.idea/
+.history/
+
+# User-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.rsuser
+*.sln.iml
+
+# Test and coverage output
+TestResults/
+coverage/
+
+# Tooling caches
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+*.ncrunch*
+.*crunch*.local.xml
+*.dotCover
+
+# Packaging and publish output
+*.nupkg
+.publish/
+
+# Logs and OS files
+*.log
+Thumbs.db
+.DS_Store
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# ASP.NET scaffolding
+ScaffoldingReadMe.txt
