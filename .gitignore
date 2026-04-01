@@ -7,6 +7,7 @@ obj/
 .vscode/
 .idea/
 .history/
+.dotnet/
 
 # User-specific files
 *.user
@@ -42,3 +43,4 @@ Thumbs.db
 
 # ASP.NET scaffolding
 ScaffoldingReadMe.txt
+.dotnet/10.0.201.aspNetCertificateSentinel
