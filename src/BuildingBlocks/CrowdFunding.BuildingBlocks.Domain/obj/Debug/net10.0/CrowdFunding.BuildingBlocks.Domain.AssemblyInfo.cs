@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("CrowdFunding.BuildingBlocks.Domain")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+015084bf45101d3bac4f6b2edc312dd2ef4d2bc6")]
 [assembly: System.Reflection.AssemblyProductAttribute("CrowdFunding.BuildingBlocks.Domain")]
 [assembly: System.Reflection.AssemblyTitleAttribute("CrowdFunding.BuildingBlocks.Domain")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
