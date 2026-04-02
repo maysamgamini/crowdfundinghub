@@ -1,17 +1,34 @@
+using CrowdFunding.API.Mapping;
+using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.CreateCampaign;
+using CrowdFunding.Modules.Campaigns.Infrastructure.DependencyInjection;
+using Mapster;
+using MapsterMapper;
+using FluentValidation;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-
 builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+builder.Services.AddCampaignsModule(builder.Configuration);
+
+builder.Services.AddScoped<CreateCampaignCommandHandler>();
+builder.Services.AddScoped<IValidator<CreateCampaignCommand>, CreateCampaignCommandValidator>();
+
+var typeAdapterConfig = new TypeAdapterConfig();
+CampaignsMappingConfig.Register(typeAdapterConfig);
+
+builder.Services.AddSingleton(typeAdapterConfig);
+builder.Services.AddScoped<IMapper, ServiceMapper>();
+
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
 
 app.UseHttpsRedirection();

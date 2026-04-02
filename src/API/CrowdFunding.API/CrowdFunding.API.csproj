@@ -7,7 +7,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Mapster" Version="10.0.6" />
+    <PackageReference Include="Mapster.DependencyInjection" Version="10.0.6" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.5" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.5">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.7" />
   </ItemGroup>
 
   <ItemGroup>
@@ -17,6 +24,7 @@
     <ProjectReference Include="..\..\Modules\CampaignUpdates\CrowdFunding.Modules.CampaignUpdates.Infrastructure\CrowdFunding.Modules.CampaignUpdates.Infrastructure.csproj" />
     <ProjectReference Include="..\..\Modules\Notifications\CrowdFunding.Modules.Notifications.Infrastructure\CrowdFunding.Modules.Notifications.Infrastructure.csproj" />
     <ProjectReference Include="..\..\Modules\Moderation\CrowdFunding.Modules.Moderation.Infrastructure\CrowdFunding.Modules.Moderation.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Modules\Campaigns\CrowdFunding.Modules.Campaigns.Application\CrowdFunding.Modules.Campaigns.Application.csproj" />
   </ItemGroup>
 
 </Project>

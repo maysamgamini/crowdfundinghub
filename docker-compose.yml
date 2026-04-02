@@ -1,0 +1,17 @@
+version: '3.9'
+
+services:
+  crowdfunding-db:
+    image: postgres:16
+    container_name: crowdfunding-db
+    environment:
+      POSTGRES_DB: crowdfundingdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - crowdfunding_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  crowdfunding_postgres_data:
