@@ -1,6 +1,27 @@
-﻿namespace CrowdFunding.Modules.Campaigns.Application;
+﻿using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
 
-public class GetCampaignByIdQueryHandler
+namespace CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.GetCampaignById;
+
+public sealed class GetCampaignByIdQueryHandler
 {
+    private readonly ICampaignReadService _campaignReadService;
 
+    public GetCampaignByIdQueryHandler(ICampaignReadService campaignReadService)
+    {
+        _campaignReadService = campaignReadService;
+    }
+
+    public async Task<GetCampaignByIdResult> Handle(
+        GetCampaignByIdQuery query,
+        CancellationToken cancellationToken)
+    {
+        var campaign = await _campaignReadService.GetByIdAsync(query.CampaignId, cancellationToken);
+
+        if (campaign is null)
+        {
+            throw new KeyNotFoundException($"Campaign with id '{query.CampaignId}' was not found.");
+        }
+
+        return campaign;
+    }
 }
