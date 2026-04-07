@@ -1,9 +1,4 @@
-﻿using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
-using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
-using CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.DbContexts;
-using CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Repositories;
-using CrowdFunding.Modules.Campaigns.Infrastructure.Services;
-using Microsoft.EntityFrameworkCore;
+using CrowdFunding.Modules.Campaigns.Application.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -15,14 +10,8 @@ public static class CampaignsModuleServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString("DefaultConnection")
-                               ?? throw new InvalidOperationException("Connection string 'DefaultConnection' was not found.");
-
-        services.AddDbContext<CampaignsDbContext>(options =>
-            options.UseNpgsql(connectionString));
-
-        services.AddScoped<ICampaignRepository, CampaignRepository>();
-        services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();
+        services.AddCampaignsApplication();
+        services.AddCampaignsInfrastructure(configuration);
 
         return services;
     }
