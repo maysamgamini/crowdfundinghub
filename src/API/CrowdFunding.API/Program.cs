@@ -5,16 +5,21 @@ using CrowdFunding.API.Security;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.Campaigns.Application.DependencyInjection;
 using CrowdFunding.Modules.Campaigns.Infrastructure.DependencyInjection;
+using CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.Contributions.Application.DependencyInjection;
 using CrowdFunding.Modules.Contributions.Infrastructure.DependencyInjection;
+using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
 using CrowdFunding.Modules.Identity.Application.DependencyInjection;
 using CrowdFunding.Modules.Identity.Infrastructure.DependencyInjection;
+using CrowdFunding.Modules.Identity.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.Moderation.Application.DependencyInjection;
 using CrowdFunding.Modules.Moderation.Infrastructure.DependencyInjection;
+using CrowdFunding.Modules.Moderation.Infrastructure.Persistence.DbContexts;
 using Mapster;
 using MapsterMapper;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -82,6 +87,7 @@ var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
+    await app.ApplyMigrationsAsync();
     app.UseSwagger();
     app.UseSwaggerUI();
 }
@@ -96,3 +102,23 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+static class StartupDatabaseMigrationExtensions
+{
+    public static async Task ApplyMigrationsAsync(this WebApplication app)
+    {
+        await using var scope = app.Services.CreateAsyncScope();
+
+        await MigrateAsync<CampaignsDbContext>(scope.ServiceProvider);
+        await MigrateAsync<ContributionsDbContext>(scope.ServiceProvider);
+        await MigrateAsync<IdentityDbContext>(scope.ServiceProvider);
+        await MigrateAsync<ModerationDbContext>(scope.ServiceProvider);
+    }
+
+    private static async Task MigrateAsync<TContext>(IServiceProvider serviceProvider)
+        where TContext : DbContext
+    {
+        var dbContext = serviceProvider.GetRequiredService<TContext>();
+        await dbContext.Database.MigrateAsync();
+    }
+}
