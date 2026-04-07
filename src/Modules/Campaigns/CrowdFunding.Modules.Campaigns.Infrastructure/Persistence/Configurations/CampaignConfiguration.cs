@@ -1,5 +1,5 @@
-﻿using CrowdFunding.Modules.Campaigns.Domain.Aggregates;
-using CrowdFunding.Modules.Campaigns.Domain.ValueObjects;
+using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
+using CrowdFunding.Modules.Campaigns.Domain.Aggregates;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 

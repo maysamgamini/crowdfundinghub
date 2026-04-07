@@ -1,4 +1,4 @@
-﻿
+
 /*
 What is a valid campaign?
 When can a campaign be published?
@@ -6,11 +6,10 @@ When can a campaign accept contributions?
 What state transitions are allowed?
 What makes money valid?
 */
+using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Campaigns.Domain.Enums;
-using CrowdFunding.Modules.Campaigns.Domain.ValueObjects;
 
 namespace CrowdFunding.Modules.Campaigns.Domain.Aggregates;
-
 
 /// <summary>
 /// Represents a crowdfunding campaign aggregate root.
@@ -72,17 +71,6 @@ public sealed class Campaign
     /// </summary>
     private Campaign() { }
 
-    /// <summary>
-    /// Private constructor for creating a new campaign instance.
-    /// </summary>
-    /// <param name="id">Campaign identifier.</param>
-    /// <param name="ownerId">Owner identifier.</param>
-    /// <param name="title">Campaign title.</param>
-    /// <param name="story">Campaign story.</param>
-    /// <param name="category">Campaign category.</param>
-    /// <param name="goalAmount">Goal amount.</param>
-    /// <param name="deadlineUtc">Deadline in UTC.</param>
-    /// <param name="createdAtUtc">Creation date in UTC.</param>
     private Campaign(
         Guid id,
         Guid ownerId,
@@ -99,26 +87,12 @@ public sealed class Campaign
         Story = story;
         Category = category;
         GoalAmount = goalAmount;
-        // Initialize raised amount to zero in the same currency as the goal
         RaisedAmount = Money.Zero(goalAmount.Currency);
         DeadlineUtc = deadlineUtc;
         CreatedAtUtc = createdAtUtc;
-        // New campaigns start as Draft
         Status = CampaignStatus.Draft;
     }
 
-
-    /// <summary>
-    /// Factory method to create a new campaign with validation.
-    /// </summary>
-    /// <param name="ownerId">Owner identifier.</param>
-    /// <param name="title">Campaign title.</param>
-    /// <param name="story">Campaign story.</param>
-    /// <param name="category">Campaign category.</param>
-    /// <param name="goalAmount">Goal amount.</param>
-    /// <param name="deadlineUtc">Deadline in UTC.</param>
-    /// <param name="createdAtUtc">Creation date in UTC.</param>
-    /// <returns>A new <see cref="Campaign"/> instance.</returns>
     public static Campaign Create(
         Guid ownerId,
         string title,
@@ -128,7 +102,6 @@ public sealed class Campaign
         DateTime deadlineUtc,
         DateTime createdAtUtc)
     {
-        // Validate all input parameters
         ValidateOwner(ownerId);
         ValidateTitle(title);
         ValidateStory(story);
@@ -136,7 +109,6 @@ public sealed class Campaign
         ValidateGoalAmount(goalAmount);
         ValidateDeadline(deadlineUtc, createdAtUtc);
 
-        // Create and return a new campaign instance
         return new Campaign(
             Guid.NewGuid(),
             ownerId,
@@ -148,21 +120,13 @@ public sealed class Campaign
             createdAtUtc);
     }
 
-
-    /// <summary>
-    /// Publishes the campaign if it is in Draft and deadline is in the future.
-    /// </summary>
-    /// <param name="currentUtc">The current UTC time.</param>
-    /// <exception cref="InvalidOperationException">Thrown if the campaign cannot be published.</exception>
     public void Publish(DateTime currentUtc)
     {
-        // Only allow publishing from Draft state
         if (Status != CampaignStatus.Draft)
         {
             throw new InvalidOperationException("Only draft campaigns can be published.");
         }
 
-        // Deadline must be in the future
         if (DeadlineUtc <= currentUtc)
         {
             throw new InvalidOperationException("Cannot publish a campaign with a past deadline.");
@@ -171,11 +135,6 @@ public sealed class Campaign
         Status = CampaignStatus.Published;
     }
 
-
-    /// <summary>
-    /// Cancels the campaign unless it is already completed (Successful or Failed).
-    /// </summary>
-    /// <exception cref="InvalidOperationException">Thrown if the campaign cannot be cancelled.</exception>
     public void Cancel()
     {
         if (Status == CampaignStatus.Successful || Status == CampaignStatus.Failed)
@@ -186,16 +145,8 @@ public sealed class Campaign
         Status = CampaignStatus.Cancelled;
     }
 
-
-    /// <summary>
-    /// Adds a contribution to the campaign if it is published and the amount is valid.
-    /// </summary>
-    /// <param name="contribution">The contribution to add.</param>
-    /// <exception cref="InvalidOperationException">Thrown if the campaign cannot receive contributions or the amount is invalid.</exception>
-    /// <exception cref="ArgumentNullException">Thrown if the contribution is null.</exception>
     public void AddContribution(Money contribution)
     {
-        // Only published campaigns can receive contributions
         if (Status != CampaignStatus.Published)
         {
             throw new InvalidOperationException("Only published campaigns can receive contributions.");
@@ -211,16 +162,9 @@ public sealed class Campaign
             throw new InvalidOperationException("Contribution amount must be greater than zero.");
         }
 
-        // Add the contribution to the raised amount
         RaisedAmount = RaisedAmount.Add(contribution);
     }
 
-
-    /// <summary>
-    /// Validates that the owner ID is not empty.
-    /// </summary>
-    /// <param name="ownerId">Owner identifier.</param>
-    /// <exception cref="ArgumentException">Thrown if the ownerId is empty.</exception>
     private static void ValidateOwner(Guid ownerId)
     {
         if (ownerId == Guid.Empty)
@@ -229,12 +173,6 @@ public sealed class Campaign
         }
     }
 
-
-    /// <summary>
-    /// Validates the campaign title (required, max 200 chars).
-    /// </summary>
-    /// <param name="title">Campaign title.</param>
-    /// <exception cref="ArgumentException">Thrown if the title is invalid.</exception>
     private static void ValidateTitle(string title)
     {
         if (string.IsNullOrWhiteSpace(title))
@@ -248,12 +186,6 @@ public sealed class Campaign
         }
     }
 
-
-    /// <summary>
-    /// Validates the campaign story (required, min 20 chars).
-    /// </summary>
-    /// <param name="story">Campaign story.</param>
-    /// <exception cref="ArgumentException">Thrown if the story is invalid.</exception>
     private static void ValidateStory(string story)
     {
         if (string.IsNullOrWhiteSpace(story))
@@ -267,12 +199,6 @@ public sealed class Campaign
         }
     }
 
-
-    /// <summary>
-    /// Validates the campaign category (required, max 100 chars).
-    /// </summary>
-    /// <param name="category">Campaign category.</param>
-    /// <exception cref="ArgumentException">Thrown if the category is invalid.</exception>
     private static void ValidateCategory(string category)
     {
         if (string.IsNullOrWhiteSpace(category))
@@ -286,13 +212,6 @@ public sealed class Campaign
         }
     }
 
-
-    /// <summary>
-    /// Validates the goal amount (required, &gt; 0).
-    /// </summary>
-    /// <param name="goalAmount">Goal amount.</param>
-    /// <exception cref="ArgumentNullException">Thrown if the goal amount is null.</exception>
-    /// <exception cref="ArgumentException">Thrown if the goal amount is invalid.</exception>
     private static void ValidateGoalAmount(Money goalAmount)
     {
         if (goalAmount is null)
@@ -306,12 +225,6 @@ public sealed class Campaign
         }
     }
 
-    /// <summary>
-    /// Validates that the deadline is after the creation date.
-    /// </summary>
-    /// <param name="deadlineUtc">Deadline in UTC.</param>
-    /// <param name="createdAtUtc">Creation date in UTC.</param>
-    /// <exception cref="ArgumentException">Thrown if the deadline is not in the future.</exception>
     private static void ValidateDeadline(DateTime deadlineUtc, DateTime createdAtUtc)
     {
         if (deadlineUtc <= createdAtUtc)

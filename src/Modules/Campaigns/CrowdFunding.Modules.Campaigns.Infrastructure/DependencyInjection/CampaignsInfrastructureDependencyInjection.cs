@@ -21,6 +21,7 @@ public static class CampaignsInfrastructureDependencyInjection
         services.AddDbContext<CampaignsDbContext>(options =>
             options.UseNpgsql(connectionString));
 
+        services.AddScoped<ICampaignFundingService, CampaignFundingService>();
         services.AddScoped<ICampaignRepository, CampaignRepository>();
         services.AddScoped<ICampaignReadService, CampaignReadService>();
         services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();

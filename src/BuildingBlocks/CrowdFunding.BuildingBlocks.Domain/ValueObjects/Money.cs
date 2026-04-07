@@ -1,4 +1,4 @@
-﻿namespace CrowdFunding.Modules.Campaigns.Domain.ValueObjects;
+namespace CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 
 public sealed class Money : IEquatable<Money>
 {
@@ -17,13 +17,13 @@ public sealed class Money : IEquatable<Money>
             throw new ArgumentException("Currency is required.", nameof(currency));
         }
 
-        if (currency.Length != 3)
+        if (currency.Trim().Length != 3)
         {
             throw new ArgumentException("Currency must be a 3-letter ISO code.", nameof(currency));
         }
 
-        Amount = amount;
-        Currency = currency.ToUpperInvariant();
+        Amount = decimal.Round(amount, 2, MidpointRounding.AwayFromZero);
+        Currency = currency.Trim().ToUpperInvariant();
     }
 
     public static Money Zero(string currency) => new(0m, currency);

@@ -31,3 +31,19 @@ POST {{CrowdFunding.API_HostAddress}}/api/campaigns/{{campaignId}}/publish
 ###
 
 POST {{CrowdFunding.API_HostAddress}}/api/campaigns/{{campaignId}}/cancel
+
+###
+
+POST {{CrowdFunding.API_HostAddress}}/api/campaigns/{{campaignId}}/contributions
+Content-Type: application/json
+
+{
+  "contributorId": "22222222-2222-2222-2222-222222222222",
+  "amount": 50,
+  "currency": "USD"
+}
+
+###
+
+GET {{CrowdFunding.API_HostAddress}}/api/campaigns/{{campaignId}}/contributions
+Accept: application/json

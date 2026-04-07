@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.CancelCampaign;
@@ -6,7 +7,6 @@ using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.GetC
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.ListCampaigns;
 using CrowdFunding.Modules.Campaigns.Domain.Aggregates;
 using CrowdFunding.Modules.Campaigns.Domain.Enums;
-using CrowdFunding.Modules.Campaigns.Domain.ValueObjects;
 
 namespace CrowdFunding.UnitTests;
 

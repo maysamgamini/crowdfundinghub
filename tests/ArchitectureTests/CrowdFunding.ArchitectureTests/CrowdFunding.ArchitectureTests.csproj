@@ -23,6 +23,9 @@
     <ProjectReference Include="..\..\..\src\Modules\Campaigns\CrowdFunding.Modules.Campaigns.Application\CrowdFunding.Modules.Campaigns.Application.csproj" />
     <ProjectReference Include="..\..\..\src\Modules\Campaigns\CrowdFunding.Modules.Campaigns.Domain\CrowdFunding.Modules.Campaigns.Domain.csproj" />
     <ProjectReference Include="..\..\..\src\Modules\Campaigns\CrowdFunding.Modules.Campaigns.Infrastructure\CrowdFunding.Modules.Campaigns.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\src\Modules\Contributions\CrowdFunding.Modules.Contributions.Application\CrowdFunding.Modules.Contributions.Application.csproj" />
+    <ProjectReference Include="..\..\..\src\Modules\Contributions\CrowdFunding.Modules.Contributions.Domain\CrowdFunding.Modules.Contributions.Domain.csproj" />
+    <ProjectReference Include="..\..\..\src\Modules\Contributions\CrowdFunding.Modules.Contributions.Infrastructure\CrowdFunding.Modules.Contributions.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

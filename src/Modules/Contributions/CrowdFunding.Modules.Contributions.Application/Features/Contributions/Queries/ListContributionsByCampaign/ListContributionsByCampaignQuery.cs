@@ -1,0 +1,3 @@
+namespace CrowdFunding.Modules.Contributions.Application.Features.Contributions.Queries.ListContributionsByCampaign;
+
+public sealed record ListContributionsByCampaignQuery(Guid CampaignId);
