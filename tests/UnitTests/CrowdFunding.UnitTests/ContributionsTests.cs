@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Application.Pagination;
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
@@ -87,15 +88,17 @@ public sealed class ListContributionsByCampaignQueryHandlerTests
                 new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc))
         ];
 
+        var page = new PagedResult<ListContributionsByCampaignResult>(contributions, 1, 10, 1);
         var handler = new ListContributionsByCampaignQueryHandler(
-            new FakeContributionReadService(contributions));
+            new FakeContributionReadService(page));
 
         var result = await handler.Handle(
-            new ListContributionsByCampaignQuery(contributions.Single().CampaignId),
+            new ListContributionsByCampaignQuery(contributions.Single().CampaignId, new PageRequest(1, 10)),
             CancellationToken.None);
 
-        Assert.Single(result);
-        Assert.Equal(75m, result.Single().Amount);
+        Assert.Single(result.Items);
+        Assert.Equal(75m, result.Items.Single().Amount);
+        Assert.Equal(1, result.TotalCount);
     }
 }
 
@@ -141,17 +144,18 @@ internal sealed class FakeContributionDateTimeProvider : IContributionDateTimePr
 
 internal sealed class FakeContributionReadService : IContributionReadService
 {
-    private readonly IReadOnlyCollection<ListContributionsByCampaignResult> _contributions;
+    private readonly PagedResult<ListContributionsByCampaignResult> _contributionsPage;
 
-    public FakeContributionReadService(IReadOnlyCollection<ListContributionsByCampaignResult> contributions)
+    public FakeContributionReadService(PagedResult<ListContributionsByCampaignResult> contributionsPage)
     {
-        _contributions = contributions;
+        _contributionsPage = contributionsPage;
     }
 
-    public Task<IReadOnlyCollection<ListContributionsByCampaignResult>> ListByCampaignAsync(
+    public Task<PagedResult<ListContributionsByCampaignResult>> ListByCampaignAsync(
         Guid campaignId,
+        PageRequest pageRequest,
         CancellationToken cancellationToken)
     {
-        return Task.FromResult(_contributions);
+        return Task.FromResult(_contributionsPage);
     }
 }

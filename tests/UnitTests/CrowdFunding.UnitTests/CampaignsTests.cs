@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Application.Pagination;
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
@@ -166,12 +167,18 @@ public sealed class ListCampaignsQueryHandlerTests
                 new DateTime(2026, 4, 5, 0, 0, 0, DateTimeKind.Utc))
         ];
 
-        var handler = new ListCampaignsQueryHandler(new FakeCampaignReadService(campaigns));
+        var page = new PagedResult<ListCampaignsResult>(campaigns, 2, 5, 8);
+        var handler = new ListCampaignsQueryHandler(new FakeCampaignReadService(page));
 
-        var result = await handler.Handle(new ListCampaignsQuery(), CancellationToken.None);
+        var result = await handler.Handle(
+            new ListCampaignsQuery(new PageRequest(2, 5)),
+            CancellationToken.None);
 
-        Assert.Single(result);
-        Assert.Equal("Community Kitchen", result.Single().Title);
+        Assert.Single(result.Items);
+        Assert.Equal("Community Kitchen", result.Items.Single().Title);
+        Assert.Equal(2, result.PageNumber);
+        Assert.Equal(5, result.PageSize);
+        Assert.Equal(8, result.TotalCount);
     }
 }
 
@@ -205,11 +212,11 @@ internal sealed class FakeCampaignRepository : ICampaignRepository
 
 internal sealed class FakeCampaignReadService : ICampaignReadService
 {
-    private readonly IReadOnlyCollection<ListCampaignsResult> _campaigns;
+    private readonly PagedResult<ListCampaignsResult> _campaignsPage;
 
-    public FakeCampaignReadService(IReadOnlyCollection<ListCampaignsResult> campaigns)
+    public FakeCampaignReadService(PagedResult<ListCampaignsResult> campaignsPage)
     {
-        _campaigns = campaigns;
+        _campaignsPage = campaignsPage;
     }
 
     public Task<GetCampaignByIdResult?> GetByIdAsync(Guid campaignId, CancellationToken cancellationToken)
@@ -217,9 +224,11 @@ internal sealed class FakeCampaignReadService : ICampaignReadService
         throw new NotSupportedException();
     }
 
-    public Task<IReadOnlyCollection<ListCampaignsResult>> ListAsync(CancellationToken cancellationToken)
+    public Task<PagedResult<ListCampaignsResult>> ListAsync(
+        PageRequest pageRequest,
+        CancellationToken cancellationToken)
     {
-        return Task.FromResult(_campaigns);
+        return Task.FromResult(_campaignsPage);
     }
 }
 

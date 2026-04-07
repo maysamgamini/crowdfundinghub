@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Application.Pagination;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.GetCampaignById;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.ListCampaigns;
@@ -38,11 +39,20 @@ public sealed class CampaignReadService : ICampaignReadService
             .FirstOrDefaultAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyCollection<ListCampaignsResult>> ListAsync(CancellationToken cancellationToken)
+    public async Task<PagedResult<ListCampaignsResult>> ListAsync(
+        PageRequest pageRequest,
+        CancellationToken cancellationToken)
     {
-        return await _dbContext.Campaigns
+        var query = _dbContext.Campaigns
             .AsNoTracking()
             .OrderByDescending(x => x.CreatedAtUtc)
+            .ThenByDescending(x => x.Id);
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .Skip(pageRequest.Skip)
+            .Take(pageRequest.PageSize)
             .Select(x => new ListCampaignsResult(
                 x.Id,
                 x.OwnerId,
@@ -56,5 +66,11 @@ public sealed class CampaignReadService : ICampaignReadService
                 x.Status.ToString(),
                 x.CreatedAtUtc))
             .ToListAsync(cancellationToken);
+
+        return new PagedResult<ListCampaignsResult>(
+            items,
+            pageRequest.PageNumber,
+            pageRequest.PageSize,
+            totalCount);
     }
 }

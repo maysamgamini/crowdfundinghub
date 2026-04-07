@@ -1,4 +1,6 @@
+using CrowdFunding.API.Contracts.Common;
 using CrowdFunding.API.Contracts.Campaigns;
+using CrowdFunding.BuildingBlocks.Application.Pagination;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.CancelCampaign;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.CreateCampaign;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.PublishCampaign;
@@ -48,14 +50,24 @@ public sealed class CampaignsController : ControllerBase
     }
 
     [HttpGet]
-    [ProducesResponseType(typeof(IReadOnlyCollection<ListCampaignsResponse>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<IReadOnlyCollection<ListCampaignsResponse>>> List(
+    [ProducesResponseType(typeof(PagedResponse<ListCampaignsResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PagedResponse<ListCampaignsResponse>>> List(
+        [FromQuery] int? pageNumber,
+        [FromQuery] int? pageSize,
         CancellationToken cancellationToken)
     {
-        var result = await _listCampaignsQueryHandler.Handle(new ListCampaignsQuery(), cancellationToken);
-        var response = result
+        var pageRequest = PageRequest.Create(pageNumber, pageSize);
+        var result = await _listCampaignsQueryHandler.Handle(new ListCampaignsQuery(pageRequest), cancellationToken);
+        var items = result.Items
             .Select(x => _mapper.Map<ListCampaignsResponse>(x))
             .ToArray();
+
+        var response = new PagedResponse<ListCampaignsResponse>(
+            items,
+            result.PageNumber,
+            result.PageSize,
+            result.TotalCount,
+            result.TotalPages);
 
         return Ok(response);
     }
