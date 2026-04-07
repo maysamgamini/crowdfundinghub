@@ -8,6 +8,7 @@ obj/
 .idea/
 .history/
 .dotnet/
+.nuget/
 
 # User-specific files
 *.user
