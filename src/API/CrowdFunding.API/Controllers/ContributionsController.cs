@@ -36,11 +36,14 @@ public sealed class ContributionsController : ControllerBase
         Guid campaignId,
         [FromQuery] int? pageNumber,
         [FromQuery] int? pageSize,
+        [FromQuery] Guid? contributorId,
+        [FromQuery] string? currency,
         CancellationToken cancellationToken)
     {
         var pageRequest = PageRequest.Create(pageNumber, pageSize);
+        var filter = new ListContributionsByCampaignFilter(contributorId, currency);
         var result = await _listContributionsByCampaignQueryHandler.Handle(
-            new ListContributionsByCampaignQuery(campaignId, pageRequest),
+            new ListContributionsByCampaignQuery(campaignId, pageRequest, filter),
             cancellationToken);
 
         var items = result.Items

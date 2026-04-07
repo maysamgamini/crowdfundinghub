@@ -168,10 +168,12 @@ public sealed class ListCampaignsQueryHandlerTests
         ];
 
         var page = new PagedResult<ListCampaignsResult>(campaigns, 2, 5, 8);
-        var handler = new ListCampaignsQueryHandler(new FakeCampaignReadService(page));
+        var readService = new FakeCampaignReadService(page);
+        var handler = new ListCampaignsQueryHandler(readService);
+        var filter = new ListCampaignsFilter(Guid.NewGuid(), "Community", "Published");
 
         var result = await handler.Handle(
-            new ListCampaignsQuery(new PageRequest(2, 5)),
+            new ListCampaignsQuery(new PageRequest(2, 5), filter),
             CancellationToken.None);
 
         Assert.Single(result.Items);
@@ -179,6 +181,8 @@ public sealed class ListCampaignsQueryHandlerTests
         Assert.Equal(2, result.PageNumber);
         Assert.Equal(5, result.PageSize);
         Assert.Equal(8, result.TotalCount);
+        Assert.Equal(new PageRequest(2, 5), readService.ReceivedPageRequest);
+        Assert.Equal(filter, readService.ReceivedFilter);
     }
 }
 
@@ -219,6 +223,10 @@ internal sealed class FakeCampaignReadService : ICampaignReadService
         _campaignsPage = campaignsPage;
     }
 
+    public PageRequest? ReceivedPageRequest { get; private set; }
+
+    public ListCampaignsFilter? ReceivedFilter { get; private set; }
+
     public Task<GetCampaignByIdResult?> GetByIdAsync(Guid campaignId, CancellationToken cancellationToken)
     {
         throw new NotSupportedException();
@@ -226,8 +234,11 @@ internal sealed class FakeCampaignReadService : ICampaignReadService
 
     public Task<PagedResult<ListCampaignsResult>> ListAsync(
         PageRequest pageRequest,
+        ListCampaignsFilter filter,
         CancellationToken cancellationToken)
     {
+        ReceivedPageRequest = pageRequest;
+        ReceivedFilter = filter;
         return Task.FromResult(_campaignsPage);
     }
 }

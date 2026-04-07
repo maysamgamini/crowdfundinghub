@@ -16,6 +16,9 @@ public sealed class ListCampaignsQueryHandler
         ListCampaignsQuery query,
         CancellationToken cancellationToken)
     {
-        return await _campaignReadService.ListAsync(query.PageRequest, cancellationToken);
+        return await _campaignReadService.ListAsync(
+            query.PageRequest,
+            query.Filter,
+            cancellationToken);
     }
 }

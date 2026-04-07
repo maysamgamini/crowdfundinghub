@@ -89,16 +89,22 @@ public sealed class ListContributionsByCampaignQueryHandlerTests
         ];
 
         var page = new PagedResult<ListContributionsByCampaignResult>(contributions, 1, 10, 1);
-        var handler = new ListContributionsByCampaignQueryHandler(
-            new FakeContributionReadService(page));
+        var readService = new FakeContributionReadService(page);
+        var handler = new ListContributionsByCampaignQueryHandler(readService);
+        var filter = new ListContributionsByCampaignFilter(Guid.NewGuid(), "USD");
 
         var result = await handler.Handle(
-            new ListContributionsByCampaignQuery(contributions.Single().CampaignId, new PageRequest(1, 10)),
+            new ListContributionsByCampaignQuery(
+                contributions.Single().CampaignId,
+                new PageRequest(1, 10),
+                filter),
             CancellationToken.None);
 
         Assert.Single(result.Items);
         Assert.Equal(75m, result.Items.Single().Amount);
         Assert.Equal(1, result.TotalCount);
+        Assert.Equal(new PageRequest(1, 10), readService.ReceivedPageRequest);
+        Assert.Equal(filter, readService.ReceivedFilter);
     }
 }
 
@@ -151,11 +157,18 @@ internal sealed class FakeContributionReadService : IContributionReadService
         _contributionsPage = contributionsPage;
     }
 
+    public PageRequest? ReceivedPageRequest { get; private set; }
+
+    public ListContributionsByCampaignFilter? ReceivedFilter { get; private set; }
+
     public Task<PagedResult<ListContributionsByCampaignResult>> ListByCampaignAsync(
         Guid campaignId,
         PageRequest pageRequest,
+        ListContributionsByCampaignFilter filter,
         CancellationToken cancellationToken)
     {
+        ReceivedPageRequest = pageRequest;
+        ReceivedFilter = filter;
         return Task.FromResult(_contributionsPage);
     }
 }

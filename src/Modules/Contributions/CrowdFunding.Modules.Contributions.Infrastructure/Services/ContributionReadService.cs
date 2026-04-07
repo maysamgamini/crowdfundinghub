@@ -18,11 +18,25 @@ public sealed class ContributionReadService : IContributionReadService
     public async Task<PagedResult<ListContributionsByCampaignResult>> ListByCampaignAsync(
         Guid campaignId,
         PageRequest pageRequest,
+        ListContributionsByCampaignFilter filter,
         CancellationToken cancellationToken)
     {
         var query = _dbContext.Contributions
             .AsNoTracking()
-            .Where(x => x.CampaignId == campaignId)
+            .Where(x => x.CampaignId == campaignId);
+
+        if (filter.ContributorId.HasValue)
+        {
+            query = query.Where(x => x.ContributorId == filter.ContributorId.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.Currency))
+        {
+            var currency = filter.Currency.Trim().ToUpper();
+            query = query.Where(x => x.Money.Currency == currency);
+        }
+
+        query = query
             .OrderByDescending(x => x.CreatedAtUtc)
             .ThenByDescending(x => x.Id);
 

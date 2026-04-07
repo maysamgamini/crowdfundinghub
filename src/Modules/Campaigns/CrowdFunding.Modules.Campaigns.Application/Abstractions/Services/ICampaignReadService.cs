@@ -7,5 +7,8 @@ namespace CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
 public interface ICampaignReadService
 {
     Task<GetCampaignByIdResult?> GetByIdAsync(Guid campaignId, CancellationToken cancellationToken);
-    Task<PagedResult<ListCampaignsResult>> ListAsync(PageRequest pageRequest, CancellationToken cancellationToken);
+    Task<PagedResult<ListCampaignsResult>> ListAsync(
+        PageRequest pageRequest,
+        ListCampaignsFilter filter,
+        CancellationToken cancellationToken);
 }

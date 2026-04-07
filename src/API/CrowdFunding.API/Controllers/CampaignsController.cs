@@ -54,10 +54,16 @@ public sealed class CampaignsController : ControllerBase
     public async Task<ActionResult<PagedResponse<ListCampaignsResponse>>> List(
         [FromQuery] int? pageNumber,
         [FromQuery] int? pageSize,
+        [FromQuery] Guid? ownerId,
+        [FromQuery] string? category,
+        [FromQuery] string? status,
         CancellationToken cancellationToken)
     {
         var pageRequest = PageRequest.Create(pageNumber, pageSize);
-        var result = await _listCampaignsQueryHandler.Handle(new ListCampaignsQuery(pageRequest), cancellationToken);
+        var filter = new ListCampaignsFilter(ownerId, category, status);
+        var result = await _listCampaignsQueryHandler.Handle(
+            new ListCampaignsQuery(pageRequest, filter),
+            cancellationToken);
         var items = result.Items
             .Select(x => _mapper.Map<ListCampaignsResponse>(x))
             .ToArray();

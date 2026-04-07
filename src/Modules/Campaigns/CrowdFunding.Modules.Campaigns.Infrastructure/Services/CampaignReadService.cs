@@ -2,6 +2,7 @@ using CrowdFunding.BuildingBlocks.Application.Pagination;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.GetCampaignById;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.ListCampaigns;
+using CrowdFunding.Modules.Campaigns.Domain.Enums;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore;
 
@@ -41,10 +42,37 @@ public sealed class CampaignReadService : ICampaignReadService
 
     public async Task<PagedResult<ListCampaignsResult>> ListAsync(
         PageRequest pageRequest,
+        ListCampaignsFilter filter,
         CancellationToken cancellationToken)
     {
         var query = _dbContext.Campaigns
             .AsNoTracking()
+            .AsQueryable();
+
+        if (filter.OwnerId.HasValue)
+        {
+            query = query.Where(x => x.OwnerId == filter.OwnerId.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.Category))
+        {
+            var category = filter.Category.Trim().ToLower();
+            query = query.Where(x => x.Category.ToLower() == category);
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.Status))
+        {
+            if (Enum.TryParse<CampaignStatus>(filter.Status, true, out var status))
+            {
+                query = query.Where(x => x.Status == status);
+            }
+            else
+            {
+                query = query.Where(_ => false);
+            }
+        }
+
+        query = query
             .OrderByDescending(x => x.CreatedAtUtc)
             .ThenByDescending(x => x.Id);
 

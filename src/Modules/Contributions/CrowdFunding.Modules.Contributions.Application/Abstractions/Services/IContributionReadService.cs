@@ -8,5 +8,6 @@ public interface IContributionReadService
     Task<PagedResult<ListContributionsByCampaignResult>> ListByCampaignAsync(
         Guid campaignId,
         PageRequest pageRequest,
+        ListContributionsByCampaignFilter filter,
         CancellationToken cancellationToken);
 }

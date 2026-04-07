@@ -19,6 +19,7 @@ public sealed class ListContributionsByCampaignQueryHandler
         return await _contributionReadService.ListByCampaignAsync(
             query.CampaignId,
             query.PageRequest,
+            query.Filter,
             cancellationToken);
     }
 }
