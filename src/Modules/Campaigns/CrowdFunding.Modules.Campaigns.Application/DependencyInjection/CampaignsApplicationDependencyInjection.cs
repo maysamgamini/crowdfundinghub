@@ -1,6 +1,8 @@
+using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.CancelCampaign;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.CreateCampaign;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.PublishCampaign;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.GetCampaignById;
+using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.ListCampaigns;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -10,9 +12,12 @@ public static class CampaignsApplicationDependencyInjection
 {
     public static IServiceCollection AddCampaignsApplication(this IServiceCollection services)
     {
+        services.AddScoped<CancelCampaignCommandHandler>();
         services.AddScoped<CreateCampaignCommandHandler>();
         services.AddScoped<PublishCampaignCommandHandler>();
         services.AddScoped<GetCampaignByIdQueryHandler>();
+        services.AddScoped<ListCampaignsQueryHandler>();
+        services.AddScoped<IValidator<CancelCampaignCommand>, CancelCampaignCommandValidator>();
         services.AddScoped<IValidator<CreateCampaignCommand>, CreateCampaignCommandValidator>();
         services.AddScoped<IValidator<PublishCampaignCommand>, PublishCampaignCommandValidator>();
 

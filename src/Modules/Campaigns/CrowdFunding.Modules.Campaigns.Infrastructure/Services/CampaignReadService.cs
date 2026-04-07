@@ -1,5 +1,6 @@
-﻿using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
+using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.GetCampaignById;
+using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.ListCampaigns;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore;
 
@@ -35,5 +36,25 @@ public sealed class CampaignReadService : ICampaignReadService
                 x.Status.ToString(),
                 x.CreatedAtUtc))
             .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyCollection<ListCampaignsResult>> ListAsync(CancellationToken cancellationToken)
+    {
+        return await _dbContext.Campaigns
+            .AsNoTracking()
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .Select(x => new ListCampaignsResult(
+                x.Id,
+                x.OwnerId,
+                x.Title,
+                x.Category,
+                x.GoalAmount.Amount,
+                x.GoalAmount.Currency,
+                x.RaisedAmount.Amount,
+                x.RaisedAmount.Currency,
+                x.DeadlineUtc,
+                x.Status.ToString(),
+                x.CreatedAtUtc))
+            .ToListAsync(cancellationToken);
     }
 }

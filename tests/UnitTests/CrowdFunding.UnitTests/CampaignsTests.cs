@@ -1,6 +1,9 @@
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
+using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.CancelCampaign;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.PublishCampaign;
+using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.GetCampaignById;
+using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.ListCampaigns;
 using CrowdFunding.Modules.Campaigns.Domain.Aggregates;
 using CrowdFunding.Modules.Campaigns.Domain.Enums;
 using CrowdFunding.Modules.Campaigns.Domain.ValueObjects;
@@ -53,6 +56,17 @@ public sealed class CampaignDomainTests
         Assert.Equal("Cannot publish a campaign with a past deadline.", exception.Message);
     }
 
+    [Fact]
+    public void Cancel_ShouldMoveCampaignToCancelled()
+    {
+        var createdAtUtc = new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc);
+        var campaign = CreateDraftCampaign(createdAtUtc, createdAtUtc.AddDays(14));
+
+        campaign.Cancel();
+
+        Assert.Equal(CampaignStatus.Cancelled, campaign.Status);
+    }
+
     private static Campaign CreateDraftCampaign(DateTime createdAtUtc, DateTime deadlineUtc)
     {
         return Campaign.Create(
@@ -103,42 +117,118 @@ public sealed class PublishCampaignCommandHandlerTests
 
         await Assert.ThrowsAsync<KeyNotFoundException>(action);
     }
+}
 
-    private sealed class FakeCampaignRepository : ICampaignRepository
+public sealed class CancelCampaignCommandHandlerTests
+{
+    [Fact]
+    public async Task Handle_ShouldCancelCampaignAndPersistChanges()
     {
-        private readonly Campaign? _campaign;
+        var campaign = Campaign.Create(
+            Guid.NewGuid(),
+            "Restore the old theater",
+            "This campaign restores the old theater as a shared cultural venue.",
+            "Culture",
+            new Money(12000m, "USD"),
+            new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
 
-        public FakeCampaignRepository(Campaign? campaign = null)
-        {
-            _campaign = campaign;
-        }
+        var repository = new FakeCampaignRepository(campaign);
+        var handler = new CancelCampaignCommandHandler(repository);
 
-        public bool WasUpdated { get; private set; }
+        var result = await handler.Handle(new CancelCampaignCommand(campaign.Id), CancellationToken.None);
 
-        public Task AddAsync(Campaign campaign, CancellationToken cancellationToken)
-        {
-            throw new NotSupportedException();
-        }
+        Assert.Equal(campaign.Id, result.CampaignId);
+        Assert.Equal("Cancelled", result.Status);
+        Assert.Equal(CampaignStatus.Cancelled, campaign.Status);
+        Assert.True(repository.WasUpdated);
+    }
+}
 
-        public Task<Campaign?> GetByIdAsync(Guid campaignId, CancellationToken cancellationToken)
-        {
-            return Task.FromResult(_campaign?.Id == campaignId ? _campaign : null);
-        }
+public sealed class ListCampaignsQueryHandlerTests
+{
+    [Fact]
+    public async Task Handle_ShouldReturnCampaignsFromReadService()
+    {
+        IReadOnlyCollection<ListCampaignsResult> campaigns =
+        [
+            new(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                "Community Kitchen",
+                "Community",
+                8000m,
+                "USD",
+                1200m,
+                "USD",
+                new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc),
+                "Published",
+                new DateTime(2026, 4, 5, 0, 0, 0, DateTimeKind.Utc))
+        ];
 
-        public Task UpdateAsync(Campaign campaign, CancellationToken cancellationToken)
-        {
-            WasUpdated = true;
-            return Task.CompletedTask;
-        }
+        var handler = new ListCampaignsQueryHandler(new FakeCampaignReadService(campaigns));
+
+        var result = await handler.Handle(new ListCampaignsQuery(), CancellationToken.None);
+
+        Assert.Single(result);
+        Assert.Equal("Community Kitchen", result.Single().Title);
+    }
+}
+
+internal sealed class FakeCampaignRepository : ICampaignRepository
+{
+    private readonly Campaign? _campaign;
+
+    public FakeCampaignRepository(Campaign? campaign = null)
+    {
+        _campaign = campaign;
     }
 
-    private sealed class FakeDateTimeProvider : IDateTimeProvider
-    {
-        public FakeDateTimeProvider(DateTime utcNow)
-        {
-            UtcNow = utcNow;
-        }
+    public bool WasUpdated { get; private set; }
 
-        public DateTime UtcNow { get; }
+    public Task AddAsync(Campaign campaign, CancellationToken cancellationToken)
+    {
+        throw new NotSupportedException();
     }
+
+    public Task<Campaign?> GetByIdAsync(Guid campaignId, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(_campaign?.Id == campaignId ? _campaign : null);
+    }
+
+    public Task UpdateAsync(Campaign campaign, CancellationToken cancellationToken)
+    {
+        WasUpdated = true;
+        return Task.CompletedTask;
+    }
+}
+
+internal sealed class FakeCampaignReadService : ICampaignReadService
+{
+    private readonly IReadOnlyCollection<ListCampaignsResult> _campaigns;
+
+    public FakeCampaignReadService(IReadOnlyCollection<ListCampaignsResult> campaigns)
+    {
+        _campaigns = campaigns;
+    }
+
+    public Task<GetCampaignByIdResult?> GetByIdAsync(Guid campaignId, CancellationToken cancellationToken)
+    {
+        throw new NotSupportedException();
+    }
+
+    public Task<IReadOnlyCollection<ListCampaignsResult>> ListAsync(CancellationToken cancellationToken)
+    {
+        return Task.FromResult(_campaigns);
+    }
+}
+
+internal sealed class FakeDateTimeProvider : IDateTimeProvider
+{
+    public FakeDateTimeProvider(DateTime utcNow)
+    {
+        UtcNow = utcNow;
+    }
+
+    public DateTime UtcNow { get; }
 }
