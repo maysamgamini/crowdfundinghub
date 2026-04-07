@@ -7,7 +7,5 @@ public sealed class RejectCampaignReviewCommandValidator : AbstractValidator<Rej
     public RejectCampaignReviewCommandValidator()
     {
         RuleFor(x => x.CampaignId).NotEmpty();
-        RuleFor(x => x.ModeratorId).NotEmpty();
-        RuleFor(x => x.Notes).MaximumLength(500);
     }
 }

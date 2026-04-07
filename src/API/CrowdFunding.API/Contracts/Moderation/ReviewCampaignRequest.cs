@@ -1,3 +1,3 @@
 namespace CrowdFunding.API.Contracts.Moderation;
 
-public sealed record ReviewCampaignRequest(Guid ModeratorId, string? Notes);
+public sealed record ReviewCampaignRequest(string? Notes);

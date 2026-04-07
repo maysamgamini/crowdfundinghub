@@ -9,6 +9,7 @@
   <ItemGroup>
     <PackageReference Include="Mapster" Version="10.0.6" />
     <PackageReference Include="Mapster.DependencyInjection" Version="10.0.6" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.5" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.5" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.5">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -18,7 +19,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\BuildingBlocks\CrowdFunding.BuildingBlocks.Application\CrowdFunding.BuildingBlocks.Application.csproj" />
     <ProjectReference Include="..\..\Modules\Identity\CrowdFunding.Modules.Identity.Infrastructure\CrowdFunding.Modules.Identity.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Modules\Identity\CrowdFunding.Modules.Identity.Application\CrowdFunding.Modules.Identity.Application.csproj" />
+    <ProjectReference Include="..\..\Modules\Identity\CrowdFunding.Modules.Identity.Contracts\CrowdFunding.Modules.Identity.Contracts.csproj" />
     <ProjectReference Include="..\..\Modules\Campaigns\CrowdFunding.Modules.Campaigns.Infrastructure\CrowdFunding.Modules.Campaigns.Infrastructure.csproj" />
     <ProjectReference Include="..\..\Modules\Campaigns\CrowdFunding.Modules.Campaigns.Contracts\CrowdFunding.Modules.Campaigns.Contracts.csproj" />
     <ProjectReference Include="..\..\Modules\Contributions\CrowdFunding.Modules.Contributions.Infrastructure\CrowdFunding.Modules.Contributions.Infrastructure.csproj" />

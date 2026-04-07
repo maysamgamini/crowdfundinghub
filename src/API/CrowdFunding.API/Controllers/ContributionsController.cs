@@ -3,8 +3,10 @@ using CrowdFunding.API.Contracts.Contributions;
 using CrowdFunding.BuildingBlocks.Application.Pagination;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.MakeContribution;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Queries.ListContributionsByCampaign;
+using CrowdFunding.Modules.Identity.Contracts.Authorization;
 using FluentValidation;
 using MapsterMapper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CrowdFunding.API.Controllers;
@@ -60,6 +62,7 @@ public sealed class ContributionsController : ControllerBase
         return Ok(response);
     }
 
+    [Authorize(Policy = PermissionConstants.CampaignsContribute)]
     [HttpPost]
     [ProducesResponseType(typeof(MakeContributionResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
@@ -71,7 +74,6 @@ public sealed class ContributionsController : ControllerBase
     {
         var command = new MakeContributionCommand(
             campaignId,
-            request.ContributorId,
             request.Amount,
             request.Currency);
 

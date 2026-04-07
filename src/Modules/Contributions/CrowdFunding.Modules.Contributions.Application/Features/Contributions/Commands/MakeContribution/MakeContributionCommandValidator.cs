@@ -9,9 +9,6 @@ public sealed class MakeContributionCommandValidator : AbstractValidator<MakeCon
         RuleFor(x => x.CampaignId)
             .NotEmpty();
 
-        RuleFor(x => x.ContributorId)
-            .NotEmpty();
-
         RuleFor(x => x.Amount)
             .GreaterThan(0);
 

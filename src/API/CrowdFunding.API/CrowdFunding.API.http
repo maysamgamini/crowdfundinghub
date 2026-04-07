@@ -3,12 +3,61 @@
 @ownerId = 11111111-1111-1111-1111-111111111111
 @contributorId = 22222222-2222-2222-2222-222222222222
 @moderatorId = 33333333-3333-3333-3333-333333333333
+@userId = 44444444-4444-4444-4444-444444444444
+@accessToken = replace-with-jwt
 
-POST {{CrowdFunding.API_HostAddress}}/api/campaigns
+POST {{CrowdFunding.API_HostAddress}}/api/identity/register
 Content-Type: application/json
 
 {
-  "ownerId": "11111111-1111-1111-1111-111111111111",
+  "email": "admin@example.com",
+  "displayName": "Admin User",
+  "password": "supersecret"
+}
+
+###
+
+POST {{CrowdFunding.API_HostAddress}}/api/identity/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "supersecret"
+}
+
+###
+
+GET {{CrowdFunding.API_HostAddress}}/api/identity/me
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+###
+
+POST {{CrowdFunding.API_HostAddress}}/api/identity/users/{{userId}}/roles
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "role": "Moderator"
+}
+
+###
+
+POST {{CrowdFunding.API_HostAddress}}/api/identity/users/{{userId}}/permissions
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "permission": "identity.permissions.grant"
+}
+
+###
+
+POST {{CrowdFunding.API_HostAddress}}/api/campaigns
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
   "title": "Build a neighborhood makerspace",
   "story": "We are raising funds to create a neighborhood makerspace for students and families.",
   "category": "Community",
@@ -25,10 +74,10 @@ Accept: application/json
 ###
 
 POST {{CrowdFunding.API_HostAddress}}/api/moderation/campaigns/{{campaignId}}/approve
+Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
 {
-  "moderatorId": "33333333-3333-3333-3333-333333333333",
   "notes": "Story and funding goal look valid."
 }
 
@@ -45,18 +94,20 @@ Accept: application/json
 ###
 
 POST {{CrowdFunding.API_HostAddress}}/api/campaigns/{{campaignId}}/publish
+Authorization: Bearer {{accessToken}}
 
 ###
 
 POST {{CrowdFunding.API_HostAddress}}/api/campaigns/{{campaignId}}/cancel
+Authorization: Bearer {{accessToken}}
 
 ###
 
 POST {{CrowdFunding.API_HostAddress}}/api/campaigns/{{campaignId}}/contributions
+Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
 {
-  "contributorId": "22222222-2222-2222-2222-222222222222",
   "amount": 50,
   "currency": "USD"
 }

@@ -1,4 +1,5 @@
 using CrowdFunding.BuildingBlocks.Application.Pagination;
+using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
@@ -93,13 +94,14 @@ public sealed class CreateCampaignCommandHandlerTests
     {
         var repository = new FakeCampaignRepository();
         var moderationModule = new FakeModerationModule();
+        var currentUser = new TestCurrentUser { UserId = Guid.NewGuid() };
         var handler = new CreateCampaignCommandHandler(
             repository,
+            currentUser,
             new FakeDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
             moderationModule);
 
         var command = new CreateCampaignCommand(
-            Guid.NewGuid(),
             "Build a neighborhood makerspace",
             "We are raising funds to create a neighborhood makerspace for students and families.",
             "Community",
@@ -111,6 +113,7 @@ public sealed class CreateCampaignCommandHandlerTests
 
         Assert.NotNull(repository.SavedCampaign);
         Assert.Equal(result.CampaignId, repository.SavedCampaign!.Id);
+        Assert.Equal(currentUser.UserId, repository.SavedCampaign.OwnerId);
         Assert.Equal(result.CampaignId, moderationModule.CreatedReviewCampaignId);
     }
 }
@@ -121,8 +124,9 @@ public sealed class PublishCampaignCommandHandlerTests
     public async Task Handle_ShouldPublishCampaignAndPersistChanges()
     {
         var now = new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc);
+        var ownerId = Guid.NewGuid();
         var campaign = Campaign.Create(
-            Guid.NewGuid(),
+            ownerId,
             "Fund a neighborhood garden",
             "This campaign builds a shared neighborhood garden for local families.",
             "Community",
@@ -132,7 +136,11 @@ public sealed class PublishCampaignCommandHandlerTests
 
         var repository = new FakeCampaignRepository(campaign);
         var moderationModule = new FakeModerationModule();
-        var handler = new PublishCampaignCommandHandler(repository, new FakeDateTimeProvider(now), moderationModule);
+        var handler = new PublishCampaignCommandHandler(
+            repository,
+            new TestCurrentUser { UserId = ownerId },
+            new FakeDateTimeProvider(now),
+            moderationModule);
 
         var result = await handler.Handle(new PublishCampaignCommand(campaign.Id), CancellationToken.None);
 
@@ -148,12 +156,37 @@ public sealed class PublishCampaignCommandHandlerTests
     {
         var handler = new PublishCampaignCommandHandler(
             new FakeCampaignRepository(),
+            new TestCurrentUser { UserId = Guid.NewGuid() },
             new FakeDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
             new FakeModerationModule());
 
         var action = async () => await handler.Handle(new PublishCampaignCommand(Guid.NewGuid()), CancellationToken.None);
 
         await Assert.ThrowsAsync<KeyNotFoundException>(action);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldThrow_WhenUserDoesNotOwnCampaign()
+    {
+        var now = new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc);
+        var campaign = Campaign.Create(
+            Guid.NewGuid(),
+            "Fund a neighborhood garden",
+            "This campaign builds a shared neighborhood garden for local families.",
+            "Community",
+            new Money(2500m, "USD"),
+            now.AddDays(10),
+            now.AddDays(-1));
+
+        var handler = new PublishCampaignCommandHandler(
+            new FakeCampaignRepository(campaign),
+            new TestCurrentUser { UserId = Guid.NewGuid() },
+            new FakeDateTimeProvider(now),
+            new FakeModerationModule());
+
+        var action = async () => await handler.Handle(new PublishCampaignCommand(campaign.Id), CancellationToken.None);
+
+        await Assert.ThrowsAsync<ForbiddenAccessException>(action);
     }
 }
 
@@ -192,8 +225,9 @@ public sealed class CancelCampaignCommandHandlerTests
     [Fact]
     public async Task Handle_ShouldCancelCampaignAndPersistChanges()
     {
+        var ownerId = Guid.NewGuid();
         var campaign = Campaign.Create(
-            Guid.NewGuid(),
+            ownerId,
             "Restore the old theater",
             "This campaign restores the old theater as a shared cultural venue.",
             "Culture",
@@ -202,7 +236,7 @@ public sealed class CancelCampaignCommandHandlerTests
             new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
 
         var repository = new FakeCampaignRepository(campaign);
-        var handler = new CancelCampaignCommandHandler(repository);
+        var handler = new CancelCampaignCommandHandler(repository, new TestCurrentUser { UserId = ownerId });
 
         var result = await handler.Handle(new CancelCampaignCommand(campaign.Id), CancellationToken.None);
 

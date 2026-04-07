@@ -1,7 +1,6 @@
-﻿namespace CrowdFunding.API.Contracts.Campaigns;
+namespace CrowdFunding.API.Contracts.Campaigns;
 
 public sealed record CreateCampaignRequest(
-    Guid OwnerId,
     string Title,
     string Story,
     string Category,

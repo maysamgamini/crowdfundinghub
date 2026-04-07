@@ -1,4 +1,4 @@
-﻿using FluentValidation;
+using FluentValidation;
 
 namespace CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.CreateCampaign;
 
@@ -6,16 +6,13 @@ public sealed class CreateCampaignCommandValidator : AbstractValidator<CreateCam
 {
     public CreateCampaignCommandValidator()
     {
-        RuleFor(x => x.OwnerId)
-            .NotEmpty();
-
         RuleFor(x => x.Title)
             .NotEmpty()
             .MaximumLength(200);
 
         RuleFor(x => x.Story)
             .NotEmpty()
-            .MinimumLength(20);
+            .MaximumLength(5000);
 
         RuleFor(x => x.Category)
             .NotEmpty()

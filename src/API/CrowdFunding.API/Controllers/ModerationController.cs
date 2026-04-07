@@ -1,9 +1,11 @@
 using CrowdFunding.API.Contracts.Moderation;
+using CrowdFunding.Modules.Identity.Contracts.Authorization;
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Commands.ApproveCampaignReview;
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Commands.RejectCampaignReview;
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Queries.GetCampaignReviewByCampaignId;
 using FluentValidation;
 using MapsterMapper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CrowdFunding.API.Controllers;
@@ -49,6 +51,7 @@ public sealed class ModerationController : ControllerBase
         return Ok(_mapper.Map<CampaignReviewResponse>(result));
     }
 
+    [Authorize(Policy = PermissionConstants.ModerationReview)]
     [HttpPost("{campaignId:guid}/approve")]
     [ProducesResponseType(typeof(CampaignReviewResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
@@ -58,7 +61,7 @@ public sealed class ModerationController : ControllerBase
         [FromBody] ReviewCampaignRequest request,
         CancellationToken cancellationToken)
     {
-        var command = new ApproveCampaignReviewCommand(campaignId, request.ModeratorId, request.Notes);
+        var command = new ApproveCampaignReviewCommand(campaignId, request.Notes);
         var validationResult = await _approveCampaignReviewValidator.ValidateAsync(command, cancellationToken);
 
         if (!validationResult.IsValid)
@@ -76,6 +79,7 @@ public sealed class ModerationController : ControllerBase
         return Ok(_mapper.Map<CampaignReviewResponse>(review));
     }
 
+    [Authorize(Policy = PermissionConstants.ModerationReview)]
     [HttpPost("{campaignId:guid}/reject")]
     [ProducesResponseType(typeof(CampaignReviewResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
@@ -85,7 +89,7 @@ public sealed class ModerationController : ControllerBase
         [FromBody] ReviewCampaignRequest request,
         CancellationToken cancellationToken)
     {
-        var command = new RejectCampaignReviewCommand(campaignId, request.ModeratorId, request.Notes);
+        var command = new RejectCampaignReviewCommand(campaignId, request.Notes);
         var validationResult = await _rejectCampaignReviewValidator.ValidateAsync(command, cancellationToken);
 
         if (!validationResult.IsValid)

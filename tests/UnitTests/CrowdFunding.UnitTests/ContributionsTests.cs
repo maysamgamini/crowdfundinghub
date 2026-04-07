@@ -51,13 +51,14 @@ public sealed class MakeContributionCommandHandlerTests
     {
         var campaignsModule = new FakeCampaignsModule();
         var repository = new FakeContributionRepository();
+        var currentUser = new TestCurrentUser { UserId = Guid.NewGuid() };
         var handler = new MakeContributionCommandHandler(
             campaignsModule,
+            currentUser,
             new FakeContributionDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
             repository);
 
         var command = new MakeContributionCommand(
-            Guid.NewGuid(),
             Guid.NewGuid(),
             100m,
             "usd");
@@ -69,7 +70,8 @@ public sealed class MakeContributionCommandHandlerTests
         Assert.Equal(100m, campaignsModule.Amount);
         Assert.Equal("USD", campaignsModule.Currency);
         Assert.NotNull(repository.SavedContribution);
-        Assert.Equal(new Money(100m, "USD"), repository.SavedContribution!.Money);
+        Assert.Equal(currentUser.UserId, repository.SavedContribution!.ContributorId);
+        Assert.Equal(new Money(100m, "USD"), repository.SavedContribution.Money);
         Assert.Equal(result.ContributionId, repository.SavedContribution.Id);
     }
 }

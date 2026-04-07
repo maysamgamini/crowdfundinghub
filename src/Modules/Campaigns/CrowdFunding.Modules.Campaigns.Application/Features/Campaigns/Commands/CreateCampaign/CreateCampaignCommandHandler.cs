@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
@@ -10,15 +11,18 @@ namespace CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands
 public sealed class CreateCampaignCommandHandler
 {
     private readonly ICampaignRepository _campaignRepository;
+    private readonly ICurrentUser _currentUser;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IModerationModule _moderationModule;
 
     public CreateCampaignCommandHandler(
         ICampaignRepository campaignRepository,
+        ICurrentUser currentUser,
         IDateTimeProvider dateTimeProvider,
         IModerationModule moderationModule)
     {
         _campaignRepository = campaignRepository;
+        _currentUser = currentUser;
         _dateTimeProvider = dateTimeProvider;
         _moderationModule = moderationModule;
     }
@@ -27,10 +31,15 @@ public sealed class CreateCampaignCommandHandler
         CreateCampaignCommand command,
         CancellationToken cancellationToken)
     {
+        if (!_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty)
+        {
+            throw new UnauthorizedAccessException("The current user must be authenticated to create a campaign.");
+        }
+
         var goalAmount = new Money(command.GoalAmount, command.Currency);
 
         var campaign = Campaign.Create(
-            command.OwnerId,
+            _currentUser.UserId,
             command.Title,
             command.Story,
             command.Category,

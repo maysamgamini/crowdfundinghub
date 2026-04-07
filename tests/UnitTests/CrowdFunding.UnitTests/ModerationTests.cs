@@ -2,7 +2,6 @@ using CrowdFunding.Modules.Moderation.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Services;
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Commands.ApproveCampaignReview;
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Commands.CreateCampaignReview;
-using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Commands.RejectCampaignReview;
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Queries.GetCampaignReviewByCampaignId;
 using CrowdFunding.Modules.Moderation.Domain.Aggregates;
 using CrowdFunding.Modules.Moderation.Domain.Enums;
@@ -62,10 +61,11 @@ public sealed class ApproveCampaignReviewCommandHandlerTests
         var repository = new FakeCampaignReviewRepository(review);
         var handler = new ApproveCampaignReviewCommandHandler(
             repository,
+            new TestCurrentUser { UserId = Guid.NewGuid() },
             new FakeModerationDateTimeProvider(new DateTime(2026, 4, 7, 12, 0, 0, DateTimeKind.Utc)));
 
         var result = await handler.Handle(
-            new ApproveCampaignReviewCommand(review.CampaignId, Guid.NewGuid(), "Looks good."),
+            new ApproveCampaignReviewCommand(review.CampaignId, "Looks good."),
             CancellationToken.None);
 
         Assert.Equal("Approved", result.Status);

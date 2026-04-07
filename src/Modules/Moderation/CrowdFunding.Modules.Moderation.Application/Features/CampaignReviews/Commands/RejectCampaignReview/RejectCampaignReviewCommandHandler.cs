@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Services;
 
@@ -6,13 +7,16 @@ namespace CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.C
 public sealed class RejectCampaignReviewCommandHandler
 {
     private readonly ICampaignReviewRepository _campaignReviewRepository;
+    private readonly ICurrentUser _currentUser;
     private readonly IModerationDateTimeProvider _dateTimeProvider;
 
     public RejectCampaignReviewCommandHandler(
         ICampaignReviewRepository campaignReviewRepository,
+        ICurrentUser currentUser,
         IModerationDateTimeProvider dateTimeProvider)
     {
         _campaignReviewRepository = campaignReviewRepository;
+        _currentUser = currentUser;
         _dateTimeProvider = dateTimeProvider;
     }
 
@@ -20,6 +24,11 @@ public sealed class RejectCampaignReviewCommandHandler
         RejectCampaignReviewCommand command,
         CancellationToken cancellationToken)
     {
+        if (!_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty)
+        {
+            throw new UnauthorizedAccessException("The current user must be authenticated to reject a campaign review.");
+        }
+
         var campaignReview = await _campaignReviewRepository.GetByCampaignIdAsync(command.CampaignId, cancellationToken);
 
         if (campaignReview is null)
@@ -27,7 +36,7 @@ public sealed class RejectCampaignReviewCommandHandler
             throw new KeyNotFoundException($"Campaign review for campaign '{command.CampaignId}' was not found.");
         }
 
-        campaignReview.Reject(command.ModeratorId, command.Notes, _dateTimeProvider.UtcNow);
+        campaignReview.Reject(_currentUser.UserId, command.Notes, _dateTimeProvider.UtcNow);
 
         await _campaignReviewRepository.UpdateAsync(campaignReview, cancellationToken);
 

@@ -6,8 +6,10 @@ using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.Cre
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.PublishCampaign;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.GetCampaignById;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.ListCampaigns;
+using CrowdFunding.Modules.Identity.Contracts.Authorization;
 using FluentValidation;
 using MapsterMapper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 
@@ -78,6 +80,7 @@ public sealed class CampaignsController : ControllerBase
         return Ok(response);
     }
 
+    [Authorize(Policy = PermissionConstants.CampaignsCreate)]
     [HttpPost]
     [ProducesResponseType(typeof(CreateCampaignResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
@@ -104,6 +107,7 @@ public sealed class CampaignsController : ControllerBase
             response);
     }
 
+    [Authorize(Policy = PermissionConstants.CampaignsPublish)]
     [HttpPost("{id:guid}/publish")]
     [ProducesResponseType(typeof(PublishCampaignResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
@@ -128,6 +132,7 @@ public sealed class CampaignsController : ControllerBase
         return Ok(response);
     }
 
+    [Authorize(Policy = PermissionConstants.CampaignsCancel)]
     [HttpPost("{id:guid}/cancel")]
     [ProducesResponseType(typeof(CancelCampaignResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]

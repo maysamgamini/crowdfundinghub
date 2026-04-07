@@ -2,5 +2,4 @@ namespace CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.C
 
 public sealed record RejectCampaignReviewCommand(
     Guid CampaignId,
-    Guid ModeratorId,
     string? Notes);

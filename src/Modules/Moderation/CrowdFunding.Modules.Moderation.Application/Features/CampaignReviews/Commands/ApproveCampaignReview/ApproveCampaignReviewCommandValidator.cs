@@ -7,7 +7,5 @@ public sealed class ApproveCampaignReviewCommandValidator : AbstractValidator<Ap
     public ApproveCampaignReviewCommandValidator()
     {
         RuleFor(x => x.CampaignId).NotEmpty();
-        RuleFor(x => x.ModeratorId).NotEmpty();
-        RuleFor(x => x.Notes).MaximumLength(500);
     }
 }
