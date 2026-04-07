@@ -36,6 +36,12 @@ public sealed class ContributionReadService : IContributionReadService
             query = query.Where(x => x.Money.Currency == currency);
         }
 
+        if (!string.IsNullOrWhiteSpace(filter.Status))
+        {
+            var status = filter.Status.Trim();
+            query = query.Where(x => x.Status.ToString() == status);
+        }
+
         query = query
             .OrderByDescending(x => x.CreatedAtUtc)
             .ThenByDescending(x => x.Id);
@@ -51,7 +57,11 @@ public sealed class ContributionReadService : IContributionReadService
                 x.ContributorId,
                 x.Money.Amount,
                 x.Money.Currency,
-                x.CreatedAtUtc))
+                x.Status.ToString(),
+                x.PaymentReference,
+                x.FailureReason,
+                x.CreatedAtUtc,
+                x.ProcessedAtUtc))
             .ToListAsync(cancellationToken);
 
         return new PagedResult<ListContributionsByCampaignResult>(

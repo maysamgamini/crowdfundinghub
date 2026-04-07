@@ -6,6 +6,7 @@ public static class PermissionConstants
     public const string CampaignsPublish = "campaigns.publish";
     public const string CampaignsCancel = "campaigns.cancel";
     public const string CampaignsContribute = "campaigns.contribute";
+    public const string ContributionsPaymentsManage = "contributions.payments.manage";
     public const string CampaignsManageAny = "campaigns.manage.any";
     public const string ModerationReview = "moderation.review";
     public const string IdentityRolesAssign = "identity.roles.assign";
@@ -17,6 +18,7 @@ public static class PermissionConstants
         CampaignsPublish,
         CampaignsCancel,
         CampaignsContribute,
+        ContributionsPaymentsManage,
         CampaignsManageAny,
         ModerationReview,
         IdentityRolesAssign,

@@ -1,4 +1,5 @@
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
+using CrowdFunding.Modules.Contributions.Domain.Enums;
 
 namespace CrowdFunding.Modules.Contributions.Domain.Aggregates;
 
@@ -8,7 +9,11 @@ public sealed class Contribution
     public Guid CampaignId { get; private set; }
     public Guid ContributorId { get; private set; }
     public Money Money { get; private set; } = null!;
+    public ContributionStatus Status { get; private set; }
+    public string? PaymentReference { get; private set; }
+    public string? FailureReason { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
+    public DateTime? ProcessedAtUtc { get; private set; }
 
     private Contribution()
     {
@@ -19,12 +24,14 @@ public sealed class Contribution
         Guid campaignId,
         Guid contributorId,
         Money money,
+        ContributionStatus status,
         DateTime createdAtUtc)
     {
         Id = id;
         CampaignId = campaignId;
         ContributorId = contributorId;
         Money = money;
+        Status = status;
         CreatedAtUtc = createdAtUtc;
     }
 
@@ -57,6 +64,43 @@ public sealed class Contribution
             campaignId,
             contributorId,
             money,
+            ContributionStatus.Pending,
             createdAtUtc);
+    }
+
+    public void ConfirmPayment(string paymentReference, DateTime processedAtUtc)
+    {
+        if (Status != ContributionStatus.Pending)
+        {
+            throw new InvalidOperationException("Only pending contributions can be confirmed.");
+        }
+
+        if (string.IsNullOrWhiteSpace(paymentReference))
+        {
+            throw new ArgumentException("Payment reference is required.", nameof(paymentReference));
+        }
+
+        Status = ContributionStatus.Succeeded;
+        PaymentReference = paymentReference.Trim();
+        FailureReason = null;
+        ProcessedAtUtc = processedAtUtc;
+    }
+
+    public void FailPayment(string failureReason, DateTime processedAtUtc)
+    {
+        if (Status != ContributionStatus.Pending)
+        {
+            throw new InvalidOperationException("Only pending contributions can be failed.");
+        }
+
+        if (string.IsNullOrWhiteSpace(failureReason))
+        {
+            throw new ArgumentException("Failure reason is required.", nameof(failureReason));
+        }
+
+        Status = ContributionStatus.Failed;
+        PaymentReference = null;
+        FailureReason = failureReason.Trim();
+        ProcessedAtUtc = processedAtUtc;
     }
 }

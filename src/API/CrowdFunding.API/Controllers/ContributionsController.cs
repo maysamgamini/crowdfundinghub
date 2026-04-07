@@ -1,6 +1,8 @@
 using CrowdFunding.API.Contracts.Common;
 using CrowdFunding.API.Contracts.Contributions;
 using CrowdFunding.BuildingBlocks.Application.Pagination;
+using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.ConfirmContributionPayment;
+using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.FailContributionPayment;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.MakeContribution;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Queries.ListContributionsByCampaign;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
@@ -15,20 +17,32 @@ namespace CrowdFunding.API.Controllers;
 [Route("api/campaigns/{campaignId:guid}/[controller]")]
 public sealed class ContributionsController : ControllerBase
 {
+    private readonly ConfirmContributionPaymentCommandHandler _confirmContributionPaymentCommandHandler;
+    private readonly FailContributionPaymentCommandHandler _failContributionPaymentCommandHandler;
     private readonly MakeContributionCommandHandler _makeContributionCommandHandler;
     private readonly ListContributionsByCampaignQueryHandler _listContributionsByCampaignQueryHandler;
     private readonly IMapper _mapper;
+    private readonly IValidator<ConfirmContributionPaymentCommand> _confirmPaymentValidator;
+    private readonly IValidator<FailContributionPaymentCommand> _failPaymentValidator;
     private readonly IValidator<MakeContributionCommand> _validator;
 
     public ContributionsController(
+        ConfirmContributionPaymentCommandHandler confirmContributionPaymentCommandHandler,
+        FailContributionPaymentCommandHandler failContributionPaymentCommandHandler,
         MakeContributionCommandHandler makeContributionCommandHandler,
         ListContributionsByCampaignQueryHandler listContributionsByCampaignQueryHandler,
         IMapper mapper,
+        IValidator<ConfirmContributionPaymentCommand> confirmPaymentValidator,
+        IValidator<FailContributionPaymentCommand> failPaymentValidator,
         IValidator<MakeContributionCommand> validator)
     {
+        _confirmContributionPaymentCommandHandler = confirmContributionPaymentCommandHandler;
+        _failContributionPaymentCommandHandler = failContributionPaymentCommandHandler;
         _makeContributionCommandHandler = makeContributionCommandHandler;
         _listContributionsByCampaignQueryHandler = listContributionsByCampaignQueryHandler;
         _mapper = mapper;
+        _confirmPaymentValidator = confirmPaymentValidator;
+        _failPaymentValidator = failPaymentValidator;
         _validator = validator;
     }
 
@@ -40,10 +54,11 @@ public sealed class ContributionsController : ControllerBase
         [FromQuery] int? pageSize,
         [FromQuery] Guid? contributorId,
         [FromQuery] string? currency,
+        [FromQuery] string? status,
         CancellationToken cancellationToken)
     {
         var pageRequest = PageRequest.Create(pageNumber, pageSize);
-        var filter = new ListContributionsByCampaignFilter(contributorId, currency);
+        var filter = new ListContributionsByCampaignFilter(contributorId, currency, status);
         var result = await _listContributionsByCampaignQueryHandler.Handle(
             new ListContributionsByCampaignQuery(campaignId, pageRequest, filter),
             cancellationToken);
@@ -92,5 +107,53 @@ public sealed class ContributionsController : ControllerBase
             nameof(ListByCampaign),
             new { campaignId },
             response);
+    }
+
+    [Authorize(Policy = PermissionConstants.ContributionsPaymentsManage)]
+    [HttpPost("{contributionId:guid}/confirm-payment")]
+    [ProducesResponseType(typeof(ConfirmContributionPaymentResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ConfirmContributionPaymentResponse>> ConfirmPayment(
+        Guid campaignId,
+        Guid contributionId,
+        [FromBody] ConfirmContributionPaymentRequest request,
+        CancellationToken cancellationToken)
+    {
+        var command = new ConfirmContributionPaymentCommand(campaignId, contributionId, request.PaymentReference);
+        var validationResult = await _confirmPaymentValidator.ValidateAsync(command, cancellationToken);
+
+        if (!validationResult.IsValid)
+        {
+            validationResult.AddToModelState(ModelState);
+            return ValidationProblem(ModelState);
+        }
+
+        var result = await _confirmContributionPaymentCommandHandler.Handle(command, cancellationToken);
+        return Ok(_mapper.Map<ConfirmContributionPaymentResponse>(result));
+    }
+
+    [Authorize(Policy = PermissionConstants.ContributionsPaymentsManage)]
+    [HttpPost("{contributionId:guid}/fail-payment")]
+    [ProducesResponseType(typeof(FailContributionPaymentResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<FailContributionPaymentResponse>> FailPayment(
+        Guid campaignId,
+        Guid contributionId,
+        [FromBody] FailContributionPaymentRequest request,
+        CancellationToken cancellationToken)
+    {
+        var command = new FailContributionPaymentCommand(campaignId, contributionId, request.FailureReason);
+        var validationResult = await _failPaymentValidator.ValidateAsync(command, cancellationToken);
+
+        if (!validationResult.IsValid)
+        {
+            validationResult.AddToModelState(ModelState);
+            return ValidationProblem(ModelState);
+        }
+
+        var result = await _failContributionPaymentCommandHandler.Handle(command, cancellationToken);
+        return Ok(_mapper.Map<FailContributionPaymentResponse>(result));
     }
 }

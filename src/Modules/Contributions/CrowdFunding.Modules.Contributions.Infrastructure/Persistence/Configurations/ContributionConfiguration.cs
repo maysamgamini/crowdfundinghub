@@ -1,5 +1,6 @@
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Contributions.Domain.Aggregates;
+using CrowdFunding.Modules.Contributions.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -22,6 +23,17 @@ public sealed class ContributionConfiguration : IEntityTypeConfiguration<Contrib
         builder.Property(x => x.ContributorId)
             .IsRequired();
 
+        builder.Property(x => x.Status)
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .IsRequired();
+
+        builder.Property(x => x.PaymentReference)
+            .HasMaxLength(100);
+
+        builder.Property(x => x.FailureReason)
+            .HasMaxLength(500);
+
         builder.OwnsOne(x => x.Money, money =>
         {
             money.Property(x => x.Amount)
@@ -37,5 +49,7 @@ public sealed class ContributionConfiguration : IEntityTypeConfiguration<Contrib
 
         builder.Property(x => x.CreatedAtUtc)
             .IsRequired();
+
+        builder.Property(x => x.ProcessedAtUtc);
     }
 }

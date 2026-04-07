@@ -2,4 +2,5 @@ namespace CrowdFunding.Modules.Contributions.Application.Features.Contributions.
 
 public sealed record ListContributionsByCampaignFilter(
     Guid? ContributorId,
-    string? Currency);
+    string? Currency,
+    string? Status);

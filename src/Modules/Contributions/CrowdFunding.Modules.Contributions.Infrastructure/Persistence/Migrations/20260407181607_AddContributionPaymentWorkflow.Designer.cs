@@ -3,6 +3,7 @@ using System;
 using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CrowdFunding.Modules.Contributions.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(ContributionsDbContext))]
-    partial class ContributionsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260407181607_AddContributionPaymentWorkflow")]
+    partial class AddContributionPaymentWorkflow
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

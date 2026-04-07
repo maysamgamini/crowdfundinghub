@@ -6,4 +6,8 @@ public sealed record ListContributionsResponse(
     Guid ContributorId,
     decimal Amount,
     string Currency,
-    DateTime CreatedAtUtc);
+    string Status,
+    string? PaymentReference,
+    string? FailureReason,
+    DateTime CreatedAtUtc,
+    DateTime? ProcessedAtUtc);

@@ -114,5 +114,25 @@ Content-Type: application/json
 
 ###
 
-GET {{CrowdFunding.API_HostAddress}}/api/campaigns/{{campaignId}}/contributions?pageNumber=1&pageSize=10&contributorId={{contributorId}}&currency=USD
+POST {{CrowdFunding.API_HostAddress}}/api/campaigns/{{campaignId}}/contributions/00000000-0000-0000-0000-000000000000/confirm-payment
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "paymentReference": "PAY-12345"
+}
+
+###
+
+POST {{CrowdFunding.API_HostAddress}}/api/campaigns/{{campaignId}}/contributions/00000000-0000-0000-0000-000000000000/fail-payment
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "failureReason": "Card was declined by the payment provider."
+}
+
+###
+
+GET {{CrowdFunding.API_HostAddress}}/api/campaigns/{{campaignId}}/contributions?pageNumber=1&pageSize=10&contributorId={{contributorId}}&currency=USD&status=Succeeded
 Accept: application/json
