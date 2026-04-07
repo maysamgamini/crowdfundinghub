@@ -7,13 +7,16 @@ public sealed class PublishCampaignCommandHandler
 {
     private readonly ICampaignRepository _campaignRepository;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly ICampaignModerationGateway _campaignModerationGateway;
 
     public PublishCampaignCommandHandler(
         ICampaignRepository campaignRepository,
-        IDateTimeProvider dateTimeProvider)
+        IDateTimeProvider dateTimeProvider,
+        ICampaignModerationGateway campaignModerationGateway)
     {
         _campaignRepository = campaignRepository;
         _dateTimeProvider = dateTimeProvider;
+        _campaignModerationGateway = campaignModerationGateway;
     }
 
     public async Task<PublishCampaignResult> Handle(
@@ -26,6 +29,8 @@ public sealed class PublishCampaignCommandHandler
         {
             throw new KeyNotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
         }
+
+        await _campaignModerationGateway.EnsureApprovedForPublishingAsync(command.CampaignId, cancellationToken);
 
         campaign.Publish(_dateTimeProvider.UtcNow);
 

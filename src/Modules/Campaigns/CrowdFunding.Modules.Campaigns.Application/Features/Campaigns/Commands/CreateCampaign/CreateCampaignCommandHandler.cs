@@ -9,13 +9,16 @@ public sealed class CreateCampaignCommandHandler
 {
     private readonly ICampaignRepository _campaignRepository;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly ICampaignModerationGateway _campaignModerationGateway;
 
     public CreateCampaignCommandHandler(
         ICampaignRepository campaignRepository,
-        IDateTimeProvider dateTimeProvider)
+        IDateTimeProvider dateTimeProvider,
+        ICampaignModerationGateway campaignModerationGateway)
     {
         _campaignRepository = campaignRepository;
         _dateTimeProvider = dateTimeProvider;
+        _campaignModerationGateway = campaignModerationGateway;
     }
 
     public async Task<CreateCampaignResult> Handle(
@@ -34,6 +37,7 @@ public sealed class CreateCampaignCommandHandler
             _dateTimeProvider.UtcNow);
 
         await _campaignRepository.AddAsync(campaign, cancellationToken);
+        await _campaignModerationGateway.CreateReviewAsync(campaign.Id, cancellationToken);
 
         return new CreateCampaignResult(campaign.Id);
     }

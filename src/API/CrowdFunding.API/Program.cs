@@ -1,9 +1,11 @@
 using CrowdFunding.API.Mapping;
 using CrowdFunding.API.Middleware;
 using CrowdFunding.API.Services;
+using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
 using CrowdFunding.Modules.Campaigns.Infrastructure.DependencyInjection;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
 using CrowdFunding.Modules.Contributions.Infrastructure.DependencyInjection;
+using CrowdFunding.Modules.Moderation.Infrastructure.DependencyInjection;
 using Mapster;
 using MapsterMapper;
 
@@ -15,11 +17,14 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.AddCampaignsModule(builder.Configuration);
 builder.Services.AddContributionsModule(builder.Configuration);
+builder.Services.AddModerationModule(builder.Configuration);
 builder.Services.AddScoped<ICampaignContributionGateway, CampaignContributionGateway>();
+builder.Services.AddScoped<ICampaignModerationGateway, CampaignModerationGateway>();
 
 var typeAdapterConfig = new TypeAdapterConfig();
 CampaignsMappingConfig.Register(typeAdapterConfig);
 ContributionsMappingConfig.Register(typeAdapterConfig);
+ModerationMappingConfig.Register(typeAdapterConfig);
 
 builder.Services.AddSingleton(typeAdapterConfig);
 builder.Services.AddScoped<IMapper, ServiceMapper>();

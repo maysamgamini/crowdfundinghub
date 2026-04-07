@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -23,6 +23,8 @@
     <ProjectReference Include="..\..\..\src\Modules\Campaigns\CrowdFunding.Modules.Campaigns.Domain\CrowdFunding.Modules.Campaigns.Domain.csproj" />
     <ProjectReference Include="..\..\..\src\Modules\Contributions\CrowdFunding.Modules.Contributions.Application\CrowdFunding.Modules.Contributions.Application.csproj" />
     <ProjectReference Include="..\..\..\src\Modules\Contributions\CrowdFunding.Modules.Contributions.Domain\CrowdFunding.Modules.Contributions.Domain.csproj" />
+    <ProjectReference Include="..\..\..\src\Modules\Moderation\CrowdFunding.Modules.Moderation.Application\CrowdFunding.Modules.Moderation.Application.csproj" />
+    <ProjectReference Include="..\..\..\src\Modules\Moderation\CrowdFunding.Modules.Moderation.Domain\CrowdFunding.Modules.Moderation.Domain.csproj" />
   </ItemGroup>
 
 </Project>

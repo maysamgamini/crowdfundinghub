@@ -1,0 +1,3 @@
+namespace CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Queries.GetCampaignReviewByCampaignId;
+
+public sealed record GetCampaignReviewByCampaignIdQuery(Guid CampaignId);

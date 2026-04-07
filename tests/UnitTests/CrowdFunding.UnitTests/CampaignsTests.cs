@@ -3,6 +3,7 @@ using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.CancelCampaign;
+using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.CreateCampaign;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.PublishCampaign;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.GetCampaignById;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.ListCampaigns;
@@ -81,6 +82,35 @@ public sealed class CampaignDomainTests
     }
 }
 
+public sealed class CreateCampaignCommandHandlerTests
+{
+    [Fact]
+    public async Task Handle_ShouldCreateCampaignAndInitializeModerationReview()
+    {
+        var repository = new FakeCampaignRepository();
+        var moderationGateway = new FakeCampaignModerationGateway();
+        var handler = new CreateCampaignCommandHandler(
+            repository,
+            new FakeDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
+            moderationGateway);
+
+        var command = new CreateCampaignCommand(
+            Guid.NewGuid(),
+            "Build a neighborhood makerspace",
+            "We are raising funds to create a neighborhood makerspace for students and families.",
+            "Community",
+            15000m,
+            "USD",
+            new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
+
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        Assert.NotNull(repository.SavedCampaign);
+        Assert.Equal(result.CampaignId, repository.SavedCampaign!.Id);
+        Assert.Equal(result.CampaignId, moderationGateway.CreatedReviewCampaignId);
+    }
+}
+
 public sealed class PublishCampaignCommandHandlerTests
 {
     [Fact]
@@ -97,7 +127,8 @@ public sealed class PublishCampaignCommandHandlerTests
             now.AddDays(-1));
 
         var repository = new FakeCampaignRepository(campaign);
-        var handler = new PublishCampaignCommandHandler(repository, new FakeDateTimeProvider(now));
+        var moderationGateway = new FakeCampaignModerationGateway();
+        var handler = new PublishCampaignCommandHandler(repository, new FakeDateTimeProvider(now), moderationGateway);
 
         var result = await handler.Handle(new PublishCampaignCommand(campaign.Id), CancellationToken.None);
 
@@ -105,6 +136,7 @@ public sealed class PublishCampaignCommandHandlerTests
         Assert.Equal("Published", result.Status);
         Assert.Equal(CampaignStatus.Published, campaign.Status);
         Assert.True(repository.WasUpdated);
+        Assert.Equal(campaign.Id, moderationGateway.CheckedCampaignId);
     }
 
     [Fact]
@@ -112,7 +144,8 @@ public sealed class PublishCampaignCommandHandlerTests
     {
         var handler = new PublishCampaignCommandHandler(
             new FakeCampaignRepository(),
-            new FakeDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)));
+            new FakeDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
+            new FakeCampaignModerationGateway());
 
         var action = async () => await handler.Handle(new PublishCampaignCommand(Guid.NewGuid()), CancellationToken.None);
 
@@ -197,19 +230,28 @@ internal sealed class FakeCampaignRepository : ICampaignRepository
 
     public bool WasUpdated { get; private set; }
 
+    public Campaign? SavedCampaign { get; private set; }
+
     public Task AddAsync(Campaign campaign, CancellationToken cancellationToken)
     {
-        throw new NotSupportedException();
+        SavedCampaign = campaign;
+        return Task.CompletedTask;
     }
 
     public Task<Campaign?> GetByIdAsync(Guid campaignId, CancellationToken cancellationToken)
     {
-        return Task.FromResult(_campaign?.Id == campaignId ? _campaign : null);
+        if (_campaign?.Id == campaignId)
+        {
+            return Task.FromResult<Campaign?>(_campaign);
+        }
+
+        return Task.FromResult(SavedCampaign?.Id == campaignId ? SavedCampaign : null);
     }
 
     public Task UpdateAsync(Campaign campaign, CancellationToken cancellationToken)
     {
         WasUpdated = true;
+        SavedCampaign = campaign;
         return Task.CompletedTask;
     }
 }
@@ -240,6 +282,25 @@ internal sealed class FakeCampaignReadService : ICampaignReadService
         ReceivedPageRequest = pageRequest;
         ReceivedFilter = filter;
         return Task.FromResult(_campaignsPage);
+    }
+}
+
+internal sealed class FakeCampaignModerationGateway : ICampaignModerationGateway
+{
+    public Guid? CreatedReviewCampaignId { get; private set; }
+
+    public Guid? CheckedCampaignId { get; private set; }
+
+    public Task CreateReviewAsync(Guid campaignId, CancellationToken cancellationToken)
+    {
+        CreatedReviewCampaignId = campaignId;
+        return Task.CompletedTask;
+    }
+
+    public Task EnsureApprovedForPublishingAsync(Guid campaignId, CancellationToken cancellationToken)
+    {
+        CheckedCampaignId = campaignId;
+        return Task.CompletedTask;
     }
 }
 
