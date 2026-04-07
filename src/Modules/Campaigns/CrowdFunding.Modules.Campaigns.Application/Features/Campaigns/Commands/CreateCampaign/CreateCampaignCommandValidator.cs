@@ -29,6 +29,7 @@ public sealed class CreateCampaignCommandValidator : AbstractValidator<CreateCam
             .Length(3);
 
         RuleFor(x => x.DeadlineUtc)
-            .GreaterThan(DateTime.UtcNow);
+            .Must(deadlineUtc => deadlineUtc > DateTime.UtcNow)
+            .WithMessage("DeadlineUtc must be in the future.");
     }
 }

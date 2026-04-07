@@ -25,4 +25,10 @@ public sealed class CampaignRepository : ICampaignRepository
         return await _dbContext.Campaigns
             .FirstOrDefaultAsync(x => x.Id == campaignId, cancellationToken);
     }
+
+    public async Task UpdateAsync(Campaign campaign, CancellationToken cancellationToken)
+    {
+        _dbContext.Campaigns.Update(campaign);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
 }

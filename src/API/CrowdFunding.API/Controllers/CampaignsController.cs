@@ -1,5 +1,6 @@
-﻿using CrowdFunding.API.Contracts.Campaigns;
+using CrowdFunding.API.Contracts.Campaigns;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.CreateCampaign;
+using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.PublishCampaign;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.GetCampaignById;
 using FluentValidation;
 using MapsterMapper;
@@ -13,20 +14,26 @@ namespace CrowdFunding.API.Controllers;
 public sealed class CampaignsController : ControllerBase
 {
     private readonly CreateCampaignCommandHandler _createCampaignCommandHandler;
+    private readonly PublishCampaignCommandHandler _publishCampaignCommandHandler;
     private readonly GetCampaignByIdQueryHandler _getCampaignByIdQueryHandler;
     private readonly IMapper _mapper;
-    private readonly IValidator<CreateCampaignCommand> _validator;
+    private readonly IValidator<CreateCampaignCommand> _createCampaignValidator;
+    private readonly IValidator<PublishCampaignCommand> _publishCampaignValidator;
 
     public CampaignsController(
         CreateCampaignCommandHandler createCampaignCommandHandler,
+        PublishCampaignCommandHandler publishCampaignCommandHandler,
         GetCampaignByIdQueryHandler getCampaignByIdQueryHandler,
         IMapper mapper,
-        IValidator<CreateCampaignCommand> validator)
+        IValidator<CreateCampaignCommand> createCampaignValidator,
+        IValidator<PublishCampaignCommand> publishCampaignValidator)
     {
         _createCampaignCommandHandler = createCampaignCommandHandler;
+        _publishCampaignCommandHandler = publishCampaignCommandHandler;
         _getCampaignByIdQueryHandler = getCampaignByIdQueryHandler;
         _mapper = mapper;
-        _validator = validator;
+        _createCampaignValidator = createCampaignValidator;
+        _publishCampaignValidator = publishCampaignValidator;
     }
 
     [HttpPost]
@@ -38,7 +45,7 @@ public sealed class CampaignsController : ControllerBase
     {
         var command = _mapper.Map<CreateCampaignCommand>(request);
 
-        var validationResult = await _validator.ValidateAsync(command, cancellationToken);
+        var validationResult = await _createCampaignValidator.ValidateAsync(command, cancellationToken);
 
         if (!validationResult.IsValid)
         {
@@ -53,6 +60,30 @@ public sealed class CampaignsController : ControllerBase
             nameof(GetById),
             new { id = response.CampaignId },
             response);
+    }
+
+    [HttpPost("{id:guid}/publish")]
+    [ProducesResponseType(typeof(PublishCampaignResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<PublishCampaignResponse>> Publish(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var command = new PublishCampaignCommand(id);
+
+        var validationResult = await _publishCampaignValidator.ValidateAsync(command, cancellationToken);
+
+        if (!validationResult.IsValid)
+        {
+            validationResult.AddToModelState(ModelState);
+            return ValidationProblem(ModelState);
+        }
+
+        var result = await _publishCampaignCommandHandler.Handle(command, cancellationToken);
+        var response = _mapper.Map<PublishCampaignResponse>(result);
+
+        return Ok(response);
     }
 
     [HttpGet("{id:guid}")]

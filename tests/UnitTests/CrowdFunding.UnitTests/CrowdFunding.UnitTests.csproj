@@ -19,6 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Modules\Campaigns\CrowdFunding.Modules.Campaigns.Application\CrowdFunding.Modules.Campaigns.Application.csproj" />
     <ProjectReference Include="..\..\..\src\Modules\Campaigns\CrowdFunding.Modules.Campaigns.Domain\CrowdFunding.Modules.Campaigns.Domain.csproj" />
   </ItemGroup>
 
