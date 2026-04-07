@@ -3,10 +3,14 @@ using CrowdFunding.API.Mapping;
 using CrowdFunding.API.Middleware;
 using CrowdFunding.API.Security;
 using CrowdFunding.BuildingBlocks.Application.Security;
+using CrowdFunding.Modules.Campaigns.Application.DependencyInjection;
 using CrowdFunding.Modules.Campaigns.Infrastructure.DependencyInjection;
+using CrowdFunding.Modules.Contributions.Application.DependencyInjection;
 using CrowdFunding.Modules.Contributions.Infrastructure.DependencyInjection;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
+using CrowdFunding.Modules.Identity.Application.DependencyInjection;
 using CrowdFunding.Modules.Identity.Infrastructure.DependencyInjection;
+using CrowdFunding.Modules.Moderation.Application.DependencyInjection;
 using CrowdFunding.Modules.Moderation.Infrastructure.DependencyInjection;
 using Mapster;
 using MapsterMapper;
@@ -53,10 +57,17 @@ builder.Services.AddAuthorization(options =>
     }
 });
 
-builder.Services.AddIdentityModule(builder.Configuration);
-builder.Services.AddCampaignsModule(builder.Configuration);
-builder.Services.AddContributionsModule(builder.Configuration);
-builder.Services.AddModerationModule(builder.Configuration);
+builder.Services.AddIdentityApplication();
+builder.Services.AddIdentityInfrastructure(builder.Configuration);
+
+builder.Services.AddCampaignsApplication();
+builder.Services.AddCampaignsInfrastructure(builder.Configuration);
+
+builder.Services.AddContributionsApplication();
+builder.Services.AddContributionsInfrastructure(builder.Configuration);
+
+builder.Services.AddModerationApplication();
+builder.Services.AddModerationInfrastructure(builder.Configuration);
 
 var typeAdapterConfig = new TypeAdapterConfig();
 CampaignsMappingConfig.Register(typeAdapterConfig);
