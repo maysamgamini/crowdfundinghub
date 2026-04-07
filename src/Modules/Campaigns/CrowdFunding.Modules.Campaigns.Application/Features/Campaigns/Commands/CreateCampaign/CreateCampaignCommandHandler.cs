@@ -2,6 +2,8 @@ using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
 using CrowdFunding.Modules.Campaigns.Domain.Aggregates;
+using CrowdFunding.Modules.Moderation.Contracts;
+using CrowdFunding.Modules.Moderation.Contracts.Commands.CreateCampaignReview;
 
 namespace CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.CreateCampaign;
 
@@ -9,16 +11,16 @@ public sealed class CreateCampaignCommandHandler
 {
     private readonly ICampaignRepository _campaignRepository;
     private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly ICampaignModerationGateway _campaignModerationGateway;
+    private readonly IModerationModule _moderationModule;
 
     public CreateCampaignCommandHandler(
         ICampaignRepository campaignRepository,
         IDateTimeProvider dateTimeProvider,
-        ICampaignModerationGateway campaignModerationGateway)
+        IModerationModule moderationModule)
     {
         _campaignRepository = campaignRepository;
         _dateTimeProvider = dateTimeProvider;
-        _campaignModerationGateway = campaignModerationGateway;
+        _moderationModule = moderationModule;
     }
 
     public async Task<CreateCampaignResult> Handle(
@@ -37,7 +39,9 @@ public sealed class CreateCampaignCommandHandler
             _dateTimeProvider.UtcNow);
 
         await _campaignRepository.AddAsync(campaign, cancellationToken);
-        await _campaignModerationGateway.CreateReviewAsync(campaign.Id, cancellationToken);
+        await _moderationModule.CreateCampaignReviewAsync(
+            new CreateCampaignReviewCommand(campaign.Id),
+            cancellationToken);
 
         return new CreateCampaignResult(campaign.Id);
     }

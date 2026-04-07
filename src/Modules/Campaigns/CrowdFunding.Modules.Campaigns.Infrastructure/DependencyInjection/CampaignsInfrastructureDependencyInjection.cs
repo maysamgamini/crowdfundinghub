@@ -1,5 +1,6 @@
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
+using CrowdFunding.Modules.Campaigns.Contracts;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Repositories;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Services;
@@ -21,7 +22,7 @@ public static class CampaignsInfrastructureDependencyInjection
         services.AddDbContext<CampaignsDbContext>(options =>
             options.UseNpgsql(connectionString));
 
-        services.AddScoped<ICampaignFundingService, CampaignFundingService>();
+        services.AddScoped<ICampaignsModule, CampaignsModule>();
         services.AddScoped<ICampaignRepository, CampaignRepository>();
         services.AddScoped<ICampaignReadService, CampaignReadService>();
         services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();

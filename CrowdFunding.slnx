@@ -11,6 +11,7 @@
   <Folder Name="/src/Modules/" />
   <Folder Name="/src/Modules/Campaigns/">
     <Project Path="src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Application/CrowdFunding.Modules.Campaigns.Application.csproj" />
+    <Project Path="src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Contracts/CrowdFunding.Modules.Campaigns.Contracts.csproj" />
     <Project Path="src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/CrowdFunding.Modules.Campaigns.Domain.csproj" />
     <Project Path="src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/CrowdFunding.Modules.Campaigns.Infrastructure.csproj" />
   </Folder>
@@ -31,6 +32,7 @@
   </Folder>
   <Folder Name="/src/Modules/Moderation/">
     <Project Path="src/Modules/Moderation/CrowdFunding.Modules.Moderation.Application/CrowdFunding.Modules.Moderation.Application.csproj" />
+    <Project Path="src/Modules/Moderation/CrowdFunding.Modules.Moderation.Contracts/CrowdFunding.Modules.Moderation.Contracts.csproj" />
     <Project Path="src/Modules/Moderation/CrowdFunding.Modules.Moderation.Domain/CrowdFunding.Modules.Moderation.Domain.csproj" />
     <Project Path="src/Modules/Moderation/CrowdFunding.Modules.Moderation.Infrastructure/CrowdFunding.Modules.Moderation.Infrastructure.csproj" />
   </Folder>

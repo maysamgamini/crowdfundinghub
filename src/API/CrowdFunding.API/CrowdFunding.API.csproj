@@ -20,10 +20,12 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Modules\Identity\CrowdFunding.Modules.Identity.Infrastructure\CrowdFunding.Modules.Identity.Infrastructure.csproj" />
     <ProjectReference Include="..\..\Modules\Campaigns\CrowdFunding.Modules.Campaigns.Infrastructure\CrowdFunding.Modules.Campaigns.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Modules\Campaigns\CrowdFunding.Modules.Campaigns.Contracts\CrowdFunding.Modules.Campaigns.Contracts.csproj" />
     <ProjectReference Include="..\..\Modules\Contributions\CrowdFunding.Modules.Contributions.Infrastructure\CrowdFunding.Modules.Contributions.Infrastructure.csproj" />
     <ProjectReference Include="..\..\Modules\CampaignUpdates\CrowdFunding.Modules.CampaignUpdates.Infrastructure\CrowdFunding.Modules.CampaignUpdates.Infrastructure.csproj" />
     <ProjectReference Include="..\..\Modules\Notifications\CrowdFunding.Modules.Notifications.Infrastructure\CrowdFunding.Modules.Notifications.Infrastructure.csproj" />
     <ProjectReference Include="..\..\Modules\Moderation\CrowdFunding.Modules.Moderation.Infrastructure\CrowdFunding.Modules.Moderation.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Modules\Moderation\CrowdFunding.Modules.Moderation.Contracts\CrowdFunding.Modules.Moderation.Contracts.csproj" />
     <ProjectReference Include="..\..\Modules\Campaigns\CrowdFunding.Modules.Campaigns.Application\CrowdFunding.Modules.Campaigns.Application.csproj" />
   </ItemGroup>
 

@@ -1,5 +1,6 @@
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Services;
+using CrowdFunding.Modules.Moderation.Contracts;
 using CrowdFunding.Modules.Moderation.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.Moderation.Infrastructure.Persistence.Repositories;
 using CrowdFunding.Modules.Moderation.Infrastructure.Services;
@@ -21,6 +22,7 @@ public static class ModerationInfrastructureDependencyInjection
         services.AddDbContext<ModerationDbContext>(options =>
             options.UseNpgsql(connectionString));
 
+        services.AddScoped<IModerationModule, ModerationModule>();
         services.AddScoped<ICampaignReviewRepository, CampaignReviewRepository>();
         services.AddScoped<ICampaignReviewReadService, CampaignReviewReadService>();
         services.AddSingleton<IModerationDateTimeProvider, SystemDateTimeProvider>();

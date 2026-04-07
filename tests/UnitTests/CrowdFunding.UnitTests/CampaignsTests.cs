@@ -7,8 +7,12 @@ using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.Cre
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.PublishCampaign;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.GetCampaignById;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.ListCampaigns;
+using CrowdFunding.Modules.Campaigns.Contracts.Commands.AddContributionToCampaign;
 using CrowdFunding.Modules.Campaigns.Domain.Aggregates;
 using CrowdFunding.Modules.Campaigns.Domain.Enums;
+using CrowdFunding.Modules.Moderation.Contracts;
+using CrowdFunding.Modules.Moderation.Contracts.Commands.CreateCampaignReview;
+using CrowdFunding.Modules.Moderation.Contracts.Queries.GetCampaignReviewStatusByCampaignId;
 
 namespace CrowdFunding.UnitTests;
 
@@ -88,11 +92,11 @@ public sealed class CreateCampaignCommandHandlerTests
     public async Task Handle_ShouldCreateCampaignAndInitializeModerationReview()
     {
         var repository = new FakeCampaignRepository();
-        var moderationGateway = new FakeCampaignModerationGateway();
+        var moderationModule = new FakeModerationModule();
         var handler = new CreateCampaignCommandHandler(
             repository,
             new FakeDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
-            moderationGateway);
+            moderationModule);
 
         var command = new CreateCampaignCommand(
             Guid.NewGuid(),
@@ -107,7 +111,7 @@ public sealed class CreateCampaignCommandHandlerTests
 
         Assert.NotNull(repository.SavedCampaign);
         Assert.Equal(result.CampaignId, repository.SavedCampaign!.Id);
-        Assert.Equal(result.CampaignId, moderationGateway.CreatedReviewCampaignId);
+        Assert.Equal(result.CampaignId, moderationModule.CreatedReviewCampaignId);
     }
 }
 
@@ -127,8 +131,8 @@ public sealed class PublishCampaignCommandHandlerTests
             now.AddDays(-1));
 
         var repository = new FakeCampaignRepository(campaign);
-        var moderationGateway = new FakeCampaignModerationGateway();
-        var handler = new PublishCampaignCommandHandler(repository, new FakeDateTimeProvider(now), moderationGateway);
+        var moderationModule = new FakeModerationModule();
+        var handler = new PublishCampaignCommandHandler(repository, new FakeDateTimeProvider(now), moderationModule);
 
         var result = await handler.Handle(new PublishCampaignCommand(campaign.Id), CancellationToken.None);
 
@@ -136,7 +140,7 @@ public sealed class PublishCampaignCommandHandlerTests
         Assert.Equal("Published", result.Status);
         Assert.Equal(CampaignStatus.Published, campaign.Status);
         Assert.True(repository.WasUpdated);
-        Assert.Equal(campaign.Id, moderationGateway.CheckedCampaignId);
+        Assert.Equal(campaign.Id, moderationModule.CheckedCampaignId);
     }
 
     [Fact]
@@ -145,11 +149,41 @@ public sealed class PublishCampaignCommandHandlerTests
         var handler = new PublishCampaignCommandHandler(
             new FakeCampaignRepository(),
             new FakeDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
-            new FakeCampaignModerationGateway());
+            new FakeModerationModule());
 
         var action = async () => await handler.Handle(new PublishCampaignCommand(Guid.NewGuid()), CancellationToken.None);
 
         await Assert.ThrowsAsync<KeyNotFoundException>(action);
+    }
+}
+
+public sealed class AddContributionToCampaignCommandHandlerTests
+{
+    [Fact]
+    public async Task Handle_ShouldAddContributionAndPersistChanges()
+    {
+        var campaign = Campaign.Create(
+            Guid.NewGuid(),
+            "Launch a school robotics lab",
+            "This campaign funds tools and equipment for a new school robotics lab.",
+            "Education",
+            new Money(5000m, "USD"),
+            new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
+
+        campaign.Publish(new DateTime(2026, 4, 7, 12, 0, 0, DateTimeKind.Utc));
+
+        var repository = new FakeCampaignRepository(campaign);
+        var handler = new CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.AddContributionToCampaign.AddContributionToCampaignCommandHandler(repository);
+
+        var result = await handler.Handle(
+            new AddContributionToCampaignCommand(campaign.Id, 125m, "usd"),
+            CancellationToken.None);
+
+        Assert.Equal(campaign.Id, result.CampaignId);
+        Assert.Equal(125m, result.RaisedAmount);
+        Assert.Equal("USD", result.Currency);
+        Assert.True(repository.WasUpdated);
     }
 }
 
@@ -285,22 +319,26 @@ internal sealed class FakeCampaignReadService : ICampaignReadService
     }
 }
 
-internal sealed class FakeCampaignModerationGateway : ICampaignModerationGateway
+internal sealed class FakeModerationModule : IModerationModule
 {
     public Guid? CreatedReviewCampaignId { get; private set; }
 
     public Guid? CheckedCampaignId { get; private set; }
 
-    public Task CreateReviewAsync(Guid campaignId, CancellationToken cancellationToken)
+    public Task<CreateCampaignReviewResult> CreateCampaignReviewAsync(
+        CreateCampaignReviewCommand command,
+        CancellationToken cancellationToken)
     {
-        CreatedReviewCampaignId = campaignId;
-        return Task.CompletedTask;
+        CreatedReviewCampaignId = command.CampaignId;
+        return Task.FromResult(new CreateCampaignReviewResult(Guid.NewGuid(), "Pending"));
     }
 
-    public Task EnsureApprovedForPublishingAsync(Guid campaignId, CancellationToken cancellationToken)
+    public Task<GetCampaignReviewStatusByCampaignIdResult> GetCampaignReviewStatusByCampaignIdAsync(
+        GetCampaignReviewStatusByCampaignIdQuery query,
+        CancellationToken cancellationToken)
     {
-        CheckedCampaignId = campaignId;
-        return Task.CompletedTask;
+        CheckedCampaignId = query.CampaignId;
+        return Task.FromResult(new GetCampaignReviewStatusByCampaignIdResult(query.CampaignId, "Approved"));
     }
 }
 

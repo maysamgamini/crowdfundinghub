@@ -1,5 +1,7 @@
 using CrowdFunding.BuildingBlocks.Application.Pagination;
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
+using CrowdFunding.Modules.Campaigns.Contracts;
+using CrowdFunding.Modules.Campaigns.Contracts.Commands.AddContributionToCampaign;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.MakeContribution;
@@ -47,10 +49,10 @@ public sealed class MakeContributionCommandHandlerTests
     [Fact]
     public async Task Handle_ShouldApplyCampaignContributionAndPersistContribution()
     {
-        var campaignGateway = new FakeCampaignContributionGateway();
+        var campaignsModule = new FakeCampaignsModule();
         var repository = new FakeContributionRepository();
         var handler = new MakeContributionCommandHandler(
-            campaignGateway,
+            campaignsModule,
             new FakeContributionDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
             repository);
 
@@ -63,9 +65,9 @@ public sealed class MakeContributionCommandHandlerTests
         var result = await handler.Handle(command, CancellationToken.None);
 
         Assert.NotEqual(Guid.Empty, result.ContributionId);
-        Assert.Equal(command.CampaignId, campaignGateway.CampaignId);
-        Assert.Equal(100m, campaignGateway.Amount);
-        Assert.Equal("USD", campaignGateway.Currency);
+        Assert.Equal(command.CampaignId, campaignsModule.CampaignId);
+        Assert.Equal(100m, campaignsModule.Amount);
+        Assert.Equal("USD", campaignsModule.Currency);
         Assert.NotNull(repository.SavedContribution);
         Assert.Equal(new Money(100m, "USD"), repository.SavedContribution!.Money);
         Assert.Equal(result.ContributionId, repository.SavedContribution.Id);
@@ -119,22 +121,20 @@ internal sealed class FakeContributionRepository : IContributionRepository
     }
 }
 
-internal sealed class FakeCampaignContributionGateway : ICampaignContributionGateway
+internal sealed class FakeCampaignsModule : ICampaignsModule
 {
     public Guid CampaignId { get; private set; }
     public decimal Amount { get; private set; }
     public string Currency { get; private set; } = string.Empty;
 
-    public Task ApplyContributionAsync(
-        Guid campaignId,
-        decimal amount,
-        string currency,
+    public Task<AddContributionToCampaignResult> AddContributionToCampaignAsync(
+        AddContributionToCampaignCommand command,
         CancellationToken cancellationToken)
     {
-        CampaignId = campaignId;
-        Amount = amount;
-        Currency = currency;
-        return Task.CompletedTask;
+        CampaignId = command.CampaignId;
+        Amount = command.Amount;
+        Currency = command.Currency;
+        return Task.FromResult(new AddContributionToCampaignResult(command.CampaignId, command.Amount, command.Currency));
     }
 }
 
