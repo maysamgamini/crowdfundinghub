@@ -22,6 +22,7 @@
   </Folder>
   <Folder Name="/src/Modules/Contributions/">
     <Project Path="src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/CrowdFunding.Modules.Contributions.Application.csproj" />
+    <Project Path="src/Modules/Contributions/CrowdFunding.Modules.Contributions.Contracts/CrowdFunding.Modules.Contributions.Contracts.csproj" />
     <Project Path="src/Modules/Contributions/CrowdFunding.Modules.Contributions.Domain/CrowdFunding.Modules.Contributions.Domain.csproj" />
     <Project Path="src/Modules/Contributions/CrowdFunding.Modules.Contributions.Infrastructure/CrowdFunding.Modules.Contributions.Infrastructure.csproj" />
   </Folder>

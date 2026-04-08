@@ -1,75 +1,26 @@
-
-/*
-What is a valid campaign?
-When can a campaign be published?
-When can a campaign accept contributions?
-What state transitions are allowed?
-What makes money valid?
-*/
+using CrowdFunding.BuildingBlocks.Domain.Common;
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Campaigns.Domain.Enums;
+using CrowdFunding.Modules.Campaigns.Domain.Events;
 
 namespace CrowdFunding.Modules.Campaigns.Domain.Aggregates;
 
-/// <summary>
-/// Represents a crowdfunding campaign aggregate root.
-/// </summary>
-public sealed class Campaign
+public sealed class Campaign : BaseEntity
 {
-    /// <summary>
-    /// Unique identifier for the campaign.
-    /// </summary>
     public Guid Id { get; private set; }
-
-    /// <summary>
-    /// The user who owns/created the campaign.
-    /// </summary>
     public Guid OwnerId { get; private set; }
-
-    /// <summary>
-    /// Title of the campaign.
-    /// </summary>
     public string Title { get; private set; } = string.Empty;
-
-    /// <summary>
-    /// Story/description of the campaign.
-    /// </summary>
     public string Story { get; private set; } = string.Empty;
-
-    /// <summary>
-    /// Category of the campaign (e.g., Health, Education).
-    /// </summary>
     public string Category { get; private set; } = string.Empty;
-
-    /// <summary>
-    /// Deadline for the campaign to accept contributions (UTC).
-    /// </summary>
     public DateTime DeadlineUtc { get; private set; }
-
-    /// <summary>
-    /// Current status of the campaign (Draft, Published, etc.).
-    /// </summary>
     public CampaignStatus Status { get; private set; }
-
-    /// <summary>
-    /// The goal amount to be raised.
-    /// </summary>
     public Money GoalAmount { get; private set; } = null!;
-
-    /// <summary>
-    /// The amount raised so far.
-    /// </summary>
     public Money RaisedAmount { get; private set; } = null!;
-
-    /// <summary>
-    /// When the campaign was created (UTC).
-    /// </summary>
     public DateTime CreatedAtUtc { get; private set; }
 
-    /// <summary>
-    /// Private constructor for ORM/serialization.
-    /// </summary>
-    private Campaign() { }
+    private Campaign()
+    {
+    }
 
     private Campaign(
         Guid id,
@@ -109,7 +60,7 @@ public sealed class Campaign
         ValidateGoalAmount(goalAmount);
         ValidateDeadline(deadlineUtc, createdAtUtc);
 
-        return new Campaign(
+        var campaign = new Campaign(
             Guid.NewGuid(),
             ownerId,
             title.Trim(),
@@ -118,6 +69,10 @@ public sealed class Campaign
             goalAmount,
             deadlineUtc,
             createdAtUtc);
+
+        campaign.AddDomainEvent(new CampaignCreatedDomainEvent(campaign.Id, campaign.OwnerId));
+
+        return campaign;
     }
 
     public void Publish(DateTime currentUtc)
@@ -133,6 +88,7 @@ public sealed class Campaign
         }
 
         Status = CampaignStatus.Published;
+        AddDomainEvent(new CampaignPublishedDomainEvent(Id, OwnerId));
     }
 
     public void Cancel()
@@ -143,19 +99,17 @@ public sealed class Campaign
         }
 
         Status = CampaignStatus.Cancelled;
+        AddDomainEvent(new CampaignCancelledDomainEvent(Id, OwnerId));
     }
 
-    public void AddContribution(Money contribution)
+    public void ApplyConfirmedContribution(Money contribution)
     {
-        if (Status != CampaignStatus.Published)
+        if (Status == CampaignStatus.Draft)
         {
-            throw new InvalidOperationException("Only published campaigns can receive contributions.");
+            throw new InvalidOperationException("Draft campaigns cannot receive confirmed contributions.");
         }
 
-        if (contribution is null)
-        {
-            throw new ArgumentNullException(nameof(contribution));
-        }
+        ArgumentNullException.ThrowIfNull(contribution);
 
         if (contribution.Amount <= 0)
         {
@@ -214,10 +168,7 @@ public sealed class Campaign
 
     private static void ValidateGoalAmount(Money goalAmount)
     {
-        if (goalAmount is null)
-        {
-            throw new ArgumentNullException(nameof(goalAmount));
-        }
+        ArgumentNullException.ThrowIfNull(goalAmount);
 
         if (goalAmount.Amount <= 0)
         {

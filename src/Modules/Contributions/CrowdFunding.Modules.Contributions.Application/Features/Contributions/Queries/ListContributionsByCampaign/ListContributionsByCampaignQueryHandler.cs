@@ -1,9 +1,10 @@
+using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Pagination;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
 
 namespace CrowdFunding.Modules.Contributions.Application.Features.Contributions.Queries.ListContributionsByCampaign;
 
-public sealed class ListContributionsByCampaignQueryHandler
+public sealed class ListContributionsByCampaignQueryHandler : IQueryHandler<ListContributionsByCampaignQuery, PagedResult<ListContributionsByCampaignResult>>
 {
     private readonly IContributionReadService _contributionReadService;
 

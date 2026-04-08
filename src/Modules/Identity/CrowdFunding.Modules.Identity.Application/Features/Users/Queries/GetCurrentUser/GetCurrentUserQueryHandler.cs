@@ -1,9 +1,10 @@
+using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Persistence;
 
 namespace CrowdFunding.Modules.Identity.Application.Features.Users.Queries.GetCurrentUser;
 
-public sealed class GetCurrentUserQueryHandler
+public sealed class GetCurrentUserQueryHandler : IQueryHandler<GetCurrentUserQuery, GetCurrentUserResult>
 {
     private readonly ICurrentUser _currentUser;
     private readonly IUserRepository _userRepository;

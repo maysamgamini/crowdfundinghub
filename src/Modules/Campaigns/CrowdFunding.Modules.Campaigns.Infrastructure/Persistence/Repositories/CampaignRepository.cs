@@ -1,4 +1,4 @@
-﻿using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
+using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Campaigns.Domain.Aggregates;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore;
@@ -17,7 +17,6 @@ public sealed class CampaignRepository : ICampaignRepository
     public async Task AddAsync(Campaign campaign, CancellationToken cancellationToken)
     {
         await _dbContext.Campaigns.AddAsync(campaign, cancellationToken);
-        await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<Campaign?> GetByIdAsync(Guid campaignId, CancellationToken cancellationToken)
@@ -26,9 +25,9 @@ public sealed class CampaignRepository : ICampaignRepository
             .FirstOrDefaultAsync(x => x.Id == campaignId, cancellationToken);
     }
 
-    public async Task UpdateAsync(Campaign campaign, CancellationToken cancellationToken)
+    public Task UpdateAsync(Campaign campaign, CancellationToken cancellationToken)
     {
         _dbContext.Campaigns.Update(campaign);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        return Task.CompletedTask;
     }
 }

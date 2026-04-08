@@ -1,20 +1,25 @@
+using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Services;
+using CrowdFunding.Modules.Moderation.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Moderation.Domain.Aggregates;
 
 namespace CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Commands.CreateCampaignReview;
 
-public sealed class CreateCampaignReviewCommandHandler
+public sealed class CreateCampaignReviewCommandHandler : ICommandHandler<CreateCampaignReviewCommand, CreateCampaignReviewResult>
 {
     private readonly ICampaignReviewRepository _campaignReviewRepository;
     private readonly IModerationDateTimeProvider _dateTimeProvider;
+    private readonly IModerationTransactionExecutor _transactionExecutor;
 
     public CreateCampaignReviewCommandHandler(
         ICampaignReviewRepository campaignReviewRepository,
-        IModerationDateTimeProvider dateTimeProvider)
+        IModerationDateTimeProvider dateTimeProvider,
+        IModerationTransactionExecutor transactionExecutor)
     {
         _campaignReviewRepository = campaignReviewRepository;
         _dateTimeProvider = dateTimeProvider;
+        _transactionExecutor = transactionExecutor;
     }
 
     public async Task<CreateCampaignReviewResult> Handle(
@@ -30,7 +35,11 @@ public sealed class CreateCampaignReviewCommandHandler
 
         var campaignReview = CampaignReview.Create(command.CampaignId, _dateTimeProvider.UtcNow);
 
-        await _campaignReviewRepository.AddAsync(campaignReview, cancellationToken);
+        await _transactionExecutor.ExecuteAsync(async ct =>
+        {
+            await _campaignReviewRepository.AddAsync(campaignReview, ct);
+            return 0;
+        }, cancellationToken);
 
         return new CreateCampaignReviewResult(campaignReview.Id, campaignReview.Status.ToString());
     }

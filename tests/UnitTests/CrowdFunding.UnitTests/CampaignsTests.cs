@@ -11,8 +11,8 @@ using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.List
 using CrowdFunding.Modules.Campaigns.Contracts.Commands.AddContributionToCampaign;
 using CrowdFunding.Modules.Campaigns.Domain.Aggregates;
 using CrowdFunding.Modules.Campaigns.Domain.Enums;
-using CrowdFunding.Modules.Moderation.Contracts;
-using CrowdFunding.Modules.Moderation.Contracts.Commands.CreateCampaignReview;
+using CrowdFunding.Modules.Campaigns.Domain.Events;
+using CrowdFunding.Modules.Identity.Contracts.Authorization;
 using CrowdFunding.Modules.Moderation.Contracts.Queries.GetCampaignReviewStatusByCampaignId;
 
 namespace CrowdFunding.UnitTests;
@@ -20,7 +20,7 @@ namespace CrowdFunding.UnitTests;
 public sealed class CampaignDomainTests
 {
     [Fact]
-    public void Create_ShouldInitializeDraftCampaignWithZeroRaisedAmount()
+    public void Create_ShouldInitializeDraftCampaignWithZeroRaisedAmount_AndRaiseDomainEvent()
     {
         var createdAtUtc = new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc);
 
@@ -36,10 +36,11 @@ public sealed class CampaignDomainTests
         Assert.Equal(CampaignStatus.Draft, campaign.Status);
         Assert.Equal(new Money(0m, "USD"), campaign.RaisedAmount);
         Assert.Equal(new Money(5000m, "USD"), campaign.GoalAmount);
+        Assert.Contains(campaign.DomainEvents, domainEvent => domainEvent is CampaignCreatedDomainEvent);
     }
 
     [Fact]
-    public void Publish_ShouldMoveDraftCampaignToPublished()
+    public void Publish_ShouldMoveDraftCampaignToPublished_AndRaiseDomainEvent()
     {
         var createdAtUtc = new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc);
         var campaign = CreateDraftCampaign(createdAtUtc, createdAtUtc.AddDays(14));
@@ -47,6 +48,7 @@ public sealed class CampaignDomainTests
         campaign.Publish(createdAtUtc.AddDays(1));
 
         Assert.Equal(CampaignStatus.Published, campaign.Status);
+        Assert.Contains(campaign.DomainEvents, domainEvent => domainEvent is CampaignPublishedDomainEvent);
     }
 
     [Fact]
@@ -64,7 +66,7 @@ public sealed class CampaignDomainTests
     }
 
     [Fact]
-    public void Cancel_ShouldMoveCampaignToCancelled()
+    public void Cancel_ShouldMoveCampaignToCancelled_AndRaiseDomainEvent()
     {
         var createdAtUtc = new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc);
         var campaign = CreateDraftCampaign(createdAtUtc, createdAtUtc.AddDays(14));
@@ -72,6 +74,7 @@ public sealed class CampaignDomainTests
         campaign.Cancel();
 
         Assert.Equal(CampaignStatus.Cancelled, campaign.Status);
+        Assert.Contains(campaign.DomainEvents, domainEvent => domainEvent is CampaignCancelledDomainEvent);
     }
 
     private static Campaign CreateDraftCampaign(DateTime createdAtUtc, DateTime deadlineUtc)
@@ -90,16 +93,20 @@ public sealed class CampaignDomainTests
 public sealed class CreateCampaignCommandHandlerTests
 {
     [Fact]
-    public async Task Handle_ShouldCreateCampaignAndInitializeModerationReview()
+    public async Task Handle_ShouldCreateCampaignInsideTransaction()
     {
         var repository = new FakeCampaignRepository();
-        var moderationModule = new FakeModerationModule();
-        var currentUser = new TestCurrentUser { UserId = Guid.NewGuid() };
+        var transactionExecutor = new FakeCampaignTransactionExecutor();
+        var currentUser = new TestCurrentUser
+        {
+            UserId = Guid.NewGuid(),
+            Permissions = [PermissionConstants.CampaignsCreate]
+        };
         var handler = new CreateCampaignCommandHandler(
             repository,
             currentUser,
             new FakeDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
-            moderationModule);
+            transactionExecutor);
 
         var command = new CreateCampaignCommand(
             "Build a neighborhood makerspace",
@@ -114,7 +121,8 @@ public sealed class CreateCampaignCommandHandlerTests
         Assert.NotNull(repository.SavedCampaign);
         Assert.Equal(result.CampaignId, repository.SavedCampaign!.Id);
         Assert.Equal(currentUser.UserId, repository.SavedCampaign.OwnerId);
-        Assert.Equal(result.CampaignId, moderationModule.CreatedReviewCampaignId);
+        Assert.Equal(1, transactionExecutor.InvocationCount);
+        Assert.Contains(repository.SavedCampaign.DomainEvents, domainEvent => domainEvent is CampaignCreatedDomainEvent);
     }
 }
 
@@ -135,12 +143,18 @@ public sealed class PublishCampaignCommandHandlerTests
             now.AddDays(-1));
 
         var repository = new FakeCampaignRepository(campaign);
-        var moderationModule = new FakeModerationModule();
+        var reviewStatusReader = new FakeCampaignReviewStatusReader("Approved");
+        var transactionExecutor = new FakeCampaignTransactionExecutor();
         var handler = new PublishCampaignCommandHandler(
             repository,
-            new TestCurrentUser { UserId = ownerId },
+            new TestCurrentUser
+            {
+                UserId = ownerId,
+                Permissions = [PermissionConstants.CampaignsPublish]
+            },
             new FakeDateTimeProvider(now),
-            moderationModule);
+            reviewStatusReader,
+            transactionExecutor);
 
         var result = await handler.Handle(new PublishCampaignCommand(campaign.Id), CancellationToken.None);
 
@@ -148,7 +162,9 @@ public sealed class PublishCampaignCommandHandlerTests
         Assert.Equal("Published", result.Status);
         Assert.Equal(CampaignStatus.Published, campaign.Status);
         Assert.True(repository.WasUpdated);
-        Assert.Equal(campaign.Id, moderationModule.CheckedCampaignId);
+        Assert.Equal(campaign.Id, reviewStatusReader.CheckedCampaignId);
+        Assert.Equal(1, transactionExecutor.InvocationCount);
+        Assert.Contains(campaign.DomainEvents, domainEvent => domainEvent is CampaignPublishedDomainEvent);
     }
 
     [Fact]
@@ -158,7 +174,8 @@ public sealed class PublishCampaignCommandHandlerTests
             new FakeCampaignRepository(),
             new TestCurrentUser { UserId = Guid.NewGuid() },
             new FakeDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
-            new FakeModerationModule());
+            new FakeCampaignReviewStatusReader("Approved"),
+            new FakeCampaignTransactionExecutor());
 
         var action = async () => await handler.Handle(new PublishCampaignCommand(Guid.NewGuid()), CancellationToken.None);
 
@@ -182,7 +199,8 @@ public sealed class PublishCampaignCommandHandlerTests
             new FakeCampaignRepository(campaign),
             new TestCurrentUser { UserId = Guid.NewGuid() },
             new FakeDateTimeProvider(now),
-            new FakeModerationModule());
+            new FakeCampaignReviewStatusReader("Approved"),
+            new FakeCampaignTransactionExecutor());
 
         var action = async () => await handler.Handle(new PublishCampaignCommand(campaign.Id), CancellationToken.None);
 
@@ -207,7 +225,10 @@ public sealed class AddContributionToCampaignCommandHandlerTests
         campaign.Publish(new DateTime(2026, 4, 7, 12, 0, 0, DateTimeKind.Utc));
 
         var repository = new FakeCampaignRepository(campaign);
-        var handler = new CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.AddContributionToCampaign.AddContributionToCampaignCommandHandler(repository);
+        var transactionExecutor = new FakeCampaignTransactionExecutor();
+        var handler = new CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.AddContributionToCampaign.AddContributionToCampaignCommandHandler(
+            repository,
+            transactionExecutor);
 
         var result = await handler.Handle(
             new AddContributionToCampaignCommand(campaign.Id, 125m, "usd"),
@@ -217,6 +238,7 @@ public sealed class AddContributionToCampaignCommandHandlerTests
         Assert.Equal(125m, result.RaisedAmount);
         Assert.Equal("USD", result.Currency);
         Assert.True(repository.WasUpdated);
+        Assert.Equal(1, transactionExecutor.InvocationCount);
     }
 }
 
@@ -236,7 +258,15 @@ public sealed class CancelCampaignCommandHandlerTests
             new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
 
         var repository = new FakeCampaignRepository(campaign);
-        var handler = new CancelCampaignCommandHandler(repository, new TestCurrentUser { UserId = ownerId });
+        var transactionExecutor = new FakeCampaignTransactionExecutor();
+        var handler = new CancelCampaignCommandHandler(
+            repository,
+            new TestCurrentUser
+            {
+                UserId = ownerId,
+                Permissions = [PermissionConstants.CampaignsCancel]
+            },
+            transactionExecutor);
 
         var result = await handler.Handle(new CancelCampaignCommand(campaign.Id), CancellationToken.None);
 
@@ -244,6 +274,8 @@ public sealed class CancelCampaignCommandHandlerTests
         Assert.Equal("Cancelled", result.Status);
         Assert.Equal(CampaignStatus.Cancelled, campaign.Status);
         Assert.True(repository.WasUpdated);
+        Assert.Equal(1, transactionExecutor.InvocationCount);
+        Assert.Contains(campaign.DomainEvents, domainEvent => domainEvent is CampaignCancelledDomainEvent);
     }
 }
 
@@ -353,26 +385,23 @@ internal sealed class FakeCampaignReadService : ICampaignReadService
     }
 }
 
-internal sealed class FakeModerationModule : IModerationModule
+internal sealed class FakeCampaignReviewStatusReader : ICampaignReviewStatusReader
 {
-    public Guid? CreatedReviewCampaignId { get; private set; }
+    private readonly string _status;
+
+    public FakeCampaignReviewStatusReader(string status)
+    {
+        _status = status;
+    }
 
     public Guid? CheckedCampaignId { get; private set; }
-
-    public Task<CreateCampaignReviewResult> CreateCampaignReviewAsync(
-        CreateCampaignReviewCommand command,
-        CancellationToken cancellationToken)
-    {
-        CreatedReviewCampaignId = command.CampaignId;
-        return Task.FromResult(new CreateCampaignReviewResult(Guid.NewGuid(), "Pending"));
-    }
 
     public Task<GetCampaignReviewStatusByCampaignIdResult> GetCampaignReviewStatusByCampaignIdAsync(
         GetCampaignReviewStatusByCampaignIdQuery query,
         CancellationToken cancellationToken)
     {
         CheckedCampaignId = query.CampaignId;
-        return Task.FromResult(new GetCampaignReviewStatusByCampaignIdResult(query.CampaignId, "Approved"));
+        return Task.FromResult(new GetCampaignReviewStatusByCampaignIdResult(query.CampaignId, _status));
     }
 }
 

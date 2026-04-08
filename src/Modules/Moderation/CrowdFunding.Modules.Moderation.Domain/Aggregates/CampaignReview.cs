@@ -1,8 +1,10 @@
+using CrowdFunding.BuildingBlocks.Domain.Common;
 using CrowdFunding.Modules.Moderation.Domain.Enums;
+using CrowdFunding.Modules.Moderation.Domain.Events;
 
 namespace CrowdFunding.Modules.Moderation.Domain.Aggregates;
 
-public sealed class CampaignReview
+public sealed class CampaignReview : BaseEntity
 {
     public Guid Id { get; private set; }
     public Guid CampaignId { get; private set; }
@@ -43,6 +45,7 @@ public sealed class CampaignReview
         Notes = NormalizeNotes(notes);
         ReviewedAtUtc = reviewedAtUtc;
         Status = CampaignReviewStatus.Approved;
+        AddDomainEvent(new CampaignReviewApprovedDomainEvent(CampaignId, ModeratorId!.Value, Notes));
     }
 
     public void Reject(Guid moderatorId, string? notes, DateTime reviewedAtUtc)
@@ -54,6 +57,7 @@ public sealed class CampaignReview
         Notes = NormalizeNotes(notes);
         ReviewedAtUtc = reviewedAtUtc;
         Status = CampaignReviewStatus.Rejected;
+        AddDomainEvent(new CampaignReviewRejectedDomainEvent(CampaignId, ModeratorId!.Value, Notes));
     }
 
     private void EnsurePending()

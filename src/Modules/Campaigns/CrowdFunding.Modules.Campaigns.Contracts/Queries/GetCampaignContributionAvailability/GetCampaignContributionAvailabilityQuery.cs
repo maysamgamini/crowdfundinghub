@@ -1,0 +1,3 @@
+namespace CrowdFunding.Modules.Campaigns.Contracts.Queries.GetCampaignContributionAvailability;
+
+public sealed record GetCampaignContributionAvailabilityQuery(Guid CampaignId);

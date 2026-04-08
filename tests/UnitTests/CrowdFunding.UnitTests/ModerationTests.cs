@@ -2,9 +2,12 @@ using CrowdFunding.Modules.Moderation.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Services;
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Commands.ApproveCampaignReview;
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Commands.CreateCampaignReview;
+using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Commands.RejectCampaignReview;
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Queries.GetCampaignReviewByCampaignId;
+using CrowdFunding.Modules.Identity.Contracts.Authorization;
 using CrowdFunding.Modules.Moderation.Domain.Aggregates;
 using CrowdFunding.Modules.Moderation.Domain.Enums;
+using CrowdFunding.Modules.Moderation.Domain.Events;
 
 namespace CrowdFunding.UnitTests;
 
@@ -19,10 +22,11 @@ public sealed class CampaignReviewDomainTests
 
         Assert.Equal(CampaignReviewStatus.Pending, review.Status);
         Assert.Equal(createdAtUtc, review.CreatedAtUtc);
+        Assert.Empty(review.DomainEvents);
     }
 
     [Fact]
-    public void Approve_ShouldMoveReviewToApproved()
+    public void Approve_ShouldMoveReviewToApproved_AndRaiseDomainEvent()
     {
         var review = CampaignReview.Create(Guid.NewGuid(), new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
 
@@ -31,6 +35,20 @@ public sealed class CampaignReviewDomainTests
         Assert.Equal(CampaignReviewStatus.Approved, review.Status);
         Assert.NotNull(review.ModeratorId);
         Assert.NotNull(review.ReviewedAtUtc);
+        Assert.Contains(review.DomainEvents, domainEvent => domainEvent is CampaignReviewApprovedDomainEvent);
+    }
+
+    [Fact]
+    public void Reject_ShouldMoveReviewToRejected_AndRaiseDomainEvent()
+    {
+        var review = CampaignReview.Create(Guid.NewGuid(), new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
+
+        review.Reject(Guid.NewGuid(), "Missing required details.", new DateTime(2026, 4, 7, 12, 0, 0, DateTimeKind.Utc));
+
+        Assert.Equal(CampaignReviewStatus.Rejected, review.Status);
+        Assert.NotNull(review.ModeratorId);
+        Assert.NotNull(review.ReviewedAtUtc);
+        Assert.Contains(review.DomainEvents, domainEvent => domainEvent is CampaignReviewRejectedDomainEvent);
     }
 }
 
@@ -40,15 +58,18 @@ public sealed class CreateCampaignReviewCommandHandlerTests
     public async Task Handle_ShouldCreatePendingReview()
     {
         var repository = new FakeCampaignReviewRepository();
+        var transactionExecutor = new FakeModerationTransactionExecutor();
         var handler = new CreateCampaignReviewCommandHandler(
             repository,
-            new FakeModerationDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)));
+            new FakeModerationDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
+            transactionExecutor);
 
         var result = await handler.Handle(new CreateCampaignReviewCommand(Guid.NewGuid()), CancellationToken.None);
 
         Assert.NotNull(repository.SavedReview);
         Assert.Equal(result.CampaignReviewId, repository.SavedReview!.Id);
         Assert.Equal("Pending", result.Status);
+        Assert.Equal(1, transactionExecutor.InvocationCount);
     }
 }
 
@@ -59,10 +80,16 @@ public sealed class ApproveCampaignReviewCommandHandlerTests
     {
         var review = CampaignReview.Create(Guid.NewGuid(), new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
         var repository = new FakeCampaignReviewRepository(review);
+        var transactionExecutor = new FakeModerationTransactionExecutor();
         var handler = new ApproveCampaignReviewCommandHandler(
             repository,
-            new TestCurrentUser { UserId = Guid.NewGuid() },
-            new FakeModerationDateTimeProvider(new DateTime(2026, 4, 7, 12, 0, 0, DateTimeKind.Utc)));
+            new TestCurrentUser
+            {
+                UserId = Guid.NewGuid(),
+                Permissions = [PermissionConstants.ModerationReview]
+            },
+            new FakeModerationDateTimeProvider(new DateTime(2026, 4, 7, 12, 0, 0, DateTimeKind.Utc)),
+            transactionExecutor);
 
         var result = await handler.Handle(
             new ApproveCampaignReviewCommand(review.CampaignId, "Looks good."),
@@ -71,6 +98,38 @@ public sealed class ApproveCampaignReviewCommandHandlerTests
         Assert.Equal("Approved", result.Status);
         Assert.Equal(CampaignReviewStatus.Approved, review.Status);
         Assert.True(repository.WasUpdated);
+        Assert.Equal(1, transactionExecutor.InvocationCount);
+        Assert.Contains(review.DomainEvents, domainEvent => domainEvent is CampaignReviewApprovedDomainEvent);
+    }
+}
+
+public sealed class RejectCampaignReviewCommandHandlerTests
+{
+    [Fact]
+    public async Task Handle_ShouldRejectPendingReview()
+    {
+        var review = CampaignReview.Create(Guid.NewGuid(), new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
+        var repository = new FakeCampaignReviewRepository(review);
+        var transactionExecutor = new FakeModerationTransactionExecutor();
+        var handler = new RejectCampaignReviewCommandHandler(
+            repository,
+            new TestCurrentUser
+            {
+                UserId = Guid.NewGuid(),
+                Permissions = [PermissionConstants.ModerationReview]
+            },
+            new FakeModerationDateTimeProvider(new DateTime(2026, 4, 7, 12, 0, 0, DateTimeKind.Utc)),
+            transactionExecutor);
+
+        var result = await handler.Handle(
+            new RejectCampaignReviewCommand(review.CampaignId, "Needs more evidence."),
+            CancellationToken.None);
+
+        Assert.Equal("Rejected", result.Status);
+        Assert.Equal(CampaignReviewStatus.Rejected, review.Status);
+        Assert.True(repository.WasUpdated);
+        Assert.Equal(1, transactionExecutor.InvocationCount);
+        Assert.Contains(review.DomainEvents, domainEvent => domainEvent is CampaignReviewRejectedDomainEvent);
     }
 }
 

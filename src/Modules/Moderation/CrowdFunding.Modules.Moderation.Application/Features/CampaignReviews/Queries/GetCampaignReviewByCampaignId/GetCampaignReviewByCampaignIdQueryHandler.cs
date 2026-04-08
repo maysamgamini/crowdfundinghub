@@ -1,8 +1,9 @@
+using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Services;
 
 namespace CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Queries.GetCampaignReviewByCampaignId;
 
-public sealed class GetCampaignReviewByCampaignIdQueryHandler
+public sealed class GetCampaignReviewByCampaignIdQueryHandler : IQueryHandler<GetCampaignReviewByCampaignIdQuery, GetCampaignReviewByCampaignIdResult>
 {
     private readonly ICampaignReviewReadService _campaignReviewReadService;
 

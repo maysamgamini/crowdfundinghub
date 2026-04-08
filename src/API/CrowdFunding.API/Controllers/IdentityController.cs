@@ -1,4 +1,5 @@
 using CrowdFunding.API.Contracts.Identity;
+using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.AssignRoleToUser;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.GrantPermissionToUser;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.LoginUser;
@@ -16,11 +17,8 @@ namespace CrowdFunding.API.Controllers;
 [Route("api/[controller]")]
 public sealed class IdentityController : ControllerBase
 {
-    private readonly AssignRoleToUserCommandHandler _assignRoleToUserCommandHandler;
-    private readonly GetCurrentUserQueryHandler _getCurrentUserQueryHandler;
-    private readonly GrantPermissionToUserCommandHandler _grantPermissionToUserCommandHandler;
-    private readonly LoginUserCommandHandler _loginUserCommandHandler;
-    private readonly RegisterUserCommandHandler _registerUserCommandHandler;
+    private readonly ICommandDispatcher _commandDispatcher;
+    private readonly IQueryDispatcher _queryDispatcher;
     private readonly IMapper _mapper;
     private readonly IValidator<AssignRoleToUserCommand> _assignRoleValidator;
     private readonly IValidator<GrantPermissionToUserCommand> _grantPermissionValidator;
@@ -28,22 +26,16 @@ public sealed class IdentityController : ControllerBase
     private readonly IValidator<RegisterUserCommand> _registerValidator;
 
     public IdentityController(
-        AssignRoleToUserCommandHandler assignRoleToUserCommandHandler,
-        GetCurrentUserQueryHandler getCurrentUserQueryHandler,
-        GrantPermissionToUserCommandHandler grantPermissionToUserCommandHandler,
-        LoginUserCommandHandler loginUserCommandHandler,
-        RegisterUserCommandHandler registerUserCommandHandler,
+        ICommandDispatcher commandDispatcher,
+        IQueryDispatcher queryDispatcher,
         IMapper mapper,
         IValidator<AssignRoleToUserCommand> assignRoleValidator,
         IValidator<GrantPermissionToUserCommand> grantPermissionValidator,
         IValidator<LoginUserCommand> loginValidator,
         IValidator<RegisterUserCommand> registerValidator)
     {
-        _assignRoleToUserCommandHandler = assignRoleToUserCommandHandler;
-        _getCurrentUserQueryHandler = getCurrentUserQueryHandler;
-        _grantPermissionToUserCommandHandler = grantPermissionToUserCommandHandler;
-        _loginUserCommandHandler = loginUserCommandHandler;
-        _registerUserCommandHandler = registerUserCommandHandler;
+        _commandDispatcher = commandDispatcher;
+        _queryDispatcher = queryDispatcher;
         _mapper = mapper;
         _assignRoleValidator = assignRoleValidator;
         _grantPermissionValidator = grantPermissionValidator;
@@ -68,10 +60,8 @@ public sealed class IdentityController : ControllerBase
             return ValidationProblem(ModelState);
         }
 
-        var result = await _registerUserCommandHandler.Handle(command, cancellationToken);
-        var response = _mapper.Map<RegisterUserResponse>(result);
-
-        return CreatedAtAction(nameof(Me), response);
+        var result = await _commandDispatcher.SendAsync<RegisterUserResult>(command, cancellationToken);
+        return CreatedAtAction(nameof(Me), _mapper.Map<RegisterUserResponse>(result));
     }
 
     [AllowAnonymous]
@@ -91,7 +81,7 @@ public sealed class IdentityController : ControllerBase
             return ValidationProblem(ModelState);
         }
 
-        var result = await _loginUserCommandHandler.Handle(command, cancellationToken);
+        var result = await _commandDispatcher.SendAsync<LoginUserResult>(command, cancellationToken);
         return Ok(_mapper.Map<LoginUserResponse>(result));
     }
 
@@ -100,7 +90,7 @@ public sealed class IdentityController : ControllerBase
     [ProducesResponseType(typeof(CurrentUserResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<CurrentUserResponse>> Me(CancellationToken cancellationToken)
     {
-        var result = await _getCurrentUserQueryHandler.Handle(new GetCurrentUserQuery(), cancellationToken);
+        var result = await _queryDispatcher.QueryAsync<GetCurrentUserResult>(new GetCurrentUserQuery(), cancellationToken);
         return Ok(_mapper.Map<CurrentUserResponse>(result));
     }
 
@@ -122,7 +112,7 @@ public sealed class IdentityController : ControllerBase
             return ValidationProblem(ModelState);
         }
 
-        var result = await _assignRoleToUserCommandHandler.Handle(command, cancellationToken);
+        var result = await _commandDispatcher.SendAsync<AssignRoleToUserResult>(command, cancellationToken);
         return Ok(_mapper.Map<AssignRoleToUserResponse>(result));
     }
 
@@ -144,7 +134,7 @@ public sealed class IdentityController : ControllerBase
             return ValidationProblem(ModelState);
         }
 
-        var result = await _grantPermissionToUserCommandHandler.Handle(command, cancellationToken);
+        var result = await _commandDispatcher.SendAsync<GrantPermissionToUserResult>(command, cancellationToken);
         return Ok(_mapper.Map<GrantPermissionToUserResponse>(result));
     }
 }

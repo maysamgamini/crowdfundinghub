@@ -1,10 +1,11 @@
+using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Services;
 using CrowdFunding.Modules.Identity.Domain.Aggregates;
 
 namespace CrowdFunding.Modules.Identity.Application.Features.Users.Commands.LoginUser;
 
-public sealed class LoginUserCommandHandler
+public sealed class LoginUserCommandHandler : ICommandHandler<LoginUserCommand, LoginUserResult>
 {
     private readonly IAccessTokenProvider _accessTokenProvider;
     private readonly IPasswordHasher _passwordHasher;

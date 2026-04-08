@@ -1,9 +1,11 @@
+using CrowdFunding.BuildingBlocks.Domain.Common;
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Contributions.Domain.Enums;
+using CrowdFunding.Modules.Contributions.Domain.Events;
 
 namespace CrowdFunding.Modules.Contributions.Domain.Aggregates;
 
-public sealed class Contribution
+public sealed class Contribution : BaseEntity
 {
     public Guid Id { get; private set; }
     public Guid CampaignId { get; private set; }
@@ -84,6 +86,7 @@ public sealed class Contribution
         PaymentReference = paymentReference.Trim();
         FailureReason = null;
         ProcessedAtUtc = processedAtUtc;
+        AddDomainEvent(new ContributionPaymentConfirmedDomainEvent(Id, CampaignId, Money.Amount, Money.Currency));
     }
 
     public void FailPayment(string failureReason, DateTime processedAtUtc)

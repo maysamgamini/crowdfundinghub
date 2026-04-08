@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
 using CrowdFunding.Modules.Moderation.Domain.Aggregates;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,10 +12,12 @@ public sealed class ModerationDbContext : DbContext
     }
 
     public DbSet<CampaignReview> CampaignReviews => Set<CampaignReview>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(ModerationDbContext).Assembly);
+        modelBuilder.ConfigureOutbox();
         base.OnModelCreating(modelBuilder);
     }
 }

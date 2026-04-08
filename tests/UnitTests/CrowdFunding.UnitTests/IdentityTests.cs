@@ -77,7 +77,11 @@ public sealed class AssignRoleToUserCommandHandlerTests
     {
         var user = User.Register("user@example.com", "User", "hash", DateTime.UtcNow);
         var repository = new FakeUserRepository(user);
-        var handler = new AssignRoleToUserCommandHandler(repository);
+        var currentUser = new TestCurrentUser
+        {
+            Permissions = [PermissionConstants.IdentityRolesAssign]
+        };
+        var handler = new AssignRoleToUserCommandHandler(currentUser, repository);
 
         var result = await handler.Handle(
             new AssignRoleToUserCommand(user.Id, RoleConstants.Moderator),
@@ -95,7 +99,11 @@ public sealed class GrantPermissionToUserCommandHandlerTests
     {
         var user = User.Register("user@example.com", "User", "hash", DateTime.UtcNow);
         var repository = new FakeUserRepository(user);
-        var handler = new GrantPermissionToUserCommandHandler(repository);
+        var currentUser = new TestCurrentUser
+        {
+            Permissions = [PermissionConstants.IdentityPermissionsGrant]
+        };
+        var handler = new GrantPermissionToUserCommandHandler(currentUser, repository);
 
         var result = await handler.Handle(
             new GrantPermissionToUserCommand(user.Id, PermissionConstants.IdentityPermissionsGrant),

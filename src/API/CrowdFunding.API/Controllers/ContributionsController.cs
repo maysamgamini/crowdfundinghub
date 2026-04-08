@@ -1,5 +1,6 @@
 using CrowdFunding.API.Contracts.Common;
 using CrowdFunding.API.Contracts.Contributions;
+using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Pagination;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.ConfirmContributionPayment;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.FailContributionPayment;
@@ -17,29 +18,23 @@ namespace CrowdFunding.API.Controllers;
 [Route("api/campaigns/{campaignId:guid}/[controller]")]
 public sealed class ContributionsController : ControllerBase
 {
-    private readonly ConfirmContributionPaymentCommandHandler _confirmContributionPaymentCommandHandler;
-    private readonly FailContributionPaymentCommandHandler _failContributionPaymentCommandHandler;
-    private readonly MakeContributionCommandHandler _makeContributionCommandHandler;
-    private readonly ListContributionsByCampaignQueryHandler _listContributionsByCampaignQueryHandler;
+    private readonly ICommandDispatcher _commandDispatcher;
+    private readonly IQueryDispatcher _queryDispatcher;
     private readonly IMapper _mapper;
     private readonly IValidator<ConfirmContributionPaymentCommand> _confirmPaymentValidator;
     private readonly IValidator<FailContributionPaymentCommand> _failPaymentValidator;
     private readonly IValidator<MakeContributionCommand> _validator;
 
     public ContributionsController(
-        ConfirmContributionPaymentCommandHandler confirmContributionPaymentCommandHandler,
-        FailContributionPaymentCommandHandler failContributionPaymentCommandHandler,
-        MakeContributionCommandHandler makeContributionCommandHandler,
-        ListContributionsByCampaignQueryHandler listContributionsByCampaignQueryHandler,
+        ICommandDispatcher commandDispatcher,
+        IQueryDispatcher queryDispatcher,
         IMapper mapper,
         IValidator<ConfirmContributionPaymentCommand> confirmPaymentValidator,
         IValidator<FailContributionPaymentCommand> failPaymentValidator,
         IValidator<MakeContributionCommand> validator)
     {
-        _confirmContributionPaymentCommandHandler = confirmContributionPaymentCommandHandler;
-        _failContributionPaymentCommandHandler = failContributionPaymentCommandHandler;
-        _makeContributionCommandHandler = makeContributionCommandHandler;
-        _listContributionsByCampaignQueryHandler = listContributionsByCampaignQueryHandler;
+        _commandDispatcher = commandDispatcher;
+        _queryDispatcher = queryDispatcher;
         _mapper = mapper;
         _confirmPaymentValidator = confirmPaymentValidator;
         _failPaymentValidator = failPaymentValidator;
@@ -59,14 +54,11 @@ public sealed class ContributionsController : ControllerBase
     {
         var pageRequest = PageRequest.Create(pageNumber, pageSize);
         var filter = new ListContributionsByCampaignFilter(contributorId, currency, status);
-        var result = await _listContributionsByCampaignQueryHandler.Handle(
+        var result = await _queryDispatcher.QueryAsync<PagedResult<ListContributionsByCampaignResult>>(
             new ListContributionsByCampaignQuery(campaignId, pageRequest, filter),
             cancellationToken);
 
-        var items = result.Items
-            .Select(x => _mapper.Map<ListContributionsResponse>(x))
-            .ToArray();
-
+        var items = result.Items.Select(x => _mapper.Map<ListContributionsResponse>(x)).ToArray();
         var response = new PagedResponse<ListContributionsResponse>(
             items,
             result.PageNumber,
@@ -87,11 +79,7 @@ public sealed class ContributionsController : ControllerBase
         [FromBody] MakeContributionRequest request,
         CancellationToken cancellationToken)
     {
-        var command = new MakeContributionCommand(
-            campaignId,
-            request.Amount,
-            request.Currency);
-
+        var command = new MakeContributionCommand(campaignId, request.Amount, request.Currency);
         var validationResult = await _validator.ValidateAsync(command, cancellationToken);
 
         if (!validationResult.IsValid)
@@ -100,13 +88,10 @@ public sealed class ContributionsController : ControllerBase
             return ValidationProblem(ModelState);
         }
 
-        var result = await _makeContributionCommandHandler.Handle(command, cancellationToken);
+        var result = await _commandDispatcher.SendAsync<MakeContributionResult>(command, cancellationToken);
         var response = _mapper.Map<MakeContributionResponse>(result);
 
-        return CreatedAtAction(
-            nameof(ListByCampaign),
-            new { campaignId },
-            response);
+        return CreatedAtAction(nameof(ListByCampaign), new { campaignId }, response);
     }
 
     [Authorize(Policy = PermissionConstants.ContributionsPaymentsManage)]
@@ -129,7 +114,7 @@ public sealed class ContributionsController : ControllerBase
             return ValidationProblem(ModelState);
         }
 
-        var result = await _confirmContributionPaymentCommandHandler.Handle(command, cancellationToken);
+        var result = await _commandDispatcher.SendAsync<ConfirmContributionPaymentResult>(command, cancellationToken);
         return Ok(_mapper.Map<ConfirmContributionPaymentResponse>(result));
     }
 
@@ -153,7 +138,7 @@ public sealed class ContributionsController : ControllerBase
             return ValidationProblem(ModelState);
         }
 
-        var result = await _failContributionPaymentCommandHandler.Handle(command, cancellationToken);
+        var result = await _commandDispatcher.SendAsync<FailContributionPaymentResult>(command, cancellationToken);
         return Ok(_mapper.Map<FailContributionPaymentResponse>(result));
     }
 }

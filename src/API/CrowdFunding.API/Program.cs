@@ -1,21 +1,27 @@
 using System.Text;
+using CrowdFunding.API.Background;
 using CrowdFunding.API.Mapping;
 using CrowdFunding.API.Middleware;
 using CrowdFunding.API.Security;
+using CrowdFunding.BuildingBlocks.Application.Events;
+using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
+using CrowdFunding.BuildingBlocks.Infrastructure.Events;
+using CrowdFunding.Modules.CampaignUpdates.Application.DependencyInjection;
 using CrowdFunding.Modules.Campaigns.Application.DependencyInjection;
 using CrowdFunding.Modules.Campaigns.Infrastructure.DependencyInjection;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.Contributions.Application.DependencyInjection;
 using CrowdFunding.Modules.Contributions.Infrastructure.DependencyInjection;
 using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.DbContexts;
-using CrowdFunding.Modules.Identity.Contracts.Authorization;
 using CrowdFunding.Modules.Identity.Application.DependencyInjection;
+using CrowdFunding.Modules.Identity.Contracts.Authorization;
 using CrowdFunding.Modules.Identity.Infrastructure.DependencyInjection;
 using CrowdFunding.Modules.Identity.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.Moderation.Application.DependencyInjection;
 using CrowdFunding.Modules.Moderation.Infrastructure.DependencyInjection;
 using CrowdFunding.Modules.Moderation.Infrastructure.Persistence.DbContexts;
+using CrowdFunding.Modules.Notifications.Application.DependencyInjection;
 using Mapster;
 using MapsterMapper;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -33,6 +39,26 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
+builder.Services.AddScoped<IEventPublisher, ServiceProviderEventPublisher>();
+builder.Services.AddScoped<ICommandDispatcher, CommandDispatcher>();
+builder.Services.AddScoped<IQueryDispatcher, QueryDispatcher>();
+builder.Services.AddHostedService<OutboxProcessorBackgroundService>();
+
+builder.Services.AddRequestHandlersFromAssemblies(
+    typeof(IdentityApplicationDependencyInjection).Assembly,
+    typeof(CampaignsApplicationDependencyInjection).Assembly,
+    typeof(ContributionsApplicationDependencyInjection).Assembly,
+    typeof(ModerationApplicationDependencyInjection).Assembly,
+    typeof(NotificationsApplicationDependencyInjection).Assembly,
+    typeof(CampaignUpdatesApplicationDependencyInjection).Assembly);
+
+builder.Services.AddEventHandlersFromAssemblies(
+    typeof(IdentityApplicationDependencyInjection).Assembly,
+    typeof(CampaignsApplicationDependencyInjection).Assembly,
+    typeof(ContributionsApplicationDependencyInjection).Assembly,
+    typeof(ModerationApplicationDependencyInjection).Assembly,
+    typeof(NotificationsApplicationDependencyInjection).Assembly,
+    typeof(CampaignUpdatesApplicationDependencyInjection).Assembly);
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -74,6 +100,9 @@ builder.Services.AddContributionsInfrastructure(builder.Configuration);
 builder.Services.AddModerationApplication();
 builder.Services.AddModerationInfrastructure(builder.Configuration);
 
+builder.Services.AddNotificationsApplication();
+builder.Services.AddCampaignUpdatesApplication();
+
 var typeAdapterConfig = new TypeAdapterConfig();
 CampaignsMappingConfig.Register(typeAdapterConfig);
 ContributionsMappingConfig.Register(typeAdapterConfig);
@@ -93,14 +122,10 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
 app.UseMiddleware<GlobalExceptionMiddleware>();
-
 app.UseAuthentication();
 app.UseAuthorization();
-
 app.MapControllers();
-
 app.Run();
 
 static class StartupDatabaseMigrationExtensions

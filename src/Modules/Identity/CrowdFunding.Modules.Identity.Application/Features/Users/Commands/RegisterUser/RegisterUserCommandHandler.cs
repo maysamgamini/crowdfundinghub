@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Services;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
@@ -5,7 +6,7 @@ using CrowdFunding.Modules.Identity.Domain.Aggregates;
 
 namespace CrowdFunding.Modules.Identity.Application.Features.Users.Commands.RegisterUser;
 
-public sealed class RegisterUserCommandHandler
+public sealed class RegisterUserCommandHandler : ICommandHandler<RegisterUserCommand, RegisterUserResult>
 {
     private readonly IIdentityDateTimeProvider _dateTimeProvider;
     private readonly IPasswordHasher _passwordHasher;

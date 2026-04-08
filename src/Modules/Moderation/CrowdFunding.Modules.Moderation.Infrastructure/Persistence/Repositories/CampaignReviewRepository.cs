@@ -17,7 +17,6 @@ public sealed class CampaignReviewRepository : ICampaignReviewRepository
     public async Task AddAsync(CampaignReview campaignReview, CancellationToken cancellationToken)
     {
         await _dbContext.CampaignReviews.AddAsync(campaignReview, cancellationToken);
-        await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public Task<CampaignReview?> GetByCampaignIdAsync(Guid campaignId, CancellationToken cancellationToken)
@@ -26,9 +25,9 @@ public sealed class CampaignReviewRepository : ICampaignReviewRepository
             .FirstOrDefaultAsync(x => x.CampaignId == campaignId, cancellationToken);
     }
 
-    public async Task UpdateAsync(CampaignReview campaignReview, CancellationToken cancellationToken)
+    public Task UpdateAsync(CampaignReview campaignReview, CancellationToken cancellationToken)
     {
         _dbContext.CampaignReviews.Update(campaignReview);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        return Task.CompletedTask;
     }
 }

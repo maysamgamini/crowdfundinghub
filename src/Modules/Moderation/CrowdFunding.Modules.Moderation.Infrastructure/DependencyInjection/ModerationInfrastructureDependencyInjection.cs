@@ -1,9 +1,11 @@
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Services;
-using CrowdFunding.Modules.Moderation.Contracts;
+using CrowdFunding.Modules.Moderation.Application.Abstractions.Transactions;
+using CrowdFunding.Modules.Moderation.Contracts.Queries.GetCampaignReviewStatusByCampaignId;
 using CrowdFunding.Modules.Moderation.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.Moderation.Infrastructure.Persistence.Repositories;
 using CrowdFunding.Modules.Moderation.Infrastructure.Services;
+using CrowdFunding.Modules.Moderation.Infrastructure.Transactions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,9 +24,10 @@ public static class ModerationInfrastructureDependencyInjection
         services.AddDbContext<ModerationDbContext>(options =>
             options.UseNpgsql(connectionString));
 
-        services.AddScoped<IModerationModule, ModerationModule>();
+        services.AddScoped<ICampaignReviewStatusReader, CampaignReviewStatusReader>();
         services.AddScoped<ICampaignReviewRepository, CampaignReviewRepository>();
         services.AddScoped<ICampaignReviewReadService, CampaignReviewReadService>();
+        services.AddScoped<IModerationTransactionExecutor, ModerationTransactionExecutor>();
         services.AddSingleton<IModerationDateTimeProvider, SystemDateTimeProvider>();
 
         return services;

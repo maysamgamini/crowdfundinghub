@@ -1,9 +1,11 @@
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
-using CrowdFunding.Modules.Campaigns.Contracts;
+using CrowdFunding.Modules.Campaigns.Application.Abstractions.Transactions;
+using CrowdFunding.Modules.Campaigns.Contracts.Queries.GetCampaignContributionAvailability;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Repositories;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Services;
+using CrowdFunding.Modules.Campaigns.Infrastructure.Transactions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,9 +24,10 @@ public static class CampaignsInfrastructureDependencyInjection
         services.AddDbContext<CampaignsDbContext>(options =>
             options.UseNpgsql(connectionString));
 
-        services.AddScoped<ICampaignsModule, CampaignsModule>();
+        services.AddScoped<ICampaignContributionAvailabilityReader, CampaignContributionAvailabilityReader>();
         services.AddScoped<ICampaignRepository, CampaignRepository>();
         services.AddScoped<ICampaignReadService, CampaignReadService>();
+        services.AddScoped<ICampaignTransactionExecutor, CampaignTransactionExecutor>();
         services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();
 
         return services;

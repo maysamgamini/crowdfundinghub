@@ -1,16 +1,22 @@
+using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
+using CrowdFunding.Modules.Campaigns.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Campaigns.Contracts.Commands.AddContributionToCampaign;
 
 namespace CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.AddContributionToCampaign;
 
-public sealed class AddContributionToCampaignCommandHandler
+public sealed class AddContributionToCampaignCommandHandler : ICommandHandler<AddContributionToCampaignCommand, AddContributionToCampaignResult>
 {
     private readonly ICampaignRepository _campaignRepository;
+    private readonly ICampaignTransactionExecutor _transactionExecutor;
 
-    public AddContributionToCampaignCommandHandler(ICampaignRepository campaignRepository)
+    public AddContributionToCampaignCommandHandler(
+        ICampaignRepository campaignRepository,
+        ICampaignTransactionExecutor transactionExecutor)
     {
         _campaignRepository = campaignRepository;
+        _transactionExecutor = transactionExecutor;
     }
 
     public async Task<AddContributionToCampaignResult> Handle(
@@ -24,13 +30,13 @@ public sealed class AddContributionToCampaignCommandHandler
             throw new KeyNotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
         }
 
-        campaign.AddContribution(new Money(command.Amount, command.Currency));
+        await _transactionExecutor.ExecuteAsync(async ct =>
+        {
+            campaign.ApplyConfirmedContribution(new Money(command.Amount, command.Currency));
+            await _campaignRepository.UpdateAsync(campaign, ct);
+            return 0;
+        }, cancellationToken);
 
-        await _campaignRepository.UpdateAsync(campaign, cancellationToken);
-
-        return new AddContributionToCampaignResult(
-            campaign.Id,
-            campaign.RaisedAmount.Amount,
-            campaign.RaisedAmount.Currency);
+        return new AddContributionToCampaignResult(campaign.Id, campaign.RaisedAmount.Amount, campaign.RaisedAmount.Currency);
     }
 }

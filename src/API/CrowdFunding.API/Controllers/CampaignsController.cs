@@ -1,5 +1,6 @@
 using CrowdFunding.API.Contracts.Common;
 using CrowdFunding.API.Contracts.Campaigns;
+using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Pagination;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.CancelCampaign;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.CreateCampaign;
@@ -19,32 +20,23 @@ namespace CrowdFunding.API.Controllers;
 [Route("api/[controller]")]
 public sealed class CampaignsController : ControllerBase
 {
-    private readonly CancelCampaignCommandHandler _cancelCampaignCommandHandler;
-    private readonly CreateCampaignCommandHandler _createCampaignCommandHandler;
-    private readonly PublishCampaignCommandHandler _publishCampaignCommandHandler;
-    private readonly GetCampaignByIdQueryHandler _getCampaignByIdQueryHandler;
-    private readonly ListCampaignsQueryHandler _listCampaignsQueryHandler;
+    private readonly ICommandDispatcher _commandDispatcher;
+    private readonly IQueryDispatcher _queryDispatcher;
     private readonly IMapper _mapper;
     private readonly IValidator<CancelCampaignCommand> _cancelCampaignValidator;
     private readonly IValidator<CreateCampaignCommand> _createCampaignValidator;
     private readonly IValidator<PublishCampaignCommand> _publishCampaignValidator;
 
     public CampaignsController(
-        CancelCampaignCommandHandler cancelCampaignCommandHandler,
-        CreateCampaignCommandHandler createCampaignCommandHandler,
-        PublishCampaignCommandHandler publishCampaignCommandHandler,
-        GetCampaignByIdQueryHandler getCampaignByIdQueryHandler,
-        ListCampaignsQueryHandler listCampaignsQueryHandler,
+        ICommandDispatcher commandDispatcher,
+        IQueryDispatcher queryDispatcher,
         IMapper mapper,
         IValidator<CancelCampaignCommand> cancelCampaignValidator,
         IValidator<CreateCampaignCommand> createCampaignValidator,
         IValidator<PublishCampaignCommand> publishCampaignValidator)
     {
-        _cancelCampaignCommandHandler = cancelCampaignCommandHandler;
-        _createCampaignCommandHandler = createCampaignCommandHandler;
-        _publishCampaignCommandHandler = publishCampaignCommandHandler;
-        _getCampaignByIdQueryHandler = getCampaignByIdQueryHandler;
-        _listCampaignsQueryHandler = listCampaignsQueryHandler;
+        _commandDispatcher = commandDispatcher;
+        _queryDispatcher = queryDispatcher;
         _mapper = mapper;
         _cancelCampaignValidator = cancelCampaignValidator;
         _createCampaignValidator = createCampaignValidator;
@@ -63,13 +55,11 @@ public sealed class CampaignsController : ControllerBase
     {
         var pageRequest = PageRequest.Create(pageNumber, pageSize);
         var filter = new ListCampaignsFilter(ownerId, category, status);
-        var result = await _listCampaignsQueryHandler.Handle(
+        var result = await _queryDispatcher.QueryAsync<PagedResult<ListCampaignsResult>>(
             new ListCampaignsQuery(pageRequest, filter),
             cancellationToken);
-        var items = result.Items
-            .Select(x => _mapper.Map<ListCampaignsResponse>(x))
-            .ToArray();
 
+        var items = result.Items.Select(x => _mapper.Map<ListCampaignsResponse>(x)).ToArray();
         var response = new PagedResponse<ListCampaignsResponse>(
             items,
             result.PageNumber,
@@ -89,7 +79,6 @@ public sealed class CampaignsController : ControllerBase
         CancellationToken cancellationToken)
     {
         var command = _mapper.Map<CreateCampaignCommand>(request);
-
         var validationResult = await _createCampaignValidator.ValidateAsync(command, cancellationToken);
 
         if (!validationResult.IsValid)
@@ -98,13 +87,10 @@ public sealed class CampaignsController : ControllerBase
             return ValidationProblem(ModelState);
         }
 
-        var result = await _createCampaignCommandHandler.Handle(command, cancellationToken);
+        var result = await _commandDispatcher.SendAsync<CreateCampaignResult>(command, cancellationToken);
         var response = _mapper.Map<CreateCampaignResponse>(result);
 
-        return CreatedAtAction(
-            nameof(GetById),
-            new { id = response.CampaignId },
-            response);
+        return CreatedAtAction(nameof(GetById), new { id = response.CampaignId }, response);
     }
 
     [Authorize(Policy = PermissionConstants.CampaignsPublish)]
@@ -112,12 +98,9 @@ public sealed class CampaignsController : ControllerBase
     [ProducesResponseType(typeof(PublishCampaignResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<PublishCampaignResponse>> Publish(
-        Guid id,
-        CancellationToken cancellationToken)
+    public async Task<ActionResult<PublishCampaignResponse>> Publish(Guid id, CancellationToken cancellationToken)
     {
         var command = new PublishCampaignCommand(id);
-
         var validationResult = await _publishCampaignValidator.ValidateAsync(command, cancellationToken);
 
         if (!validationResult.IsValid)
@@ -126,10 +109,8 @@ public sealed class CampaignsController : ControllerBase
             return ValidationProblem(ModelState);
         }
 
-        var result = await _publishCampaignCommandHandler.Handle(command, cancellationToken);
-        var response = _mapper.Map<PublishCampaignResponse>(result);
-
-        return Ok(response);
+        var result = await _commandDispatcher.SendAsync<PublishCampaignResult>(command, cancellationToken);
+        return Ok(_mapper.Map<PublishCampaignResponse>(result));
     }
 
     [Authorize(Policy = PermissionConstants.CampaignsCancel)]
@@ -137,12 +118,9 @@ public sealed class CampaignsController : ControllerBase
     [ProducesResponseType(typeof(CancelCampaignResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<CancelCampaignResponse>> Cancel(
-        Guid id,
-        CancellationToken cancellationToken)
+    public async Task<ActionResult<CancelCampaignResponse>> Cancel(Guid id, CancellationToken cancellationToken)
     {
         var command = new CancelCampaignCommand(id);
-
         var validationResult = await _cancelCampaignValidator.ValidateAsync(command, cancellationToken);
 
         if (!validationResult.IsValid)
@@ -151,26 +129,17 @@ public sealed class CampaignsController : ControllerBase
             return ValidationProblem(ModelState);
         }
 
-        var result = await _cancelCampaignCommandHandler.Handle(command, cancellationToken);
-        var response = _mapper.Map<CancelCampaignResponse>(result);
-
-        return Ok(response);
+        var result = await _commandDispatcher.SendAsync<CancelCampaignResult>(command, cancellationToken);
+        return Ok(_mapper.Map<CancelCampaignResponse>(result));
     }
 
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(GetCampaignByIdResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<GetCampaignByIdResponse>> GetById(
-        Guid id,
-        CancellationToken cancellationToken)
+    public async Task<ActionResult<GetCampaignByIdResponse>> GetById(Guid id, CancellationToken cancellationToken)
     {
-        var query = new GetCampaignByIdQuery(id);
-
-        var result = await _getCampaignByIdQueryHandler.Handle(query, cancellationToken);
-
-        var response = _mapper.Map<GetCampaignByIdResponse>(result);
-
-        return Ok(response);
+        var result = await _queryDispatcher.QueryAsync<GetCampaignByIdResult>(new GetCampaignByIdQuery(id), cancellationToken);
+        return Ok(_mapper.Map<GetCampaignByIdResponse>(result));
     }
 }
 
