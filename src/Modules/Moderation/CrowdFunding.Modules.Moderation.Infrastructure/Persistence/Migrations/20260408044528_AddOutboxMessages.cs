@@ -12,7 +12,7 @@ namespace CrowdFunding.Modules.Moderation.Infrastructure.Persistence.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
-                name: "outbox_messages",
+                name: "moderation_outbox_messages",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
@@ -25,12 +25,12 @@ namespace CrowdFunding.Modules.Moderation.Infrastructure.Persistence.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_outbox_messages", x => x.Id);
+                    table.PrimaryKey("PK_moderation_outbox_messages", x => x.Id);
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_outbox_messages_ProcessedOnUtc_OccurredOnUtc",
-                table: "outbox_messages",
+                name: "IX_moderation_outbox_messages_ProcessedOnUtc_OccurredOnUtc",
+                table: "moderation_outbox_messages",
                 columns: new[] { "ProcessedOnUtc", "OccurredOnUtc" });
         }
 
@@ -38,7 +38,7 @@ namespace CrowdFunding.Modules.Moderation.Infrastructure.Persistence.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
-                name: "outbox_messages");
+                name: "moderation_outbox_messages");
         }
     }
 }

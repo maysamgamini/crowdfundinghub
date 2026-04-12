@@ -17,7 +17,7 @@ public sealed class ModerationDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(ModerationDbContext).Assembly);
-        modelBuilder.ConfigureOutbox();
+        modelBuilder.ConfigureOutbox("moderation_outbox_messages");
         base.OnModelCreating(modelBuilder);
     }
 }

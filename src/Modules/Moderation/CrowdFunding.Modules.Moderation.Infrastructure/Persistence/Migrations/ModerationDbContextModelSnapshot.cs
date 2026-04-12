@@ -56,7 +56,7 @@ namespace CrowdFunding.Modules.Moderation.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ProcessedOnUtc", "OccurredOnUtc");
 
-                    b.ToTable("outbox_messages", (string)null);
+                    b.ToTable("moderation_outbox_messages", (string)null);
                 });
 
             modelBuilder.Entity("CrowdFunding.Modules.Moderation.Domain.Aggregates.CampaignReview", b =>

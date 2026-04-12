@@ -4,11 +4,11 @@ namespace CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
 
 public static class ModelBuilderExtensions
 {
-    public static ModelBuilder ConfigureOutbox(this ModelBuilder modelBuilder)
+    public static ModelBuilder ConfigureOutbox(this ModelBuilder modelBuilder, string tableName)
     {
         modelBuilder.Entity<OutboxMessage>(builder =>
         {
-            builder.ToTable("outbox_messages");
+            builder.ToTable(tableName);
             builder.HasKey(x => x.Id);
             builder.Property(x => x.EventType).HasMaxLength(2048).IsRequired();
             builder.Property(x => x.Payload).IsRequired();

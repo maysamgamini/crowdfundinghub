@@ -17,7 +17,7 @@ public sealed class CampaignsDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(CampaignsDbContext).Assembly);
-        modelBuilder.ConfigureOutbox();
+        modelBuilder.ConfigureOutbox("campaigns_outbox_messages");
         base.OnModelCreating(modelBuilder);
     }
 }

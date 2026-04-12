@@ -17,7 +17,7 @@ public sealed class ContributionsDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(ContributionsDbContext).Assembly);
-        modelBuilder.ConfigureOutbox();
+        modelBuilder.ConfigureOutbox("contributions_outbox_messages");
         base.OnModelCreating(modelBuilder);
     }
 }
