@@ -1,9 +1,12 @@
-using System.Net;
+﻿using System.Net;
 using System.Text.Json;
 using CrowdFunding.BuildingBlocks.Application.Security;
 
 namespace CrowdFunding.API.Middleware;
 
+/// <summary>
+/// Captures unhandled exceptions and converts them into HTTP responses.
+/// </summary>
 public sealed class GlobalExceptionMiddleware
 {
     private readonly RequestDelegate _next;

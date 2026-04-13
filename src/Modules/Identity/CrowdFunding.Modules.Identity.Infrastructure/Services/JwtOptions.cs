@@ -1,5 +1,8 @@
-namespace CrowdFunding.Modules.Identity.Infrastructure.Services;
+﻿namespace CrowdFunding.Modules.Identity.Infrastructure.Services;
 
+/// <summary>
+/// Defines configuration values used when generating JWT access tokens.
+/// </summary>
 public sealed class JwtOptions
 {
     public const string SectionName = "Jwt";

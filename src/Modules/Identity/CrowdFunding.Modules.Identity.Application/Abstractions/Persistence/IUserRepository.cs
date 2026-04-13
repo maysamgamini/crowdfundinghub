@@ -1,7 +1,10 @@
-using CrowdFunding.Modules.Identity.Domain.Aggregates;
+﻿using CrowdFunding.Modules.Identity.Domain.Aggregates;
 
 namespace CrowdFunding.Modules.Identity.Application.Abstractions.Persistence;
 
+/// <summary>
+/// Defines persistence operations for users.
+/// </summary>
 public interface IUserRepository
 {
     Task AddAsync(User user, CancellationToken cancellationToken);

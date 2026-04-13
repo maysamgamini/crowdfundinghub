@@ -1,4 +1,4 @@
-using System.IdentityModel.Tokens.Jwt;
+﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Services;
@@ -9,6 +9,9 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace CrowdFunding.Modules.Identity.Infrastructure.Services;
 
+/// <summary>
+/// Generates signed JWT access tokens for authenticated users.
+/// </summary>
 public sealed class JwtAccessTokenProvider : IAccessTokenProvider
 {
     private readonly IIdentityDateTimeProvider _dateTimeProvider;

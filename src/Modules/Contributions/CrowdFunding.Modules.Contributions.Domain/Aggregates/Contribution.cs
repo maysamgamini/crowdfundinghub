@@ -1,10 +1,13 @@
-using CrowdFunding.BuildingBlocks.Domain.Common;
+﻿using CrowdFunding.BuildingBlocks.Domain.Common;
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Contributions.Domain.Enums;
 using CrowdFunding.Modules.Contributions.Domain.Events;
 
 namespace CrowdFunding.Modules.Contributions.Domain.Aggregates;
 
+/// <summary>
+/// Represents the contribution aggregate root and enforces payment-state transitions.
+/// </summary>
 public sealed class Contribution : BaseEntity
 {
     public Guid Id { get; private set; }

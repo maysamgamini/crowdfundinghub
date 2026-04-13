@@ -1,4 +1,4 @@
-using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Commands.ApproveCampaignReview;
+﻿using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Commands.ApproveCampaignReview;
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Commands.CreateCampaignReview;
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Commands.RejectCampaignReview;
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Queries.GetCampaignReviewByCampaignId;
@@ -8,6 +8,9 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace CrowdFunding.Modules.Moderation.Application.DependencyInjection;
 
+/// <summary>
+/// Registers services from the surrounding layer with the dependency injection container.
+/// </summary>
 public static class ModerationApplicationDependencyInjection
 {
     public static IServiceCollection AddModerationApplication(this IServiceCollection services)

@@ -1,7 +1,10 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 
 namespace CrowdFunding.API.Controllers;
 
+/// <summary>
+/// Exposes HTTP endpoints for Weather Forecast.
+/// </summary>
 [ApiController]
 [Route("[controller]")]
 public class WeatherForecastController : ControllerBase

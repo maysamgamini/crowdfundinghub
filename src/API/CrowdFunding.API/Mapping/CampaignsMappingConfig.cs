@@ -1,4 +1,4 @@
-using CrowdFunding.API.Contracts.Campaigns;
+﻿using CrowdFunding.API.Contracts.Campaigns;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.CancelCampaign;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.CreateCampaign;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.PublishCampaign;
@@ -8,6 +8,9 @@ using Mapster;
 
 namespace CrowdFunding.API.Mapping;
 
+/// <summary>
+/// Registers Mapster mappings for Campaigns.
+/// </summary>
 public static class CampaignsMappingConfig
 {
     public static void Register(TypeAdapterConfig config)

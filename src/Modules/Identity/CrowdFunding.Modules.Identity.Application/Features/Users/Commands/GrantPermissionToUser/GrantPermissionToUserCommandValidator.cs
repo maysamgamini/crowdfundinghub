@@ -1,8 +1,11 @@
-using CrowdFunding.Modules.Identity.Contracts.Authorization;
+﻿using CrowdFunding.Modules.Identity.Contracts.Authorization;
 using FluentValidation;
 
 namespace CrowdFunding.Modules.Identity.Application.Features.Users.Commands.GrantPermissionToUser;
 
+/// <summary>
+/// Validates Grant Permission To User Command instances before they reach the handler.
+/// </summary>
 public sealed class GrantPermissionToUserCommandValidator : AbstractValidator<GrantPermissionToUserCommand>
 {
     public GrantPermissionToUserCommandValidator()

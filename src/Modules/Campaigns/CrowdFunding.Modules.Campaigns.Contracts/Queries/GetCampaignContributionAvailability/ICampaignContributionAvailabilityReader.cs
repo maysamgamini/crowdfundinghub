@@ -1,5 +1,8 @@
-namespace CrowdFunding.Modules.Campaigns.Contracts.Queries.GetCampaignContributionAvailability;
+﻿namespace CrowdFunding.Modules.Campaigns.Contracts.Queries.GetCampaignContributionAvailability;
 
+/// <summary>
+/// Defines cross-module reads for campaign contribution availability.
+/// </summary>
 public interface ICampaignContributionAvailabilityReader
 {
     Task<GetCampaignContributionAvailabilityResult> GetCampaignContributionAvailabilityAsync(

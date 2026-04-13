@@ -1,10 +1,13 @@
-using CrowdFunding.BuildingBlocks.Application.Events;
+﻿using CrowdFunding.BuildingBlocks.Application.Events;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignCreated;
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Commands.CreateCampaignReview;
 
 namespace CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Events;
 
+/// <summary>
+/// Handles the Campaign Created Application event workflow.
+/// </summary>
 public sealed class CampaignCreatedApplicationEventHandler : IEventHandler<CampaignCreatedApplicationEvent>
 {
     private readonly ICommandDispatcher _commandDispatcher;

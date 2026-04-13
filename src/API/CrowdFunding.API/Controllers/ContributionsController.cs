@@ -1,4 +1,4 @@
-using CrowdFunding.API.Contracts.Common;
+﻿using CrowdFunding.API.Contracts.Common;
 using CrowdFunding.API.Contracts.Contributions;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Pagination;
@@ -14,6 +14,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace CrowdFunding.API.Controllers;
 
+/// <summary>
+/// Exposes HTTP endpoints for Contributions.
+/// </summary>
 [ApiController]
 [Route("api/campaigns/{campaignId:guid}/[controller]")]
 public sealed class ContributionsController : ControllerBase

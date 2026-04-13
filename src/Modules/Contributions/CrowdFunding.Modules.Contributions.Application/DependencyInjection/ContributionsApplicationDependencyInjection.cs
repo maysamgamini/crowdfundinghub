@@ -1,4 +1,4 @@
-using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.ConfirmContributionPayment;
+﻿using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.ConfirmContributionPayment;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.FailContributionPayment;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.MakeContribution;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Queries.ListContributionsByCampaign;
@@ -7,6 +7,9 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace CrowdFunding.Modules.Contributions.Application.DependencyInjection;
 
+/// <summary>
+/// Registers services from the surrounding layer with the dependency injection container.
+/// </summary>
 public static class ContributionsApplicationDependencyInjection
 {
     public static IServiceCollection AddContributionsApplication(this IServiceCollection services)

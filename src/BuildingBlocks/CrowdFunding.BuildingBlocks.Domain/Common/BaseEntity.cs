@@ -1,7 +1,10 @@
-using System.ComponentModel.DataAnnotations.Schema;
+﻿using System.ComponentModel.DataAnnotations.Schema;
 
 namespace CrowdFunding.BuildingBlocks.Domain.Common;
 
+/// <summary>
+/// Provides shared domain-event support for aggregate roots and entities.
+/// </summary>
 public abstract class BaseEntity
 {
     private readonly List<BaseEvent> _domainEvents = [];

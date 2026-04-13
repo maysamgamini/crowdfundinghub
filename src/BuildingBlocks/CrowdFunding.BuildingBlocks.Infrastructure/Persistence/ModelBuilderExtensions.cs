@@ -1,7 +1,10 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 
 namespace CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
 
+/// <summary>
+/// Adds shared EF Core model configuration used by module DbContexts.
+/// </summary>
 public static class ModelBuilderExtensions
 {
     public static ModelBuilder ConfigureOutbox(this ModelBuilder modelBuilder, string tableName)

@@ -1,9 +1,12 @@
-using CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
+﻿using CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
 using CrowdFunding.Modules.Moderation.Domain.Aggregates;
 using Microsoft.EntityFrameworkCore;
 
 namespace CrowdFunding.Modules.Moderation.Infrastructure.Persistence.DbContexts;
 
+/// <summary>
+/// Represents the EF Core database context for the moderation area.
+/// </summary>
 public sealed class ModerationDbContext : DbContext
 {
     public ModerationDbContext(DbContextOptions<ModerationDbContext> options)

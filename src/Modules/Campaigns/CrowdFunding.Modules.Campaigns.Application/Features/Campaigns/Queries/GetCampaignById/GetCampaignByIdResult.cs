@@ -1,5 +1,8 @@
 ﻿namespace CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.GetCampaignById;
 
+/// <summary>
+/// Represents the outcome returned by Get Campaign By Id.
+/// </summary>
 public sealed record GetCampaignByIdResult(
     Guid Id,
     Guid OwnerId,

@@ -1,4 +1,4 @@
-using CrowdFunding.Modules.Identity.Application.Abstractions.Persistence;
+﻿using CrowdFunding.Modules.Identity.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Services;
 using CrowdFunding.Modules.Identity.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.Identity.Infrastructure.Persistence.Repositories;
@@ -9,6 +9,9 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace CrowdFunding.Modules.Identity.Infrastructure.DependencyInjection;
 
+/// <summary>
+/// Registers services from the surrounding layer with the dependency injection container.
+/// </summary>
 public static class IdentityInfrastructureDependencyInjection
 {
     public static IServiceCollection AddIdentityInfrastructure(

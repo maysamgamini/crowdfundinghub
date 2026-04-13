@@ -1,7 +1,10 @@
-using CrowdFunding.Modules.Identity.Domain.Entities;
+﻿using CrowdFunding.Modules.Identity.Domain.Entities;
 
 namespace CrowdFunding.Modules.Identity.Domain.Aggregates;
 
+/// <summary>
+/// Represents an application user together with assigned roles and direct permissions.
+/// </summary>
 public sealed class User
 {
     public Guid Id { get; private set; }

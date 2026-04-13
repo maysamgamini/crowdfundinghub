@@ -1,5 +1,8 @@
-namespace CrowdFunding.BuildingBlocks.Domain.ValueObjects;
+﻿namespace CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 
+/// <summary>
+/// Represents a monetary value with a normalized currency code.
+/// </summary>
 public sealed class Money : IEquatable<Money>
 {
     public decimal Amount { get; }

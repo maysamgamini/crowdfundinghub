@@ -1,4 +1,4 @@
-using CrowdFunding.BuildingBlocks.Domain.Common;
+﻿using CrowdFunding.BuildingBlocks.Domain.Common;
 using CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPaymentConfirmed;
@@ -8,6 +8,9 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace CrowdFunding.Modules.Contributions.Infrastructure.Transactions;
 
+/// <summary>
+/// Executes the surrounding module write operation inside a transaction boundary.
+/// </summary>
 public sealed class ContributionTransactionExecutor : IContributionTransactionExecutor
 {
     private readonly ContributionsDbContext _dbContext;

@@ -1,5 +1,8 @@
-namespace CrowdFunding.Modules.Identity.Contracts.Authorization;
+﻿namespace CrowdFunding.Modules.Identity.Contracts.Authorization;
 
+/// <summary>
+/// Defines the permission names recognized by the application.
+/// </summary>
 public static class PermissionConstants
 {
     public const string CampaignsCreate = "campaigns.create";

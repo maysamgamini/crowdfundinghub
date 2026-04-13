@@ -1,4 +1,4 @@
-using CrowdFunding.BuildingBlocks.Application.Pagination;
+﻿using CrowdFunding.BuildingBlocks.Application.Pagination;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.GetCampaignById;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.ListCampaigns;
@@ -8,6 +8,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CrowdFunding.Modules.Campaigns.Infrastructure.Services;
 
+/// <summary>
+/// Provides read-model access for Campaign.
+/// </summary>
 public sealed class CampaignReadService : ICampaignReadService
 {
     private readonly CampaignsDbContext _dbContext;

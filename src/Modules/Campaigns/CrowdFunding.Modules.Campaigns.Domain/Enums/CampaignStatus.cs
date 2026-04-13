@@ -1,5 +1,8 @@
 ﻿namespace CrowdFunding.Modules.Campaigns.Domain.Enums;
 
+/// <summary>
+/// Defines the lifecycle states that a campaign can move through.
+/// </summary>
 public enum CampaignStatus
 {
     Draft = 1,

@@ -1,4 +1,4 @@
-using CrowdFunding.BuildingBlocks.Application.Messaging;
+﻿using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
@@ -8,6 +8,9 @@ using CrowdFunding.Modules.Moderation.Contracts.Queries.GetCampaignReviewStatusB
 
 namespace CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.PublishCampaign;
 
+/// <summary>
+/// Handles Publish Campaign command requests.
+/// </summary>
 public sealed class PublishCampaignCommandHandler : ICommandHandler<PublishCampaignCommand, PublishCampaignResult>
 {
     private readonly ICampaignRepository _campaignRepository;

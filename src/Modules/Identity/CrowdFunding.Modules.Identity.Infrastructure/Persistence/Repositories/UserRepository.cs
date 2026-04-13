@@ -1,10 +1,13 @@
-using CrowdFunding.Modules.Identity.Application.Abstractions.Persistence;
+﻿using CrowdFunding.Modules.Identity.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Identity.Domain.Aggregates;
 using CrowdFunding.Modules.Identity.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore;
 
 namespace CrowdFunding.Modules.Identity.Infrastructure.Persistence.Repositories;
 
+/// <summary>
+/// Implements repository operations for User.
+/// </summary>
 public sealed class UserRepository : IUserRepository
 {
     private readonly IdentityDbContext _dbContext;

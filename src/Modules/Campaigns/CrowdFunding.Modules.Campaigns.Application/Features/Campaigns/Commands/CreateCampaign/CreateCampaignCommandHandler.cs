@@ -1,4 +1,4 @@
-using CrowdFunding.BuildingBlocks.Application.Messaging;
+﻿using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
@@ -9,6 +9,9 @@ using CrowdFunding.Modules.Identity.Contracts.Authorization;
 
 namespace CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.CreateCampaign;
 
+/// <summary>
+/// Handles Create Campaign command requests.
+/// </summary>
 public sealed class CreateCampaignCommandHandler : ICommandHandler<CreateCampaignCommand, CreateCampaignResult>
 {
     private readonly ICampaignRepository _campaignRepository;

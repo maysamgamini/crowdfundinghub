@@ -1,10 +1,13 @@
-using CrowdFunding.BuildingBlocks.Domain.Common;
+﻿using CrowdFunding.BuildingBlocks.Domain.Common;
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Campaigns.Domain.Enums;
 using CrowdFunding.Modules.Campaigns.Domain.Events;
 
 namespace CrowdFunding.Modules.Campaigns.Domain.Aggregates;
 
+/// <summary>
+/// Represents the campaign aggregate root and enforces campaign lifecycle rules.
+/// </summary>
 public sealed class Campaign : BaseEntity
 {
     public Guid Id { get; private set; }

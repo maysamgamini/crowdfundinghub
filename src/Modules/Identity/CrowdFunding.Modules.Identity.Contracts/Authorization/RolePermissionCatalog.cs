@@ -1,5 +1,8 @@
-namespace CrowdFunding.Modules.Identity.Contracts.Authorization;
+﻿namespace CrowdFunding.Modules.Identity.Contracts.Authorization;
 
+/// <summary>
+/// Maps built-in roles to the permissions they grant.
+/// </summary>
 public static class RolePermissionCatalog
 {
     public static IReadOnlyCollection<string> GetPermissionsForRole(string role)

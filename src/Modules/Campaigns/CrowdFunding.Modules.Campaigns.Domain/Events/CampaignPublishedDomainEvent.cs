@@ -1,7 +1,10 @@
-using CrowdFunding.BuildingBlocks.Domain.Common;
+﻿using CrowdFunding.BuildingBlocks.Domain.Common;
 
 namespace CrowdFunding.Modules.Campaigns.Domain.Events;
 
+/// <summary>
+/// Represents the domain event raised when Campaign Published.
+/// </summary>
 public sealed class CampaignPublishedDomainEvent : BaseEvent
 {
     public CampaignPublishedDomainEvent(Guid campaignId, Guid ownerId)

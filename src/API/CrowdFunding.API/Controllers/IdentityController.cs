@@ -1,4 +1,4 @@
-using CrowdFunding.API.Contracts.Identity;
+﻿using CrowdFunding.API.Contracts.Identity;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.AssignRoleToUser;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.GrantPermissionToUser;
@@ -13,6 +13,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace CrowdFunding.API.Controllers;
 
+/// <summary>
+/// Exposes HTTP endpoints for Identity.
+/// </summary>
 [ApiController]
 [Route("api/[controller]")]
 public sealed class IdentityController : ControllerBase

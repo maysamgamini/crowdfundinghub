@@ -1,7 +1,10 @@
-using CrowdFunding.BuildingBlocks.Domain.Common;
+﻿using CrowdFunding.BuildingBlocks.Domain.Common;
 
 namespace CrowdFunding.Modules.Moderation.Domain.Events;
 
+/// <summary>
+/// Represents the domain event raised when Campaign Review Approved.
+/// </summary>
 public sealed class CampaignReviewApprovedDomainEvent : BaseEvent
 {
     public CampaignReviewApprovedDomainEvent(Guid campaignId, Guid moderatorId, string? notes)

@@ -1,10 +1,13 @@
-using CrowdFunding.Modules.Moderation.Application.Abstractions.Persistence;
+﻿using CrowdFunding.Modules.Moderation.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Moderation.Domain.Aggregates;
 using CrowdFunding.Modules.Moderation.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore;
 
 namespace CrowdFunding.Modules.Moderation.Infrastructure.Persistence.Repositories;
 
+/// <summary>
+/// Implements repository operations for Campaign Review.
+/// </summary>
 public sealed class CampaignReviewRepository : ICampaignReviewRepository
 {
     private readonly ModerationDbContext _dbContext;

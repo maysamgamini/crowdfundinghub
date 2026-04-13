@@ -1,4 +1,4 @@
-using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
+﻿using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Campaigns.Contracts.Queries.GetCampaignContributionAvailability;
@@ -12,6 +12,9 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace CrowdFunding.Modules.Campaigns.Infrastructure.DependencyInjection;
 
+/// <summary>
+/// Registers services from the surrounding layer with the dependency injection container.
+/// </summary>
 public static class CampaignsInfrastructureDependencyInjection
 {
     public static IServiceCollection AddCampaignsInfrastructure(

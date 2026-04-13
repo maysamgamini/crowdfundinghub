@@ -1,10 +1,13 @@
-using CrowdFunding.BuildingBlocks.Application.Messaging;
+﻿using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Persistence;
 
 namespace CrowdFunding.Modules.Identity.Application.Features.Users.Commands.AssignRoleToUser;
 
+/// <summary>
+/// Handles Assign Role To User command requests.
+/// </summary>
 public sealed class AssignRoleToUserCommandHandler : ICommandHandler<AssignRoleToUserCommand, AssignRoleToUserResult>
 {
     private readonly ICurrentUser _currentUser;

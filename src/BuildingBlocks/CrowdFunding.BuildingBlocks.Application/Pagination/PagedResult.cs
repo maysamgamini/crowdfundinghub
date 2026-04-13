@@ -1,5 +1,8 @@
-namespace CrowdFunding.BuildingBlocks.Application.Pagination;
+﻿namespace CrowdFunding.BuildingBlocks.Application.Pagination;
 
+/// <summary>
+/// Represents a page of data returned by a query operation.
+/// </summary>
 public sealed record PagedResult<T>(
     IReadOnlyCollection<T> Items,
     int PageNumber,

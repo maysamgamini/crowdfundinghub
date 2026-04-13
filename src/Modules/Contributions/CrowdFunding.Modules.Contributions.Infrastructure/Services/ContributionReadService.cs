@@ -1,4 +1,4 @@
-using CrowdFunding.BuildingBlocks.Application.Pagination;
+﻿using CrowdFunding.BuildingBlocks.Application.Pagination;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Queries.ListContributionsByCampaign;
 using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.DbContexts;
@@ -6,6 +6,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CrowdFunding.Modules.Contributions.Infrastructure.Services;
 
+/// <summary>
+/// Provides read-model access for Contribution.
+/// </summary>
 public sealed class ContributionReadService : IContributionReadService
 {
     private readonly ContributionsDbContext _dbContext;

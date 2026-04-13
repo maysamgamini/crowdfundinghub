@@ -1,7 +1,10 @@
-using FluentValidation;
+﻿using FluentValidation;
 
 namespace CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.CreateCampaign;
 
+/// <summary>
+/// Validates Create Campaign Command instances before they reach the handler.
+/// </summary>
 public sealed class CreateCampaignCommandValidator : AbstractValidator<CreateCampaignCommand>
 {
     public CreateCampaignCommandValidator()

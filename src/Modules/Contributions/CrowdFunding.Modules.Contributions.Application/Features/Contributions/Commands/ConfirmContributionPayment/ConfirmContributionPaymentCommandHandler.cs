@@ -1,4 +1,4 @@
-using CrowdFunding.BuildingBlocks.Application.Messaging;
+﻿using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.Campaigns.Contracts.Queries.GetCampaignContributionAvailability;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
@@ -8,6 +8,9 @@ using CrowdFunding.Modules.Identity.Contracts.Authorization;
 
 namespace CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.ConfirmContributionPayment;
 
+/// <summary>
+/// Handles Confirm Contribution Payment command requests.
+/// </summary>
 public sealed class ConfirmContributionPaymentCommandHandler : ICommandHandler<ConfirmContributionPaymentCommand, ConfirmContributionPaymentResult>
 {
     private readonly ICampaignContributionAvailabilityReader _campaignContributionAvailabilityReader;

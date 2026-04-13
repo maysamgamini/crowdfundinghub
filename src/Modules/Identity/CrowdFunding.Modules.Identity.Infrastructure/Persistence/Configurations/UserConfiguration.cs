@@ -1,9 +1,12 @@
-using CrowdFunding.Modules.Identity.Domain.Aggregates;
+﻿using CrowdFunding.Modules.Identity.Domain.Aggregates;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace CrowdFunding.Modules.Identity.Infrastructure.Persistence.Configurations;
 
+/// <summary>
+/// Configures EF Core persistence for User.
+/// </summary>
 public sealed class UserConfiguration : IEntityTypeConfiguration<User>
 {
     public void Configure(EntityTypeBuilder<User> builder)

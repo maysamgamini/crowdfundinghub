@@ -1,8 +1,11 @@
-using System.Reflection;
+﻿using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CrowdFunding.BuildingBlocks.Application.Events;
 
+/// <summary>
+/// Registers application event handlers with dependency injection.
+/// </summary>
 public static class NotificationRegistrationExtensions
 {
     public static IServiceCollection AddEventHandlersFromAssemblies(

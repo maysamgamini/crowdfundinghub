@@ -1,9 +1,12 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
 
 namespace CrowdFunding.API.Security;
 
+/// <summary>
+/// Adapts the ASP.NET Core HTTP context into the shared current-user abstraction.
+/// </summary>
 public sealed class HttpContextCurrentUser : ICurrentUser
 {
     private readonly IHttpContextAccessor _httpContextAccessor;

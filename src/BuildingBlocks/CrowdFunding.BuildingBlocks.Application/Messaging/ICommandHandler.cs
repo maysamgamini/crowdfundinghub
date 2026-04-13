@@ -1,5 +1,8 @@
-namespace CrowdFunding.BuildingBlocks.Application.Messaging;
+﻿namespace CrowdFunding.BuildingBlocks.Application.Messaging;
 
+/// <summary>
+/// Handles a specific command.
+/// </summary>
 public interface ICommandHandler<in TCommand, TResult>
     where TCommand : class
 {

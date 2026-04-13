@@ -1,10 +1,13 @@
-using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
+﻿using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Campaigns.Domain.Aggregates;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Configurations;
 
+/// <summary>
+/// Configures EF Core persistence for Campaign.
+/// </summary>
 public sealed class CampaignConfiguration : IEntityTypeConfiguration<Campaign>
 {
     public void Configure(EntityTypeBuilder<Campaign> builder)

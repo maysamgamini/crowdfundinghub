@@ -1,7 +1,10 @@
-using CrowdFunding.Modules.Moderation.Domain.Aggregates;
+﻿using CrowdFunding.Modules.Moderation.Domain.Aggregates;
 
 namespace CrowdFunding.Modules.Moderation.Application.Abstractions.Persistence;
 
+/// <summary>
+/// Defines persistence operations for campaign reviews.
+/// </summary>
 public interface ICampaignReviewRepository
 {
     Task AddAsync(CampaignReview campaignReview, CancellationToken cancellationToken);

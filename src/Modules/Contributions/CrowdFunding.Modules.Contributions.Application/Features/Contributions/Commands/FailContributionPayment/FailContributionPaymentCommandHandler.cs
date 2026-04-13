@@ -1,4 +1,4 @@
-using CrowdFunding.BuildingBlocks.Application.Messaging;
+﻿using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
@@ -7,6 +7,9 @@ using CrowdFunding.Modules.Identity.Contracts.Authorization;
 
 namespace CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.FailContributionPayment;
 
+/// <summary>
+/// Handles Fail Contribution Payment command requests.
+/// </summary>
 public sealed class FailContributionPaymentCommandHandler : ICommandHandler<FailContributionPaymentCommand, FailContributionPaymentResult>
 {
     private readonly ICurrentUser _currentUser;

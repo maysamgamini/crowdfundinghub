@@ -1,4 +1,4 @@
-using CrowdFunding.BuildingBlocks.Application.Messaging;
+﻿using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Services;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Transactions;
@@ -6,6 +6,9 @@ using CrowdFunding.Modules.Moderation.Domain.Aggregates;
 
 namespace CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Commands.CreateCampaignReview;
 
+/// <summary>
+/// Handles Create Campaign Review command requests.
+/// </summary>
 public sealed class CreateCampaignReviewCommandHandler : ICommandHandler<CreateCampaignReviewCommand, CreateCampaignReviewResult>
 {
     private readonly ICampaignReviewRepository _campaignReviewRepository;

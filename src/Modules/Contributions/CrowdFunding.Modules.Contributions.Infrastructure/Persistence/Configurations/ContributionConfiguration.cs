@@ -1,4 +1,4 @@
-using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
+﻿using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Contributions.Domain.Aggregates;
 using CrowdFunding.Modules.Contributions.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -6,6 +6,9 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace CrowdFunding.Modules.Contributions.Infrastructure.Persistence.Configurations;
 
+/// <summary>
+/// Configures EF Core persistence for Contribution.
+/// </summary>
 public sealed class ContributionConfiguration : IEntityTypeConfiguration<Contribution>
 {
     public void Configure(EntityTypeBuilder<Contribution> builder)

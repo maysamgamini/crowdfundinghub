@@ -1,4 +1,4 @@
-using CrowdFunding.BuildingBlocks.Application.Events;
+﻿using CrowdFunding.BuildingBlocks.Application.Events;
 using CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.DbContexts;
@@ -7,6 +7,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CrowdFunding.API.Background;
 
+/// <summary>
+/// Processes pending outbox messages and republishes them as application events.
+/// </summary>
 public sealed class OutboxProcessorBackgroundService : BackgroundService
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);

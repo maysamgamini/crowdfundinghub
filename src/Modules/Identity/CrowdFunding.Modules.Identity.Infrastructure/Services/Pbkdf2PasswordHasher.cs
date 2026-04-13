@@ -1,8 +1,11 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Services;
 
 namespace CrowdFunding.Modules.Identity.Infrastructure.Services;
 
+/// <summary>
+/// Hashes and verifies passwords using the PBKDF2 algorithm.
+/// </summary>
 public sealed class Pbkdf2PasswordHasher : IPasswordHasher
 {
     private const int Iterations = 100_000;

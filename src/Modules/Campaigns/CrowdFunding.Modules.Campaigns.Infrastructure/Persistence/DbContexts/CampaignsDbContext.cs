@@ -1,9 +1,12 @@
-using CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
+﻿using CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
 using CrowdFunding.Modules.Campaigns.Domain.Aggregates;
 using Microsoft.EntityFrameworkCore;
 
 namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.DbContexts;
 
+/// <summary>
+/// Represents the EF Core database context for the campaigns area.
+/// </summary>
 public sealed class CampaignsDbContext : DbContext
 {
     public CampaignsDbContext(DbContextOptions<CampaignsDbContext> options)

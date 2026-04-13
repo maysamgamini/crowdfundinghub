@@ -1,9 +1,12 @@
-using CrowdFunding.BuildingBlocks.Domain.Common;
+﻿using CrowdFunding.BuildingBlocks.Domain.Common;
 using CrowdFunding.Modules.Moderation.Domain.Enums;
 using CrowdFunding.Modules.Moderation.Domain.Events;
 
 namespace CrowdFunding.Modules.Moderation.Domain.Aggregates;
 
+/// <summary>
+/// Represents the moderation aggregate that tracks review state for a campaign.
+/// </summary>
 public sealed class CampaignReview : BaseEntity
 {
     public Guid Id { get; private set; }

@@ -1,4 +1,4 @@
-using CrowdFunding.BuildingBlocks.Application.Messaging;
+﻿using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.Campaigns.Contracts.Queries.GetCampaignContributionAvailability;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
@@ -9,6 +9,9 @@ using CrowdFunding.Modules.Identity.Contracts.Authorization;
 
 namespace CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.MakeContribution;
 
+/// <summary>
+/// Handles Make Contribution command requests.
+/// </summary>
 public sealed class MakeContributionCommandHandler : ICommandHandler<MakeContributionCommand, MakeContributionResult>
 {
     private readonly ICampaignContributionAvailabilityReader _campaignContributionAvailabilityReader;

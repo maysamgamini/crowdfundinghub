@@ -1,10 +1,13 @@
-using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
+﻿using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Campaigns.Domain.Aggregates;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore;
 
 namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Repositories;
 
+/// <summary>
+/// Implements repository operations for Campaign.
+/// </summary>
 public sealed class CampaignRepository : ICampaignRepository
 {
     private readonly CampaignsDbContext _dbContext;

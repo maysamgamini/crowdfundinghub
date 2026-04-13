@@ -1,5 +1,8 @@
-namespace CrowdFunding.API.Contracts.Moderation;
+﻿namespace CrowdFunding.API.Contracts.Moderation;
 
+/// <summary>
+/// Represents the HTTP response payload for Campaign Review.
+/// </summary>
 public sealed record CampaignReviewResponse(
     Guid CampaignId,
     string Status,

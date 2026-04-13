@@ -1,5 +1,8 @@
-namespace CrowdFunding.Modules.Identity.Contracts.Authorization;
+﻿namespace CrowdFunding.Modules.Identity.Contracts.Authorization;
 
+/// <summary>
+/// Defines the built-in role names recognized by the application.
+/// </summary>
 public static class RoleConstants
 {
     public const string Admin = "Admin";

@@ -1,4 +1,4 @@
-using CrowdFunding.BuildingBlocks.Application.Messaging;
+﻿using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Transactions;
@@ -6,6 +6,9 @@ using CrowdFunding.Modules.Campaigns.Contracts.Commands.AddContributionToCampaig
 
 namespace CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.AddContributionToCampaign;
 
+/// <summary>
+/// Handles Add Contribution To Campaign command requests.
+/// </summary>
 public sealed class AddContributionToCampaignCommandHandler : ICommandHandler<AddContributionToCampaignCommand, AddContributionToCampaignResult>
 {
     private readonly ICampaignRepository _campaignRepository;

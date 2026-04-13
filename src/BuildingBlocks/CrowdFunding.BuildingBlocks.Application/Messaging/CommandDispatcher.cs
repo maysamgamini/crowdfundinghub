@@ -1,7 +1,10 @@
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 
 namespace CrowdFunding.BuildingBlocks.Application.Messaging;
 
+/// <summary>
+/// Dispatches command objects to their registered handlers.
+/// </summary>
 public sealed class CommandDispatcher : ICommandDispatcher
 {
     private readonly IServiceProvider _serviceProvider;

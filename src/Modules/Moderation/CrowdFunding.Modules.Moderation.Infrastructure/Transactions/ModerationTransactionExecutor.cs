@@ -1,4 +1,4 @@
-using CrowdFunding.BuildingBlocks.Domain.Common;
+﻿using CrowdFunding.BuildingBlocks.Domain.Common;
 using CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Moderation.Contracts.Events.CampaignReviewApproved;
@@ -9,6 +9,9 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace CrowdFunding.Modules.Moderation.Infrastructure.Transactions;
 
+/// <summary>
+/// Executes the surrounding module write operation inside a transaction boundary.
+/// </summary>
 public sealed class ModerationTransactionExecutor : IModerationTransactionExecutor
 {
     private readonly ModerationDbContext _dbContext;

@@ -1,5 +1,8 @@
-namespace CrowdFunding.Modules.Contributions.Application.Features.Contributions.Queries.ListContributionsByCampaign;
+﻿namespace CrowdFunding.Modules.Contributions.Application.Features.Contributions.Queries.ListContributionsByCampaign;
 
+/// <summary>
+/// Represents the outcome returned by List Contributions By Campaign.
+/// </summary>
 public sealed record ListContributionsByCampaignResult(
     Guid Id,
     Guid CampaignId,

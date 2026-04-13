@@ -1,9 +1,12 @@
-using CrowdFunding.Modules.Moderation.Domain.Aggregates;
+﻿using CrowdFunding.Modules.Moderation.Domain.Aggregates;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace CrowdFunding.Modules.Moderation.Infrastructure.Persistence.Configurations;
 
+/// <summary>
+/// Configures EF Core persistence for Campaign Review.
+/// </summary>
 public sealed class CampaignReviewConfiguration : IEntityTypeConfiguration<CampaignReview>
 {
     public void Configure(EntityTypeBuilder<CampaignReview> builder)

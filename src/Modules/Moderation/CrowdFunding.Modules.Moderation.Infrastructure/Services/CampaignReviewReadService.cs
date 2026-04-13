@@ -1,10 +1,13 @@
-using CrowdFunding.Modules.Moderation.Application.Abstractions.Services;
+﻿using CrowdFunding.Modules.Moderation.Application.Abstractions.Services;
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Queries.GetCampaignReviewByCampaignId;
 using CrowdFunding.Modules.Moderation.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore;
 
 namespace CrowdFunding.Modules.Moderation.Infrastructure.Services;
 
+/// <summary>
+/// Provides read-model access for Campaign Review.
+/// </summary>
 public sealed class CampaignReviewReadService : ICampaignReviewReadService
 {
     private readonly ModerationDbContext _dbContext;

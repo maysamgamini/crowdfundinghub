@@ -1,4 +1,4 @@
-using CrowdFunding.API.Contracts.Common;
+﻿using CrowdFunding.API.Contracts.Common;
 using CrowdFunding.API.Contracts.Campaigns;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Pagination;
@@ -16,6 +16,9 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace CrowdFunding.API.Controllers;
 
+/// <summary>
+/// Exposes HTTP endpoints for Campaigns.
+/// </summary>
 [ApiController]
 [Route("api/[controller]")]
 public sealed class CampaignsController : ControllerBase
@@ -143,6 +146,9 @@ public sealed class CampaignsController : ControllerBase
     }
 }
 
+/// <summary>
+/// Adds FluentValidation errors to ASP.NET Core model state.
+/// </summary>
 internal static class ValidationExtensions
 {
     public static void AddToModelState(

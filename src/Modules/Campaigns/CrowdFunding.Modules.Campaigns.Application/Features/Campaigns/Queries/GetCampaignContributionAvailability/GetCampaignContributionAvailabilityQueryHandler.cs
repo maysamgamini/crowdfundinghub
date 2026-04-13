@@ -1,10 +1,13 @@
-using CrowdFunding.BuildingBlocks.Application.Messaging;
+﻿using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Campaigns.Contracts.Queries.GetCampaignContributionAvailability;
 using CrowdFunding.Modules.Campaigns.Domain.Enums;
 
 namespace CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.GetCampaignContributionAvailability;
 
+/// <summary>
+/// Handles Get Campaign Contribution Availability query requests.
+/// </summary>
 public sealed class GetCampaignContributionAvailabilityQueryHandler : IQueryHandler<GetCampaignContributionAvailabilityQuery, GetCampaignContributionAvailabilityResult>
 {
     private readonly ICampaignRepository _campaignRepository;

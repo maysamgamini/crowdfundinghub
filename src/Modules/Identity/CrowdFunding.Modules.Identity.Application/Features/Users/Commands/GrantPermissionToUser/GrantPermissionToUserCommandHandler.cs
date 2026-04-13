@@ -1,10 +1,13 @@
-using CrowdFunding.BuildingBlocks.Application.Messaging;
+﻿using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
 
 namespace CrowdFunding.Modules.Identity.Application.Features.Users.Commands.GrantPermissionToUser;
 
+/// <summary>
+/// Handles Grant Permission To User command requests.
+/// </summary>
 public sealed class GrantPermissionToUserCommandHandler : ICommandHandler<GrantPermissionToUserCommand, GrantPermissionToUserResult>
 {
     private readonly ICurrentUser _currentUser;

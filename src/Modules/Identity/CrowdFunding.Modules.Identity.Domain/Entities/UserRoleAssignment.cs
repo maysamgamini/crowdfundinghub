@@ -1,5 +1,8 @@
-namespace CrowdFunding.Modules.Identity.Domain.Entities;
+﻿namespace CrowdFunding.Modules.Identity.Domain.Entities;
 
+/// <summary>
+/// Represents a role assigned to a user.
+/// </summary>
 public sealed class UserRoleAssignment
 {
     public Guid Id { get; private set; }

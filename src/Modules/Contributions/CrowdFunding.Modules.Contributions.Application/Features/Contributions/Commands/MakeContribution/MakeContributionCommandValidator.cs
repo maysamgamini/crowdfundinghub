@@ -1,7 +1,10 @@
-using FluentValidation;
+﻿using FluentValidation;
 
 namespace CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.MakeContribution;
 
+/// <summary>
+/// Validates Make Contribution Command instances before they reach the handler.
+/// </summary>
 public sealed class MakeContributionCommandValidator : AbstractValidator<MakeContributionCommand>
 {
     public MakeContributionCommandValidator()

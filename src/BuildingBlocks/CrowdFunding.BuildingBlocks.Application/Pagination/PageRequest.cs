@@ -1,5 +1,8 @@
-namespace CrowdFunding.BuildingBlocks.Application.Pagination;
+﻿namespace CrowdFunding.BuildingBlocks.Application.Pagination;
 
+/// <summary>
+/// Represents paging input used by list queries.
+/// </summary>
 public sealed record PageRequest(int PageNumber, int PageSize)
 {
     public int Skip => (PageNumber - 1) * PageSize;

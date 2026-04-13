@@ -1,4 +1,4 @@
-using CrowdFunding.Modules.Moderation.Application.Abstractions.Persistence;
+﻿using CrowdFunding.Modules.Moderation.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Services;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Moderation.Contracts.Queries.GetCampaignReviewStatusByCampaignId;
@@ -12,6 +12,9 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace CrowdFunding.Modules.Moderation.Infrastructure.DependencyInjection;
 
+/// <summary>
+/// Registers services from the surrounding layer with the dependency injection container.
+/// </summary>
 public static class ModerationInfrastructureDependencyInjection
 {
     public static IServiceCollection AddModerationInfrastructure(

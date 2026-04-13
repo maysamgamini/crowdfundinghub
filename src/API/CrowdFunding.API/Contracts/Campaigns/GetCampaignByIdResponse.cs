@@ -1,5 +1,8 @@
 ﻿namespace CrowdFunding.API.Contracts.Campaigns;
 
+/// <summary>
+/// Represents the HTTP response payload for Get Campaign By Id.
+/// </summary>
 public sealed record GetCampaignByIdResponse(
     Guid Id,
     Guid OwnerId,

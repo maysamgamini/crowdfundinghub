@@ -1,4 +1,5 @@
 using CrowdFunding.BuildingBlocks.Application.Pagination;
+using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Campaigns.Contracts.Queries.GetCampaignContributionAvailability;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
@@ -85,6 +86,41 @@ public sealed class ContributionDomainTests
         Assert.Null(contribution.PaymentReference);
         Assert.NotNull(contribution.ProcessedAtUtc);
     }
+
+    [Fact]
+    public void ConfirmPayment_ShouldThrow_WhenContributionIsNotPending()
+    {
+        var contribution = Contribution.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            50m,
+            "USD",
+            new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
+        contribution.ConfirmPayment("PAY-123", new DateTime(2026, 4, 6, 12, 15, 0, DateTimeKind.Utc));
+
+        var action = () => contribution.ConfirmPayment("PAY-456", new DateTime(2026, 4, 6, 12, 20, 0, DateTimeKind.Utc));
+
+        var exception = Assert.Throws<InvalidOperationException>(action);
+
+        Assert.Equal("Only pending contributions can be confirmed.", exception.Message);
+    }
+
+    [Fact]
+    public void FailPayment_ShouldThrow_WhenReasonIsMissing()
+    {
+        var contribution = Contribution.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            50m,
+            "USD",
+            new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
+
+        var action = () => contribution.FailPayment("   ", new DateTime(2026, 4, 6, 12, 15, 0, DateTimeKind.Utc));
+
+        var exception = Assert.Throws<ArgumentException>(action);
+
+        Assert.Equal("Failure reason is required. (Parameter 'failureReason')", exception.Message);
+    }
 }
 
 public sealed class MakeContributionCommandHandlerTests
@@ -123,6 +159,96 @@ public sealed class MakeContributionCommandHandlerTests
         Assert.Equal(result.ContributionId, repository.SavedContribution.Id);
         Assert.Equal(command.CampaignId, campaignReader.CheckedCampaignId);
         Assert.Equal(1, transactionExecutor.InvocationCount);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldThrow_WhenUserIsNotAuthenticated()
+    {
+        var handler = new MakeContributionCommandHandler(
+            new FakeCampaignContributionAvailabilityReader(exists: true, canAcceptContributions: true, status: "Published"),
+            new TestCurrentUser { IsAuthenticated = false, UserId = Guid.Empty },
+            new FakeContributionDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
+            new FakeContributionRepository(),
+            new FakeContributionTransactionExecutor());
+
+        var action = async () => await handler.Handle(
+            new MakeContributionCommand(Guid.NewGuid(), 100m, "USD"),
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(action);
+
+        Assert.Equal("The current user must be authenticated to contribute to a campaign.", exception.Message);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldThrow_WhenUserLacksPermission()
+    {
+        var handler = new MakeContributionCommandHandler(
+            new FakeCampaignContributionAvailabilityReader(exists: true, canAcceptContributions: true, status: "Published"),
+            new TestCurrentUser(),
+            new FakeContributionDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
+            new FakeContributionRepository(),
+            new FakeContributionTransactionExecutor());
+
+        var action = async () => await handler.Handle(
+            new MakeContributionCommand(Guid.NewGuid(), 100m, "USD"),
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<ForbiddenAccessException>(action);
+
+        Assert.Equal("The current user does not have permission to contribute to campaigns.", exception.Message);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldThrow_WhenCampaignDoesNotExist()
+    {
+        var transactionExecutor = new FakeContributionTransactionExecutor();
+        var campaignId = Guid.NewGuid();
+        var handler = new MakeContributionCommandHandler(
+            new FakeCampaignContributionAvailabilityReader(exists: false, canAcceptContributions: false, status: "Missing"),
+            new TestCurrentUser
+            {
+                UserId = Guid.NewGuid(),
+                Permissions = [PermissionConstants.CampaignsContribute]
+            },
+            new FakeContributionDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
+            new FakeContributionRepository(),
+            transactionExecutor);
+
+        var action = async () => await handler.Handle(
+            new MakeContributionCommand(campaignId, 100m, "USD"),
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<KeyNotFoundException>(action);
+
+        Assert.Equal($"Campaign with id '{campaignId}' was not found.", exception.Message);
+        Assert.Equal(0, transactionExecutor.InvocationCount);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldThrow_WhenCampaignCannotAcceptContributions()
+    {
+        var campaignId = Guid.NewGuid();
+        var transactionExecutor = new FakeContributionTransactionExecutor();
+        var handler = new MakeContributionCommandHandler(
+            new FakeCampaignContributionAvailabilityReader(exists: true, canAcceptContributions: false, status: "Draft"),
+            new TestCurrentUser
+            {
+                UserId = Guid.NewGuid(),
+                Permissions = [PermissionConstants.CampaignsContribute]
+            },
+            new FakeContributionDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
+            new FakeContributionRepository(),
+            transactionExecutor);
+
+        var action = async () => await handler.Handle(
+            new MakeContributionCommand(campaignId, 100m, "USD"),
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(action);
+
+        Assert.Equal($"Campaign '{campaignId}' cannot accept contributions while in 'Draft' status.", exception.Message);
+        Assert.Equal(0, transactionExecutor.InvocationCount);
     }
 }
 
@@ -163,6 +289,144 @@ public sealed class ConfirmContributionPaymentCommandHandlerTests
         Assert.Equal(1, transactionExecutor.InvocationCount);
         Assert.Contains(contribution.DomainEvents, domainEvent => domainEvent is ContributionPaymentConfirmedDomainEvent);
     }
+
+    [Fact]
+    public async Task Handle_ShouldThrow_WhenUserIsNotAuthenticated()
+    {
+        var contribution = Contribution.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            100m,
+            "USD",
+            new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
+
+        var handler = new ConfirmContributionPaymentCommandHandler(
+            new FakeCampaignContributionAvailabilityReader(exists: true, canAcceptContributions: true, status: "Published"),
+            new TestCurrentUser { IsAuthenticated = false, UserId = Guid.Empty },
+            new FakeContributionDateTimeProvider(new DateTime(2026, 4, 6, 12, 5, 0, DateTimeKind.Utc)),
+            new FakeContributionRepository(contribution),
+            new FakeContributionTransactionExecutor());
+
+        var action = async () => await handler.Handle(
+            new ConfirmContributionPaymentCommand(contribution.CampaignId, contribution.Id, "PAY-123"),
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(action);
+
+        Assert.Equal("The current user must be authenticated to manage contribution payments.", exception.Message);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldThrow_WhenUserLacksPermission()
+    {
+        var contribution = Contribution.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            100m,
+            "USD",
+            new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
+
+        var handler = new ConfirmContributionPaymentCommandHandler(
+            new FakeCampaignContributionAvailabilityReader(exists: true, canAcceptContributions: true, status: "Published"),
+            new TestCurrentUser(),
+            new FakeContributionDateTimeProvider(new DateTime(2026, 4, 6, 12, 5, 0, DateTimeKind.Utc)),
+            new FakeContributionRepository(contribution),
+            new FakeContributionTransactionExecutor());
+
+        var action = async () => await handler.Handle(
+            new ConfirmContributionPaymentCommand(contribution.CampaignId, contribution.Id, "PAY-123"),
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<ForbiddenAccessException>(action);
+
+        Assert.Equal("The current user does not have permission to manage contribution payments.", exception.Message);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldThrow_WhenContributionDoesNotExist()
+    {
+        var transactionExecutor = new FakeContributionTransactionExecutor();
+        var contributionId = Guid.NewGuid();
+        var campaignId = Guid.NewGuid();
+        var handler = new ConfirmContributionPaymentCommandHandler(
+            new FakeCampaignContributionAvailabilityReader(exists: true, canAcceptContributions: true, status: "Published"),
+            new TestCurrentUser
+            {
+                Permissions = [PermissionConstants.ContributionsPaymentsManage]
+            },
+            new FakeContributionDateTimeProvider(new DateTime(2026, 4, 6, 12, 5, 0, DateTimeKind.Utc)),
+            new FakeContributionRepository(),
+            transactionExecutor);
+
+        var action = async () => await handler.Handle(
+            new ConfirmContributionPaymentCommand(campaignId, contributionId, "PAY-123"),
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<KeyNotFoundException>(action);
+
+        Assert.Equal($"Contribution '{contributionId}' was not found for campaign '{campaignId}'.", exception.Message);
+        Assert.Equal(0, transactionExecutor.InvocationCount);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldThrow_WhenCampaignDoesNotExist()
+    {
+        var contribution = Contribution.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            100m,
+            "USD",
+            new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
+        var transactionExecutor = new FakeContributionTransactionExecutor();
+        var handler = new ConfirmContributionPaymentCommandHandler(
+            new FakeCampaignContributionAvailabilityReader(exists: false, canAcceptContributions: false, status: "Missing"),
+            new TestCurrentUser
+            {
+                Permissions = [PermissionConstants.ContributionsPaymentsManage]
+            },
+            new FakeContributionDateTimeProvider(new DateTime(2026, 4, 6, 12, 5, 0, DateTimeKind.Utc)),
+            new FakeContributionRepository(contribution),
+            transactionExecutor);
+
+        var action = async () => await handler.Handle(
+            new ConfirmContributionPaymentCommand(contribution.CampaignId, contribution.Id, "PAY-123"),
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<KeyNotFoundException>(action);
+
+        Assert.Equal($"Campaign with id '{contribution.CampaignId}' was not found.", exception.Message);
+        Assert.Equal(0, transactionExecutor.InvocationCount);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldThrow_WhenCampaignIsNotPublished()
+    {
+        var contribution = Contribution.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            100m,
+            "USD",
+            new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
+        var transactionExecutor = new FakeContributionTransactionExecutor();
+        var handler = new ConfirmContributionPaymentCommandHandler(
+            new FakeCampaignContributionAvailabilityReader(exists: true, canAcceptContributions: false, status: "Draft"),
+            new TestCurrentUser
+            {
+                Permissions = [PermissionConstants.ContributionsPaymentsManage]
+            },
+            new FakeContributionDateTimeProvider(new DateTime(2026, 4, 6, 12, 5, 0, DateTimeKind.Utc)),
+            new FakeContributionRepository(contribution),
+            transactionExecutor);
+
+        var action = async () => await handler.Handle(
+            new ConfirmContributionPaymentCommand(contribution.CampaignId, contribution.Id, "PAY-123"),
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(action);
+
+        Assert.Equal("Contribution payments can only be confirmed while the campaign is published.", exception.Message);
+        Assert.Equal(0, transactionExecutor.InvocationCount);
+    }
 }
 
 public sealed class FailContributionPaymentCommandHandlerTests
@@ -198,6 +462,81 @@ public sealed class FailContributionPaymentCommandHandlerTests
         Assert.True(repository.WasUpdated);
         Assert.Equal(ContributionStatus.Failed, contribution.Status);
         Assert.Equal(1, transactionExecutor.InvocationCount);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldThrow_WhenUserIsNotAuthenticated()
+    {
+        var contribution = Contribution.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            100m,
+            "USD",
+            new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
+
+        var handler = new FailContributionPaymentCommandHandler(
+            new TestCurrentUser { IsAuthenticated = false, UserId = Guid.Empty },
+            new FakeContributionDateTimeProvider(new DateTime(2026, 4, 6, 12, 5, 0, DateTimeKind.Utc)),
+            new FakeContributionRepository(contribution),
+            new FakeContributionTransactionExecutor());
+
+        var action = async () => await handler.Handle(
+            new FailContributionPaymentCommand(contribution.CampaignId, contribution.Id, "Card declined."),
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(action);
+
+        Assert.Equal("The current user must be authenticated to manage contribution payments.", exception.Message);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldThrow_WhenUserLacksPermission()
+    {
+        var contribution = Contribution.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            100m,
+            "USD",
+            new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
+
+        var handler = new FailContributionPaymentCommandHandler(
+            new TestCurrentUser(),
+            new FakeContributionDateTimeProvider(new DateTime(2026, 4, 6, 12, 5, 0, DateTimeKind.Utc)),
+            new FakeContributionRepository(contribution),
+            new FakeContributionTransactionExecutor());
+
+        var action = async () => await handler.Handle(
+            new FailContributionPaymentCommand(contribution.CampaignId, contribution.Id, "Card declined."),
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<ForbiddenAccessException>(action);
+
+        Assert.Equal("The current user does not have permission to manage contribution payments.", exception.Message);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldThrow_WhenContributionDoesNotExist()
+    {
+        var transactionExecutor = new FakeContributionTransactionExecutor();
+        var contributionId = Guid.NewGuid();
+        var campaignId = Guid.NewGuid();
+        var handler = new FailContributionPaymentCommandHandler(
+            new TestCurrentUser
+            {
+                Permissions = [PermissionConstants.ContributionsPaymentsManage]
+            },
+            new FakeContributionDateTimeProvider(new DateTime(2026, 4, 6, 12, 5, 0, DateTimeKind.Utc)),
+            new FakeContributionRepository(),
+            transactionExecutor);
+
+        var action = async () => await handler.Handle(
+            new FailContributionPaymentCommand(campaignId, contributionId, "Card declined."),
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<KeyNotFoundException>(action);
+
+        Assert.Equal($"Contribution '{contributionId}' was not found for campaign '{campaignId}'.", exception.Message);
+        Assert.Equal(0, transactionExecutor.InvocationCount);
     }
 }
 
@@ -238,6 +577,51 @@ public sealed class ListContributionsByCampaignQueryHandlerTests
         Assert.Equal(1, result.TotalCount);
         Assert.Equal(new PageRequest(1, 10), readService.ReceivedPageRequest);
         Assert.Equal(filter, readService.ReceivedFilter);
+    }
+}
+
+public sealed class MakeContributionCommandValidatorTests
+{
+    [Fact]
+    public void Validate_ShouldReturnErrors_WhenCommandIsInvalid()
+    {
+        var validator = new MakeContributionCommandValidator();
+        var result = validator.Validate(new MakeContributionCommand(Guid.Empty, 0m, "US"));
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, error => error.PropertyName == nameof(MakeContributionCommand.CampaignId));
+        Assert.Contains(result.Errors, error => error.PropertyName == nameof(MakeContributionCommand.Amount));
+        Assert.Contains(result.Errors, error => error.PropertyName == nameof(MakeContributionCommand.Currency));
+    }
+}
+
+public sealed class ConfirmContributionPaymentCommandValidatorTests
+{
+    [Fact]
+    public void Validate_ShouldReturnErrors_WhenCommandIsInvalid()
+    {
+        var validator = new ConfirmContributionPaymentCommandValidator();
+        var result = validator.Validate(new ConfirmContributionPaymentCommand(Guid.Empty, Guid.Empty, ""));
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, error => error.PropertyName == nameof(ConfirmContributionPaymentCommand.CampaignId));
+        Assert.Contains(result.Errors, error => error.PropertyName == nameof(ConfirmContributionPaymentCommand.ContributionId));
+        Assert.Contains(result.Errors, error => error.PropertyName == nameof(ConfirmContributionPaymentCommand.PaymentReference));
+    }
+}
+
+public sealed class FailContributionPaymentCommandValidatorTests
+{
+    [Fact]
+    public void Validate_ShouldReturnErrors_WhenCommandIsInvalid()
+    {
+        var validator = new FailContributionPaymentCommandValidator();
+        var result = validator.Validate(new FailContributionPaymentCommand(Guid.Empty, Guid.Empty, ""));
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, error => error.PropertyName == nameof(FailContributionPaymentCommand.CampaignId));
+        Assert.Contains(result.Errors, error => error.PropertyName == nameof(FailContributionPaymentCommand.ContributionId));
+        Assert.Contains(result.Errors, error => error.PropertyName == nameof(FailContributionPaymentCommand.FailureReason));
     }
 }
 

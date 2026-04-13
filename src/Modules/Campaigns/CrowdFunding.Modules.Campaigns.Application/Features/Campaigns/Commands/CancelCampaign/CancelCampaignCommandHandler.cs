@@ -1,4 +1,4 @@
-using CrowdFunding.BuildingBlocks.Application.Messaging;
+﻿using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Transactions;
@@ -6,6 +6,9 @@ using CrowdFunding.Modules.Identity.Contracts.Authorization;
 
 namespace CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.CancelCampaign;
 
+/// <summary>
+/// Handles Cancel Campaign command requests.
+/// </summary>
 public sealed class CancelCampaignCommandHandler : ICommandHandler<CancelCampaignCommand, CancelCampaignResult>
 {
     private readonly ICampaignRepository _campaignRepository;

@@ -1,5 +1,8 @@
-namespace CrowdFunding.API;
+﻿namespace CrowdFunding.API;
 
+/// <summary>
+/// Represents Weather Forecast.
+/// </summary>
 public class WeatherForecast
 {
     public DateOnly Date { get; set; }

@@ -1,7 +1,10 @@
-using CrowdFunding.BuildingBlocks.Application.Events;
+﻿using CrowdFunding.BuildingBlocks.Application.Events;
 
 namespace CrowdFunding.Modules.Moderation.Contracts.Events.CampaignReviewRejected;
 
+/// <summary>
+/// Represents the application event published when Campaign Review Rejected.
+/// </summary>
 public sealed class CampaignReviewRejectedApplicationEvent : BaseApplicationEvent
 {
     public CampaignReviewRejectedApplicationEvent(Guid campaignId, Guid moderatorId, string? notes)

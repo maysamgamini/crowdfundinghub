@@ -1,8 +1,11 @@
-using CrowdFunding.BuildingBlocks.Domain.Common;
+﻿using CrowdFunding.BuildingBlocks.Domain.Common;
 using Microsoft.EntityFrameworkCore;
 
 namespace CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
 
+/// <summary>
+/// Reads and clears domain events from tracked entities during persistence.
+/// </summary>
 public static class DomainEventAccessor
 {
     public static IReadOnlyCollection<BaseEvent> GetDomainEvents(DbContext dbContext)

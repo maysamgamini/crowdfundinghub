@@ -1,9 +1,12 @@
-using CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
+﻿using CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
 using CrowdFunding.Modules.Contributions.Domain.Aggregates;
 using Microsoft.EntityFrameworkCore;
 
 namespace CrowdFunding.Modules.Contributions.Infrastructure.Persistence.DbContexts;
 
+/// <summary>
+/// Represents the EF Core database context for the contributions area.
+/// </summary>
 public sealed class ContributionsDbContext : DbContext
 {
     public ContributionsDbContext(DbContextOptions<ContributionsDbContext> options)

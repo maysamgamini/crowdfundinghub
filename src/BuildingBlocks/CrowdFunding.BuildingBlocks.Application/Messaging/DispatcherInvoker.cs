@@ -1,7 +1,10 @@
-using System.Reflection;
+﻿using System.Reflection;
 
 namespace CrowdFunding.BuildingBlocks.Application.Messaging;
 
+/// <summary>
+/// Invokes handlers dynamically for the shared command and query dispatchers.
+/// </summary>
 internal static class DispatcherInvoker
 {
     private static readonly MethodInfo HandleMethod = typeof(DispatcherInvoker)

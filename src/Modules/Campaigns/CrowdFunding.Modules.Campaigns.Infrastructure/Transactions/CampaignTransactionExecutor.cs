@@ -1,4 +1,4 @@
-using CrowdFunding.BuildingBlocks.Domain.Common;
+﻿using CrowdFunding.BuildingBlocks.Domain.Common;
 using CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignCancelled;
@@ -10,6 +10,9 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace CrowdFunding.Modules.Campaigns.Infrastructure.Transactions;
 
+/// <summary>
+/// Executes the surrounding module write operation inside a transaction boundary.
+/// </summary>
 public sealed class CampaignTransactionExecutor : ICampaignTransactionExecutor
 {
     private readonly CampaignsDbContext _dbContext;

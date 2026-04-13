@@ -1,10 +1,13 @@
-using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
+﻿using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Contributions.Domain.Aggregates;
 using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore;
 
 namespace CrowdFunding.Modules.Contributions.Infrastructure.Persistence.Repositories;
 
+/// <summary>
+/// Implements repository operations for Contribution.
+/// </summary>
 public sealed class ContributionRepository : IContributionRepository
 {
     private readonly ContributionsDbContext _dbContext;

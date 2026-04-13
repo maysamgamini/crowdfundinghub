@@ -1,7 +1,10 @@
-using CrowdFunding.BuildingBlocks.Application.Events;
+﻿using CrowdFunding.BuildingBlocks.Application.Events;
 
 namespace CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPaymentConfirmed;
 
+/// <summary>
+/// Represents the application event published when Contribution Payment Confirmed.
+/// </summary>
 public sealed class ContributionPaymentConfirmedApplicationEvent : BaseApplicationEvent
 {
     public ContributionPaymentConfirmedApplicationEvent(Guid contributionId, Guid campaignId, decimal amount, string currency)

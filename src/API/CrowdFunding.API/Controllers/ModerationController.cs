@@ -1,4 +1,4 @@
-using CrowdFunding.API.Contracts.Moderation;
+﻿using CrowdFunding.API.Contracts.Moderation;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Commands.ApproveCampaignReview;
@@ -11,6 +11,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace CrowdFunding.API.Controllers;
 
+/// <summary>
+/// Exposes HTTP endpoints for Moderation.
+/// </summary>
 [ApiController]
 [Route("api/moderation/campaigns")]
 public sealed class ModerationController : ControllerBase

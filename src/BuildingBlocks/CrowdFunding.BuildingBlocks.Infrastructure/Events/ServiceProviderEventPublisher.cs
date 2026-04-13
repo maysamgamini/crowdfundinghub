@@ -1,10 +1,13 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Reflection;
 using CrowdFunding.BuildingBlocks.Application.Events;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CrowdFunding.BuildingBlocks.Infrastructure.Events;
 
+/// <summary>
+/// Publishes application events by resolving their handlers from the service provider.
+/// </summary>
 public sealed class ServiceProviderEventPublisher : IEventPublisher
 {
     private static readonly ConcurrentDictionary<Type, MethodInfo> HandleMethods = new();

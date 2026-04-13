@@ -1,5 +1,8 @@
-namespace CrowdFunding.Modules.Identity.Domain.Entities;
+﻿namespace CrowdFunding.Modules.Identity.Domain.Entities;
 
+/// <summary>
+/// Represents a direct permission granted to a user.
+/// </summary>
 public sealed class UserPermissionGrant
 {
     public Guid Id { get; private set; }

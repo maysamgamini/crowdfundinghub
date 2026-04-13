@@ -1,7 +1,10 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 
 namespace CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
 
+/// <summary>
+/// Represents a persisted application event waiting to be published from the outbox.
+/// </summary>
 public sealed class OutboxMessage
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);

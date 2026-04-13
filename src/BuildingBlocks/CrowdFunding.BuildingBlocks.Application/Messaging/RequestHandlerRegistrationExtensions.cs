@@ -1,8 +1,11 @@
-using System.Reflection;
+﻿using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CrowdFunding.BuildingBlocks.Application.Messaging;
 
+/// <summary>
+/// Registers command and query handlers with dependency injection.
+/// </summary>
 public static class RequestHandlerRegistrationExtensions
 {
     public static IServiceCollection AddRequestHandlersFromAssemblies(

@@ -1,8 +1,11 @@
-using CrowdFunding.Modules.Identity.Contracts.Authorization;
+﻿using CrowdFunding.Modules.Identity.Contracts.Authorization;
 using FluentValidation;
 
 namespace CrowdFunding.Modules.Identity.Application.Features.Users.Commands.AssignRoleToUser;
 
+/// <summary>
+/// Validates Assign Role To User Command instances before they reach the handler.
+/// </summary>
 public sealed class AssignRoleToUserCommandValidator : AbstractValidator<AssignRoleToUserCommand>
 {
     public AssignRoleToUserCommandValidator()

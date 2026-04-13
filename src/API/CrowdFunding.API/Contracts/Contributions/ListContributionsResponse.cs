@@ -1,5 +1,8 @@
-namespace CrowdFunding.API.Contracts.Contributions;
+﻿namespace CrowdFunding.API.Contracts.Contributions;
 
+/// <summary>
+/// Represents the HTTP response payload for List Contributions.
+/// </summary>
 public sealed record ListContributionsResponse(
     Guid Id,
     Guid CampaignId,

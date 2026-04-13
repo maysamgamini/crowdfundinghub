@@ -1,8 +1,11 @@
-using CrowdFunding.Modules.Identity.Contracts.Authorization;
+﻿using CrowdFunding.Modules.Identity.Contracts.Authorization;
 using CrowdFunding.Modules.Identity.Domain.Aggregates;
 
 namespace CrowdFunding.Modules.Identity.Application.Features.Users;
 
+/// <summary>
+/// Represents User Authorization Projection.
+/// </summary>
 internal static class UserAuthorizationProjection
 {
     public static string[] GetRoles(User user)

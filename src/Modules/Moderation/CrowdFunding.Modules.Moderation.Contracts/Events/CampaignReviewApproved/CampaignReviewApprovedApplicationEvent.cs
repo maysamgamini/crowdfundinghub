@@ -1,7 +1,10 @@
-using CrowdFunding.BuildingBlocks.Application.Events;
+﻿using CrowdFunding.BuildingBlocks.Application.Events;
 
 namespace CrowdFunding.Modules.Moderation.Contracts.Events.CampaignReviewApproved;
 
+/// <summary>
+/// Represents the application event published when Campaign Review Approved.
+/// </summary>
 public sealed class CampaignReviewApprovedApplicationEvent : BaseApplicationEvent
 {
     public CampaignReviewApprovedApplicationEvent(Guid campaignId, Guid moderatorId, string? notes)

@@ -1,8 +1,11 @@
-using CrowdFunding.BuildingBlocks.Application.Messaging;
+﻿using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
 
 namespace CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.GetCampaignById;
 
+/// <summary>
+/// Handles Get Campaign By Id query requests.
+/// </summary>
 public sealed class GetCampaignByIdQueryHandler : IQueryHandler<GetCampaignByIdQuery, GetCampaignByIdResult>
 {
     private readonly ICampaignReadService _campaignReadService;
