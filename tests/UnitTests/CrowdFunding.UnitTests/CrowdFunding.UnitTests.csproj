@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.5" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
@@ -28,6 +29,7 @@
     <ProjectReference Include="..\..\..\src\Modules\Identity\CrowdFunding.Modules.Identity.Application\CrowdFunding.Modules.Identity.Application.csproj" />
     <ProjectReference Include="..\..\..\src\Modules\Identity\CrowdFunding.Modules.Identity.Contracts\CrowdFunding.Modules.Identity.Contracts.csproj" />
     <ProjectReference Include="..\..\..\src\Modules\Identity\CrowdFunding.Modules.Identity.Domain\CrowdFunding.Modules.Identity.Domain.csproj" />
+    <ProjectReference Include="..\..\..\src\Modules\Identity\CrowdFunding.Modules.Identity.Infrastructure\CrowdFunding.Modules.Identity.Infrastructure.csproj" />
     <ProjectReference Include="..\..\..\src\Modules\Moderation\CrowdFunding.Modules.Moderation.Application\CrowdFunding.Modules.Moderation.Application.csproj" />
     <ProjectReference Include="..\..\..\src\Modules\Moderation\CrowdFunding.Modules.Moderation.Contracts\CrowdFunding.Modules.Moderation.Contracts.csproj" />
     <ProjectReference Include="..\..\..\src\Modules\Moderation\CrowdFunding.Modules.Moderation.Domain\CrowdFunding.Modules.Moderation.Domain.csproj" />
