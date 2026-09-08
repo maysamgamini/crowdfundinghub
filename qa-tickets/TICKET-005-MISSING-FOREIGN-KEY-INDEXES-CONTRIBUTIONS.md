@@ -4,7 +4,7 @@
 **Severity:** 🟡 P2 (Medium - Performance & Scalability)  
 **QA Focus Area:** Performance & Database Persistence QA  
 **Found By:** `qa-performance-persistence`  
-**Status:** Open  
+**Status:** Resolved (Fixed via IX_contributions_ContributorId and IX_contributions_CampaignId_CreatedAtUtc indexes in migration 20260908222900_AddContributionIndexes)  
 **Project Mode:** Greenfield (No backward compatibility required)  
 
 ---

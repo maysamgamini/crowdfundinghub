@@ -817,6 +817,25 @@ public sealed class CreateCampaignCommandValidatorTests
         Assert.Contains(result.Errors, error => error.PropertyName == nameof(CreateCampaignCommand.Currency));
         Assert.Contains(result.Errors, error => error.PropertyName == nameof(CreateCampaignCommand.DeadlineUtc));
     }
+
+    [Fact]
+    public void Validate_ShouldReturnStoryError_WhenStoryIsNonEmptyButTooShort()
+    {
+        // Kept in sync with Campaign.ValidateStory's 20-character domain invariant — without
+        // MinimumLength(20) here, this passes validation and only fails deep inside
+        // Campaign.Create(), surfacing as an unstructured 400 instead of a field-level error.
+        var validator = new CreateCampaignCommandValidator();
+        var result = validator.Validate(new CreateCampaignCommand(
+            "Valid Title",
+            "Too short.",
+            "Technology",
+            5000m,
+            "USD",
+            DateTime.UtcNow.AddDays(30)));
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, error => error.PropertyName == nameof(CreateCampaignCommand.Story));
+    }
 }
 
 public sealed class PublishCampaignCommandValidatorTests

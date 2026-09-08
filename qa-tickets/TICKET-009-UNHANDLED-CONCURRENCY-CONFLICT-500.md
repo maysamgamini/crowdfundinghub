@@ -4,7 +4,7 @@
 **Severity:** 🟡 P2 (Medium - RFC 9457 Non-Compliance & Status Code Semantics)  
 **QA Focus Area:** API Contracts & Error Handling QA  
 **Found By:** `qa-api-contracts`  
-**Status:** Open  
+**Status:** Resolved (Fixed via GlobalExceptionHandler mapping ConcurrencyConflictException and UniqueViolation DbUpdateException to HTTP 409 Conflict)  
 **Project Mode:** Greenfield (No backward compatibility required)  
 
 ---

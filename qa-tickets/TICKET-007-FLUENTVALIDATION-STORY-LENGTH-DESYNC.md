@@ -4,7 +4,7 @@
 **Severity:** 🟡 P2 (Medium - Validation Pipeline & User Experience)  
 **QA Focus Area:** Functional & API Contracts QA  
 **Found By:** `qa-functional-domain` / `qa-api-contracts`  
-**Status:** Open  
+**Status:** Resolved (Fixed via MinimumLength(20) rule in CreateCampaignCommandValidator)  
 **Project Mode:** Greenfield (No backward compatibility required)  
 
 ---

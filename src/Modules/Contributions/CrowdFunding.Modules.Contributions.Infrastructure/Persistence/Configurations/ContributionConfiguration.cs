@@ -59,6 +59,12 @@ public sealed class ContributionConfiguration : IEntityTypeConfiguration<Contrib
 
         builder.Property(x => x.ProcessedAtUtc);
 
+        // The hot read path (GET /api/campaigns/{campaignId}/contributions, and any per-backer
+        // lookup) filters on these columns; without an index Postgres does a sequential scan of
+        // the whole table on every request as pledge volume grows.
+        builder.HasIndex(x => x.ContributorId);
+        builder.HasIndex(x => new { x.CampaignId, x.CreatedAtUtc });
+
         // Optimistic concurrency token (mirrors CampaignConfiguration). Without it, a payment
         // confirmation and a payment failure racing on the same Pending contribution silently
         // overwrite each other's state instead of one of them failing with a detectable

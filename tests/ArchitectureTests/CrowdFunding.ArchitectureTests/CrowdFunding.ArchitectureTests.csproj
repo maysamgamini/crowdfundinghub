@@ -32,6 +32,10 @@
     <ProjectReference Include="..\..\..\src\Modules\Moderation\CrowdFunding.Modules.Moderation.Application\CrowdFunding.Modules.Moderation.Application.csproj" />
     <ProjectReference Include="..\..\..\src\Modules\Moderation\CrowdFunding.Modules.Moderation.Domain\CrowdFunding.Modules.Moderation.Domain.csproj" />
     <ProjectReference Include="..\..\..\src\Modules\Moderation\CrowdFunding.Modules.Moderation.Infrastructure\CrowdFunding.Modules.Moderation.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\src\Modules\Notifications\CrowdFunding.Modules.Notifications.Application\CrowdFunding.Modules.Notifications.Application.csproj" />
+    <ProjectReference Include="..\..\..\src\Modules\Notifications\CrowdFunding.Modules.Notifications.Domain\CrowdFunding.Modules.Notifications.Domain.csproj" />
+    <ProjectReference Include="..\..\..\src\Modules\CampaignUpdates\CrowdFunding.Modules.CampaignUpdates.Application\CrowdFunding.Modules.CampaignUpdates.Application.csproj" />
+    <ProjectReference Include="..\..\..\src\Modules\CampaignUpdates\CrowdFunding.Modules.CampaignUpdates.Domain\CrowdFunding.Modules.CampaignUpdates.Domain.csproj" />
   </ItemGroup>
 
 </Project>

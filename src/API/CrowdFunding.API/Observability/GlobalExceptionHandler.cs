@@ -4,6 +4,8 @@ using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace CrowdFunding.API.Observability;
 
@@ -46,6 +48,11 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
             // A losing optimistic-concurrency writer is also a conflict, not a server failure —
             // the client can safely retry with a fresh read.
             ConcurrencyConflictException => (HttpStatusCode.Conflict, "Conflict", "The resource was modified by another request. Please retry with the latest data."),
+            // A unique-constraint violation that reaches here uncaught (i.e. no handler already
+            // treated it as an idempotent no-op) is a client-facing conflict, not a server bug —
+            // e.g. two concurrent requests racing to create the same logically-unique record.
+            DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } } =>
+                (HttpStatusCode.Conflict, "Conflict", "A record with the same unique value already exists."),
             _ => (HttpStatusCode.InternalServerError, "Internal Server Error", "An unexpected error occurred. Please contact support quoting the TraceId.")
         };
 

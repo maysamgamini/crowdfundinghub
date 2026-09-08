@@ -4,7 +4,7 @@
 **Severity:** 🟡 P2 (Medium - Test Suite Guardrail Defect)  
 **QA Focus Area:** Architecture Tests & Modular Boundary QA  
 **Found By:** `qa-api-contracts`  
-**Status:** Open  
+**Status:** Resolved (Fixed via project references added to CrowdFunding.ArchitectureTests.csproj)  
 **Project Mode:** Greenfield (No backward compatibility required)  
 
 ---

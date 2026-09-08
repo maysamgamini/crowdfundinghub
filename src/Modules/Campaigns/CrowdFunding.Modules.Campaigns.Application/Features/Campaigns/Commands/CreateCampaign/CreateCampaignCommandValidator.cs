@@ -15,6 +15,11 @@ public sealed class CreateCampaignCommandValidator : AbstractValidator<CreateCam
 
         RuleFor(x => x.Story)
             .NotEmpty()
+            // Kept in sync with Campaign.ValidateStory's 20-character domain invariant — without
+            // this, a too-short story passes validation here and only fails inside
+            // Campaign.Create(), surfacing as an unstructured 400 instead of a field-level
+            // ValidationProblemDetails error.
+            .MinimumLength(20)
             .MaximumLength(5000);
 
         RuleFor(x => x.Category)
