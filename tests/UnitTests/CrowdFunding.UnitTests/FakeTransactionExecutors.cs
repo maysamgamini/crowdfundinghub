@@ -1,5 +1,6 @@
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Transactions;
+using CrowdFunding.Modules.Identity.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Transactions;
 
 namespace CrowdFunding.UnitTests;
@@ -63,6 +64,26 @@ internal sealed class FakeContributionTransactionExecutor : IContributionTransac
 /// In-memory test double for <see cref="IModerationTransactionExecutor"/>.
 /// </summary>
 internal sealed class FakeModerationTransactionExecutor : IModerationTransactionExecutor
+{
+    public int InvocationCount { get; private set; }
+
+    public Task<T> ExecuteAsync<T>(Func<CancellationToken, Task<T>> action, CancellationToken cancellationToken)
+    {
+        InvocationCount++;
+        return action(cancellationToken);
+    }
+
+    public Task ExecuteAsync(Func<CancellationToken, Task> action, CancellationToken cancellationToken)
+    {
+        InvocationCount++;
+        return action(cancellationToken);
+    }
+}
+
+/// <summary>
+/// In-memory test double for <see cref="IIdentityTransactionExecutor"/>.
+/// </summary>
+internal sealed class FakeIdentityTransactionExecutor : IIdentityTransactionExecutor
 {
     public int InvocationCount { get; private set; }
 

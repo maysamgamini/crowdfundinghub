@@ -18,9 +18,12 @@ public sealed class CampaignReviewRepository : ICampaignReviewRepository
     }
 
     /// <inheritdoc/>
-    public async Task AddAsync(CampaignReview campaignReview, CancellationToken cancellationToken)
+    public Task AddAsync(CampaignReview campaignReview, CancellationToken cancellationToken)
     {
-        await _dbContext.CampaignReviews.AddAsync(campaignReview, cancellationToken);
+        // Add (not AddAsync) — EF's AddAsync exists only for value generators that need async DB
+        // access (e.g. SQL Server HiLo), which CampaignReview's client-generated Guid key doesn't use.
+        _dbContext.CampaignReviews.Add(campaignReview);
+        return Task.CompletedTask;
     }
 
     /// <inheritdoc/>

@@ -1,6 +1,7 @@
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Services;
+using CrowdFunding.Modules.Identity.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
 using CrowdFunding.Modules.Identity.Domain.Aggregates;
 
@@ -15,15 +16,18 @@ public sealed class SeedAdminCommandHandler : ICommandHandler<SeedAdminCommand, 
     private readonly IIdentityDateTimeProvider _dateTimeProvider;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IUserRepository _userRepository;
+    private readonly IIdentityTransactionExecutor _transactionExecutor;
 
     public SeedAdminCommandHandler(
         IIdentityDateTimeProvider dateTimeProvider,
         IPasswordHasher passwordHasher,
-        IUserRepository userRepository)
+        IUserRepository userRepository,
+        IIdentityTransactionExecutor transactionExecutor)
     {
         _dateTimeProvider = dateTimeProvider;
         _passwordHasher = passwordHasher;
         _userRepository = userRepository;
+        _transactionExecutor = transactionExecutor;
     }
 
     /// <inheritdoc/>
@@ -40,7 +44,9 @@ public sealed class SeedAdminCommandHandler : ICommandHandler<SeedAdminCommand, 
             }
 
             existingUser.AssignRole(RoleConstants.Admin);
-            await _userRepository.UpdateAsync(existingUser, cancellationToken);
+            await _transactionExecutor.ExecuteAsync(
+                ct => _userRepository.UpdateAsync(existingUser, ct),
+                cancellationToken);
             return new SeedAdminResult(existingUser.Id, WasNewlyCreated: false);
         }
 
@@ -51,7 +57,9 @@ public sealed class SeedAdminCommandHandler : ICommandHandler<SeedAdminCommand, 
             _dateTimeProvider.UtcNow);
         user.AssignRole(RoleConstants.Admin);
 
-        await _userRepository.AddAsync(user, cancellationToken);
+        await _transactionExecutor.ExecuteAsync(
+            ct => _userRepository.AddAsync(user, ct),
+            cancellationToken);
 
         return new SeedAdminResult(user.Id, WasNewlyCreated: true);
     }

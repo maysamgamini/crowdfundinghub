@@ -18,9 +18,12 @@ public sealed class ContributionRepository : IContributionRepository
     }
 
     /// <inheritdoc/>
-    public async Task AddAsync(Contribution contribution, CancellationToken cancellationToken)
+    public Task AddAsync(Contribution contribution, CancellationToken cancellationToken)
     {
-        await _dbContext.Contributions.AddAsync(contribution, cancellationToken);
+        // Add (not AddAsync) — EF's AddAsync exists only for value generators that need async DB
+        // access (e.g. SQL Server HiLo), which Contribution's client-generated Guid key doesn't use.
+        _dbContext.Contributions.Add(contribution);
+        return Task.CompletedTask;
     }
 
     /// <inheritdoc/>

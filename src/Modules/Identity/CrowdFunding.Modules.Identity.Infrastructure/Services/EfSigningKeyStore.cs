@@ -38,7 +38,9 @@ public sealed class EfSigningKeyStore : ISigningKeyStore
         if (activeRecord is null)
         {
             activeRecord = GenerateNewKeyRecord();
-            await dbContext.SigningKeys.AddAsync(activeRecord, cancellationToken);
+            // Add (not AddAsync) — EF's AddAsync exists only for value generators that need
+            // async DB access, which SigningKeyRecord's client-generated Guid key doesn't use.
+            dbContext.SigningKeys.Add(activeRecord);
             await dbContext.SaveChangesAsync(cancellationToken);
         }
 

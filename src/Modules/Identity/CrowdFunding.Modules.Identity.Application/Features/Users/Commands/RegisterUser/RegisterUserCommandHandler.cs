@@ -1,7 +1,8 @@
-﻿using CrowdFunding.BuildingBlocks.Application.Exceptions;
+using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Services;
+using CrowdFunding.Modules.Identity.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
 using CrowdFunding.Modules.Identity.Domain.Aggregates;
 
@@ -15,15 +16,18 @@ public sealed class RegisterUserCommandHandler : ICommandHandler<RegisterUserCom
     private readonly IIdentityDateTimeProvider _dateTimeProvider;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IUserRepository _userRepository;
+    private readonly IIdentityTransactionExecutor _transactionExecutor;
 
     public RegisterUserCommandHandler(
         IIdentityDateTimeProvider dateTimeProvider,
         IPasswordHasher passwordHasher,
-        IUserRepository userRepository)
+        IUserRepository userRepository,
+        IIdentityTransactionExecutor transactionExecutor)
     {
         _dateTimeProvider = dateTimeProvider;
         _passwordHasher = passwordHasher;
         _userRepository = userRepository;
+        _transactionExecutor = transactionExecutor;
     }
 
     public async Task<RegisterUserResult> Handle(
@@ -56,7 +60,9 @@ public sealed class RegisterUserCommandHandler : ICommandHandler<RegisterUserCom
         user.AssignRole(RoleConstants.Creator);
         user.AssignRole(RoleConstants.Backer);
 
-        await _userRepository.AddAsync(user, cancellationToken);
+        await _transactionExecutor.ExecuteAsync(
+            ct => _userRepository.AddAsync(user, ct),
+            cancellationToken);
 
         return new RegisterUserResult(user.Id);
     }

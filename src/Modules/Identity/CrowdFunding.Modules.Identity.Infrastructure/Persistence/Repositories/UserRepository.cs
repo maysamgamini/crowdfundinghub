@@ -1,4 +1,4 @@
-﻿using CrowdFunding.Modules.Identity.Application.Abstractions.Persistence;
+using CrowdFunding.Modules.Identity.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Identity.Domain.Aggregates;
 using CrowdFunding.Modules.Identity.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore;
@@ -18,10 +18,16 @@ public sealed class UserRepository : IUserRepository
     }
 
     /// <inheritdoc/>
-    public async Task AddAsync(User user, CancellationToken cancellationToken)
+    public Task AddAsync(User user, CancellationToken cancellationToken)
     {
-        await _dbContext.Users.AddAsync(user, cancellationToken);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        // Add (not AddAsync) — EF's AddAsync exists only for value generators that need async DB
+        // access (e.g. SQL Server HiLo), which User's client-generated Guid key doesn't use.
+        // SaveChangesAsync is the transaction executor's job (IIdentityTransactionExecutor), not
+        // the repository's — previously this called SaveChangesAsync directly, which committed
+        // as soon as this method returned regardless of what else the calling handler intended
+        // to do in the same unit of work.
+        _dbContext.Users.Add(user);
+        return Task.CompletedTask;
     }
 
     /// <inheritdoc/>
@@ -49,9 +55,9 @@ public sealed class UserRepository : IUserRepository
     }
 
     /// <inheritdoc/>
-    public async Task UpdateAsync(User user, CancellationToken cancellationToken)
+    public Task UpdateAsync(User user, CancellationToken cancellationToken)
     {
         _dbContext.Users.Update(user);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        return Task.CompletedTask;
     }
 }

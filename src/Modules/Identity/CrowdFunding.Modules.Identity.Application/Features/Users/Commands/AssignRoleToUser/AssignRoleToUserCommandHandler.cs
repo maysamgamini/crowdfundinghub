@@ -2,6 +2,7 @@
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Persistence;
+using CrowdFunding.Modules.Identity.Application.Abstractions.Transactions;
 
 namespace CrowdFunding.Modules.Identity.Application.Features.Users.Commands.AssignRoleToUser;
 
@@ -12,11 +13,16 @@ public sealed class AssignRoleToUserCommandHandler : ICommandHandler<AssignRoleT
 {
     private readonly ICurrentUser _currentUser;
     private readonly IUserRepository _userRepository;
+    private readonly IIdentityTransactionExecutor _transactionExecutor;
 
-    public AssignRoleToUserCommandHandler(ICurrentUser currentUser, IUserRepository userRepository)
+    public AssignRoleToUserCommandHandler(
+        ICurrentUser currentUser,
+        IUserRepository userRepository,
+        IIdentityTransactionExecutor transactionExecutor)
     {
         _currentUser = currentUser;
         _userRepository = userRepository;
+        _transactionExecutor = transactionExecutor;
     }
 
     /// <inheritdoc/>
@@ -28,7 +34,9 @@ public sealed class AssignRoleToUserCommandHandler : ICommandHandler<AssignRoleT
                    ?? throw new KeyNotFoundException($"User '{command.UserId}' was not found.");
 
         user.AssignRole(command.Role);
-        await _userRepository.UpdateAsync(user, cancellationToken);
+        await _transactionExecutor.ExecuteAsync(
+            ct => _userRepository.UpdateAsync(user, ct),
+            cancellationToken);
 
         return new AssignRoleToUserResult(
             user.Id,

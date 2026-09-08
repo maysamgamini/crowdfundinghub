@@ -72,7 +72,8 @@ public sealed class RegisterUserCommandHandlerTests
         var handler = new RegisterUserCommandHandler(
             new FakeIdentityDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
             new FakePasswordHasher(),
-            repository);
+            repository,
+            new FakeIdentityTransactionExecutor());
 
         var result = await handler.Handle(
             new RegisterUserCommand("admin@example.com", "Admin", "supersecret"),
@@ -93,7 +94,8 @@ public sealed class RegisterUserCommandHandlerTests
         var handler = new RegisterUserCommandHandler(
             new FakeIdentityDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
             new FakePasswordHasher(),
-            repository);
+            repository,
+            new FakeIdentityTransactionExecutor());
 
         await handler.Handle(
             new RegisterUserCommand("creator@example.com", "Creator", "supersecret"),
@@ -112,7 +114,8 @@ public sealed class RegisterUserCommandHandlerTests
         var handler = new RegisterUserCommandHandler(
             new FakeIdentityDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
             new FakePasswordHasher(),
-            repository);
+            repository,
+            new FakeIdentityTransactionExecutor());
 
         var action = async () => await handler.Handle(
             new RegisterUserCommand(" creator@example.com ", "Creator", "supersecret"),
@@ -133,7 +136,8 @@ public sealed class SeedAdminCommandHandlerTests
         var handler = new SeedAdminCommandHandler(
             new FakeIdentityDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
             new FakePasswordHasher(),
-            repository);
+            repository,
+            new FakeIdentityTransactionExecutor());
 
         var result = await handler.Handle(
             new SeedAdminCommand("admin@example.com", "supersecret", "Admin"),
@@ -153,7 +157,8 @@ public sealed class SeedAdminCommandHandlerTests
         var handler = new SeedAdminCommandHandler(
             new FakeIdentityDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
             new FakePasswordHasher(),
-            repository);
+            repository,
+            new FakeIdentityTransactionExecutor());
 
         var result = await handler.Handle(
             new SeedAdminCommand("creator@example.com", "ignored", "ignored"),
@@ -174,7 +179,8 @@ public sealed class SeedAdminCommandHandlerTests
         var handler = new SeedAdminCommandHandler(
             new FakeIdentityDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
             new FakePasswordHasher(),
-            repository);
+            repository,
+            new FakeIdentityTransactionExecutor());
 
         var result = await handler.Handle(
             new SeedAdminCommand("admin@example.com", "ignored", "ignored"),
@@ -278,7 +284,7 @@ public sealed class AssignRoleToUserCommandHandlerTests
         {
             Permissions = [PermissionConstants.IdentityRolesAssign]
         };
-        var handler = new AssignRoleToUserCommandHandler(currentUser, repository);
+        var handler = new AssignRoleToUserCommandHandler(currentUser, repository, new FakeIdentityTransactionExecutor());
 
         var result = await handler.Handle(
             new AssignRoleToUserCommand(user.Id, RoleConstants.Moderator),
@@ -294,7 +300,8 @@ public sealed class AssignRoleToUserCommandHandlerTests
         var user = User.Register("user@example.com", "User", "hash", DateTime.UtcNow);
         var handler = new AssignRoleToUserCommandHandler(
             new TestCurrentUser { IsAuthenticated = false, UserId = Guid.Empty },
-            new FakeUserRepository(user));
+            new FakeUserRepository(user),
+            new FakeIdentityTransactionExecutor());
 
         var action = async () => await handler.Handle(
             new AssignRoleToUserCommand(user.Id, RoleConstants.Moderator),
@@ -309,7 +316,7 @@ public sealed class AssignRoleToUserCommandHandlerTests
     public async Task Handle_ShouldThrow_WhenCurrentUserLacksPermission()
     {
         var user = User.Register("user@example.com", "User", "hash", DateTime.UtcNow);
-        var handler = new AssignRoleToUserCommandHandler(new TestCurrentUser(), new FakeUserRepository(user));
+        var handler = new AssignRoleToUserCommandHandler(new TestCurrentUser(), new FakeUserRepository(user), new FakeIdentityTransactionExecutor());
 
         var action = async () => await handler.Handle(
             new AssignRoleToUserCommand(user.Id, RoleConstants.Moderator),
@@ -329,7 +336,8 @@ public sealed class AssignRoleToUserCommandHandlerTests
             {
                 Permissions = [PermissionConstants.IdentityRolesAssign]
             },
-            new FakeUserRepository());
+            new FakeUserRepository(),
+            new FakeIdentityTransactionExecutor());
 
         var action = async () => await handler.Handle(
             new AssignRoleToUserCommand(userId, RoleConstants.Moderator),
@@ -352,7 +360,7 @@ public sealed class GrantPermissionToUserCommandHandlerTests
         {
             Permissions = [PermissionConstants.IdentityPermissionsGrant]
         };
-        var handler = new GrantPermissionToUserCommandHandler(currentUser, repository);
+        var handler = new GrantPermissionToUserCommandHandler(currentUser, repository, new FakeIdentityTransactionExecutor());
 
         var result = await handler.Handle(
             new GrantPermissionToUserCommand(user.Id, PermissionConstants.IdentityPermissionsGrant),
@@ -368,7 +376,8 @@ public sealed class GrantPermissionToUserCommandHandlerTests
         var user = User.Register("user@example.com", "User", "hash", DateTime.UtcNow);
         var handler = new GrantPermissionToUserCommandHandler(
             new TestCurrentUser { IsAuthenticated = false, UserId = Guid.Empty },
-            new FakeUserRepository(user));
+            new FakeUserRepository(user),
+            new FakeIdentityTransactionExecutor());
 
         var action = async () => await handler.Handle(
             new GrantPermissionToUserCommand(user.Id, PermissionConstants.IdentityPermissionsGrant),
@@ -383,7 +392,7 @@ public sealed class GrantPermissionToUserCommandHandlerTests
     public async Task Handle_ShouldThrow_WhenCurrentUserLacksPermission()
     {
         var user = User.Register("user@example.com", "User", "hash", DateTime.UtcNow);
-        var handler = new GrantPermissionToUserCommandHandler(new TestCurrentUser(), new FakeUserRepository(user));
+        var handler = new GrantPermissionToUserCommandHandler(new TestCurrentUser(), new FakeUserRepository(user), new FakeIdentityTransactionExecutor());
 
         var action = async () => await handler.Handle(
             new GrantPermissionToUserCommand(user.Id, PermissionConstants.IdentityPermissionsGrant),
@@ -403,7 +412,8 @@ public sealed class GrantPermissionToUserCommandHandlerTests
             {
                 Permissions = [PermissionConstants.IdentityPermissionsGrant]
             },
-            new FakeUserRepository());
+            new FakeUserRepository(),
+            new FakeIdentityTransactionExecutor());
 
         var action = async () => await handler.Handle(
             new GrantPermissionToUserCommand(userId, PermissionConstants.IdentityPermissionsGrant),
