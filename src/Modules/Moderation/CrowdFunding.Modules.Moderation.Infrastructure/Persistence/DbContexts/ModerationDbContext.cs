@@ -16,11 +16,13 @@ public sealed class ModerationDbContext : DbContext
 
     public DbSet<CampaignReview> CampaignReviews => Set<CampaignReview>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+    public DbSet<DeadLetterEvent> DeadLetterEvents => Set<DeadLetterEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(ModerationDbContext).Assembly);
         modelBuilder.ConfigureOutbox("moderation_outbox_messages");
+        modelBuilder.ConfigureDeadLetter("moderation_dead_letter_events");
         base.OnModelCreating(modelBuilder);
     }
 }

@@ -35,7 +35,7 @@ public sealed class ModerationTransactionExecutor : IModerationTransactionExecut
         {
             var result = await action(cancellationToken);
             var domainEvents = DomainEventAccessor.GetDomainEvents(_dbContext);
-            var outboxMessages = domainEvents.Select(MapApplicationEvent).Where(message => message is not null).Cast<OutboxMessage>().ToArray();
+            var outboxMessages = domainEvents.Select(MapApplicationEvent).ToArray();
 
             if (outboxMessages.Length > 0)
             {
@@ -70,7 +70,7 @@ public sealed class ModerationTransactionExecutor : IModerationTransactionExecut
         }
     }
 
-    private static OutboxMessage? MapApplicationEvent(BaseEvent domainEvent)
+    private static OutboxMessage MapApplicationEvent(BaseEvent domainEvent)
     {
         return domainEvent switch
         {
@@ -80,7 +80,10 @@ public sealed class ModerationTransactionExecutor : IModerationTransactionExecut
             CampaignReviewRejectedDomainEvent @event => OutboxMessage.Create(
                 new CampaignReviewRejectedApplicationEvent(@event.CampaignId, @event.ModeratorId, @event.Notes),
                 DateTime.UtcNow),
-            _ => null
+            // Fail loud instead of silently discarding (improvement.md §2.3): an unmapped domain
+            // event throws immediately rather than vanishing with no log and no side effect.
+            _ => throw new InvalidOperationException(
+                $"No outbox mapping is registered for domain event '{domainEvent.GetType().Name}'.")
         };
     }
 }

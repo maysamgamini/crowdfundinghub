@@ -23,6 +23,9 @@ using CrowdFunding.Modules.Moderation.Application.DependencyInjection;
 using CrowdFunding.Modules.Moderation.Infrastructure.DependencyInjection;
 using CrowdFunding.Modules.Moderation.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.Notifications.Application.DependencyInjection;
+using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignCreated;
+using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPaymentConfirmed;
+using CrowdFunding.Modules.Moderation.Contracts.Events.CampaignReviewApproved;
 using Mapster;
 using MapsterMapper;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -65,6 +68,11 @@ builder.Services.AddRequestHandlersFromAssemblies(
     typeof(ModerationApplicationDependencyInjection).Assembly,
     typeof(NotificationsApplicationDependencyInjection).Assembly,
     typeof(CampaignUpdatesApplicationDependencyInjection).Assembly);
+
+builder.Services.AddEventTypeRegistry(
+    typeof(CampaignCreatedApplicationEvent).Assembly,
+    typeof(ContributionPaymentConfirmedApplicationEvent).Assembly,
+    typeof(CampaignReviewApprovedApplicationEvent).Assembly);
 
 builder.Services.AddEventHandlersFromAssemblies(
     typeof(IdentityApplicationDependencyInjection).Assembly,

@@ -16,11 +16,13 @@ public sealed class ContributionsDbContext : DbContext
 
     public DbSet<Contribution> Contributions => Set<Contribution>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+    public DbSet<DeadLetterEvent> DeadLetterEvents => Set<DeadLetterEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(ContributionsDbContext).Assembly);
         modelBuilder.ConfigureOutbox("contributions_outbox_messages");
+        modelBuilder.ConfigureDeadLetter("contributions_dead_letter_events");
         base.OnModelCreating(modelBuilder);
     }
 }

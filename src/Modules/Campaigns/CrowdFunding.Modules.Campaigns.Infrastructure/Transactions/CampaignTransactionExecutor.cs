@@ -59,7 +59,7 @@ public sealed class CampaignTransactionExecutor : ICampaignTransactionExecutor
 
             var result = await action(cancellationToken);
             var domainEvents = DomainEventAccessor.GetDomainEvents(_dbContext);
-            var outboxMessages = domainEvents.Select(MapApplicationEvent).Where(message => message is not null).Cast<OutboxMessage>().ToArray();
+            var outboxMessages = domainEvents.Select(MapApplicationEvent).ToArray();
 
             if (outboxMessages.Length > 0)
             {
@@ -106,7 +106,7 @@ public sealed class CampaignTransactionExecutor : ICampaignTransactionExecutor
         }
     }
 
-    private static OutboxMessage? MapApplicationEvent(BaseEvent domainEvent)
+    private static OutboxMessage MapApplicationEvent(BaseEvent domainEvent)
     {
         return domainEvent switch
         {
@@ -119,7 +119,12 @@ public sealed class CampaignTransactionExecutor : ICampaignTransactionExecutor
             CampaignCancelledDomainEvent @event => OutboxMessage.Create(
                 new CampaignCancelledApplicationEvent(@event.CampaignId, @event.OwnerId),
                 DateTime.UtcNow),
-            _ => null
+            // Fail loud instead of silently discarding: a domain event raised without a mapping
+            // here previously vanished with no log, no error, and no downstream side effect
+            // (improvement.md §2.3). Throwing surfaces the gap immediately in tests/CI the
+            // moment a new domain event is introduced, rather than silently losing data in prod.
+            _ => throw new InvalidOperationException(
+                $"No outbox mapping is registered for domain event '{domainEvent.GetType().Name}'.")
         };
     }
 }

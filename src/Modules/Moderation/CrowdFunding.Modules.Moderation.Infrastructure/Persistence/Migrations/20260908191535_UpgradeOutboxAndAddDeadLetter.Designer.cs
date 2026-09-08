@@ -3,6 +3,7 @@ using System;
 using CrowdFunding.Modules.Moderation.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CrowdFunding.Modules.Moderation.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(ModerationDbContext))]
-    partial class ModerationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260908191535_UpgradeOutboxAndAddDeadLetter")]
+    partial class UpgradeOutboxAndAddDeadLetter
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
