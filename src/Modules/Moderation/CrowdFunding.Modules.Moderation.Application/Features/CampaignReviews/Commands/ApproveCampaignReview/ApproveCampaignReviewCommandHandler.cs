@@ -44,7 +44,6 @@ public sealed class ApproveCampaignReviewCommandHandler : ICommandHandler<Approv
         {
             campaignReview.Approve(_currentUser.UserId, command.Notes, _dateTimeProvider.UtcNow);
             await _campaignReviewRepository.UpdateAsync(campaignReview, ct);
-            return 0;
         }, cancellationToken);
 
         return new ApproveCampaignReviewResult(command.CampaignId, campaignReview.Status.ToString());

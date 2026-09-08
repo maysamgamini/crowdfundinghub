@@ -49,8 +49,6 @@ public sealed class CancelCampaignCommandHandler : ICommandHandler<CancelCampaig
 
             campaignId = campaign.Id;
             status = campaign.Status.ToString();
-
-            return 0;
         }, cancellationToken);
 
         return new CancelCampaignResult(campaignId, status);

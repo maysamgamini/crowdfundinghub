@@ -60,7 +60,6 @@ public sealed class PublishCampaignCommandHandler : ICommandHandler<PublishCampa
         {
             campaign.Publish(_dateTimeProvider.UtcNow);
             await _campaignRepository.UpdateAsync(campaign, ct);
-            return 0;
         }, cancellationToken);
 
         return new PublishCampaignResult(campaign.Id, campaign.Status.ToString());

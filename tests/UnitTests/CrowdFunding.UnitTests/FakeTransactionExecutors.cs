@@ -24,6 +24,19 @@ internal sealed class FakeCampaignTransactionExecutor : ICampaignTransactionExec
         LastAdvisoryLockKey = advisoryLockKey;
         return action(cancellationToken);
     }
+
+    public Task ExecuteAsync(Func<CancellationToken, Task> action, CancellationToken cancellationToken)
+    {
+        InvocationCount++;
+        return action(cancellationToken);
+    }
+
+    public Task ExecuteAsync(long advisoryLockKey, Func<CancellationToken, Task> action, CancellationToken cancellationToken)
+    {
+        InvocationCount++;
+        LastAdvisoryLockKey = advisoryLockKey;
+        return action(cancellationToken);
+    }
 }
 
 /// <summary>
@@ -38,6 +51,12 @@ internal sealed class FakeContributionTransactionExecutor : IContributionTransac
         InvocationCount++;
         return action(cancellationToken);
     }
+
+    public Task ExecuteAsync(Func<CancellationToken, Task> action, CancellationToken cancellationToken)
+    {
+        InvocationCount++;
+        return action(cancellationToken);
+    }
 }
 
 /// <summary>
@@ -48,6 +67,12 @@ internal sealed class FakeModerationTransactionExecutor : IModerationTransaction
     public int InvocationCount { get; private set; }
 
     public Task<T> ExecuteAsync<T>(Func<CancellationToken, Task<T>> action, CancellationToken cancellationToken)
+    {
+        InvocationCount++;
+        return action(cancellationToken);
+    }
+
+    public Task ExecuteAsync(Func<CancellationToken, Task> action, CancellationToken cancellationToken)
     {
         InvocationCount++;
         return action(cancellationToken);

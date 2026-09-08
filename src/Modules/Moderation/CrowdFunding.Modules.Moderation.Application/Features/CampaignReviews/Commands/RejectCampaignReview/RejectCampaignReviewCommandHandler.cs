@@ -44,7 +44,6 @@ public sealed class RejectCampaignReviewCommandHandler : ICommandHandler<RejectC
         {
             campaignReview.Reject(_currentUser.UserId, command.Notes, _dateTimeProvider.UtcNow);
             await _campaignReviewRepository.UpdateAsync(campaignReview, ct);
-            return 0;
         }, cancellationToken);
 
         return new RejectCampaignReviewResult(command.CampaignId, campaignReview.Status.ToString());

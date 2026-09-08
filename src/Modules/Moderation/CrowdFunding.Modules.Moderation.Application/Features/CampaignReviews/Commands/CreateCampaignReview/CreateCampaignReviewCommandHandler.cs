@@ -41,7 +41,6 @@ public sealed class CreateCampaignReviewCommandHandler : ICommandHandler<CreateC
         await _transactionExecutor.ExecuteAsync(async ct =>
         {
             await _campaignReviewRepository.AddAsync(campaignReview, ct);
-            return 0;
         }, cancellationToken);
 
         return new CreateCampaignReviewResult(campaignReview.Id, campaignReview.Status.ToString());

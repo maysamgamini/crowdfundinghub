@@ -30,6 +30,12 @@ public sealed class CampaignTransactionExecutor : ICampaignTransactionExecutor
     public Task<T> ExecuteAsync<T>(long advisoryLockKey, Func<CancellationToken, Task<T>> action, CancellationToken cancellationToken)
         => ExecuteInternalAsync(advisoryLockKey, action, cancellationToken);
 
+    public Task ExecuteAsync(Func<CancellationToken, Task> action, CancellationToken cancellationToken)
+        => ExecuteInternalAsync<object?>(null, async ct => { await action(ct); return null; }, cancellationToken);
+
+    public Task ExecuteAsync(long advisoryLockKey, Func<CancellationToken, Task> action, CancellationToken cancellationToken)
+        => ExecuteInternalAsync<object?>(advisoryLockKey, async ct => { await action(ct); return null; }, cancellationToken);
+
     private async Task<T> ExecuteInternalAsync<T>(
         long? advisoryLockKey,
         Func<CancellationToken, Task<T>> action,

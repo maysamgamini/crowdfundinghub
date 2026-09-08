@@ -75,7 +75,6 @@ public sealed class MakeContributionCommandHandler : ICommandHandler<MakeContrib
         await _transactionExecutor.ExecuteAsync(async ct =>
         {
             await _contributionRepository.AddAsync(contribution, ct);
-            return 0;
         }, cancellationToken);
 
         return new MakeContributionResult(contribution.Id, contribution.Status.ToString());

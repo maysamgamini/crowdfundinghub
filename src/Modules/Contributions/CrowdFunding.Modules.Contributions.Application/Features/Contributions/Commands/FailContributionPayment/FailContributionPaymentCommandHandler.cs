@@ -44,7 +44,6 @@ public sealed class FailContributionPaymentCommandHandler : ICommandHandler<Fail
         {
             contribution.FailPayment(command.FailureReason, _dateTimeProvider.UtcNow);
             await _contributionRepository.UpdateAsync(contribution, ct);
-            return 0;
         }, cancellationToken);
 
         return new FailContributionPaymentResult(contribution.Id, contribution.Status.ToString(), contribution.FailureReason!);

@@ -22,6 +22,9 @@ public sealed class ContributionTransactionExecutor : IContributionTransactionEx
         _dbContext = dbContext;
     }
 
+    public Task ExecuteAsync(Func<CancellationToken, Task> action, CancellationToken cancellationToken)
+        => ExecuteAsync<object?>(async ct => { await action(ct); return null; }, cancellationToken);
+
     public async Task<T> ExecuteAsync<T>(Func<CancellationToken, Task<T>> action, CancellationToken cancellationToken)
     {
         var ownsTransaction = _dbContext.Database.CurrentTransaction is null;

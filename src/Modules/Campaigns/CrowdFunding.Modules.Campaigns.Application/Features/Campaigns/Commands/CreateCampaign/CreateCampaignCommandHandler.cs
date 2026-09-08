@@ -49,7 +49,6 @@ public sealed class CreateCampaignCommandHandler : ICommandHandler<CreateCampaig
         await _transactionExecutor.ExecuteAsync(async ct =>
         {
             await _campaignRepository.AddAsync(campaign, ct);
-            return 0;
         }, cancellationToken);
 
         return new CreateCampaignResult(campaign.Id);

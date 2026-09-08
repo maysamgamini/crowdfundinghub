@@ -62,7 +62,6 @@ public sealed class ConfirmContributionPaymentCommandHandler : ICommandHandler<C
         {
             contribution.ConfirmPayment(command.PaymentReference, _dateTimeProvider.UtcNow);
             await _contributionRepository.UpdateAsync(contribution, ct);
-            return 0;
         }, cancellationToken);
 
         return new ConfirmContributionPaymentResult(contribution.Id, contribution.Status.ToString(), contribution.PaymentReference!);
