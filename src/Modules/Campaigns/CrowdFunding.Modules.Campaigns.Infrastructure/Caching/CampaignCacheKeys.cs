@@ -7,5 +7,10 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Caching;
 /// </summary>
 internal static class CampaignCacheKeys
 {
+    /// <summary>
+    /// Computes the distributed cache key for campaign detail queries.
+    /// </summary>
+    /// <param name="campaignId">The campaign identifier.</param>
+    /// <returns>The formatted cache key string.</returns>
     public static string Details(Guid campaignId) => $"campaigns:{campaignId}:details";
 }

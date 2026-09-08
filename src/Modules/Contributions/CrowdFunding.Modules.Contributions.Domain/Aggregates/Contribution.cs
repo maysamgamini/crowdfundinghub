@@ -73,6 +73,11 @@ public sealed class Contribution : BaseEntity
             createdAtUtc);
     }
 
+    /// <summary>
+    /// Transitions the contribution status to Confirmed upon successful payment.
+    /// </summary>
+    /// <param name="paymentReference">The external payment processor transaction reference.</param>
+    /// <param name="processedAtUtc">The UTC timestamp when payment was confirmed.</param>
     public void ConfirmPayment(string paymentReference, DateTime processedAtUtc)
     {
         if (Status != ContributionStatus.Pending)
@@ -92,6 +97,11 @@ public sealed class Contribution : BaseEntity
         AddDomainEvent(new ContributionPaymentConfirmedDomainEvent(Id, CampaignId, Money.Amount, Money.Currency));
     }
 
+    /// <summary>
+    /// Transitions the contribution status to Failed upon payment rejection.
+    /// </summary>
+    /// <param name="failureReason">The reason for payment failure.</param>
+    /// <param name="processedAtUtc">The UTC timestamp when failure occurred.</param>
     public void FailPayment(string failureReason, DateTime processedAtUtc)
     {
         if (Status != ContributionStatus.Pending)

@@ -37,6 +37,7 @@ public sealed class CachedCampaignReadService : ICampaignReadService
         _logger = logger;
     }
 
+    /// <inheritdoc/>
     public async Task<GetCampaignByIdResult?> GetByIdAsync(Guid campaignId, CancellationToken cancellationToken)
     {
         var cacheKey = CampaignCacheKeys.Details(campaignId);

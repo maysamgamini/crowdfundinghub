@@ -29,6 +29,7 @@ public sealed class FailContributionPaymentCommandHandler : ICommandHandler<Fail
         _transactionExecutor = transactionExecutor;
     }
 
+    /// <inheritdoc/>
     public async Task<FailContributionPaymentResult> Handle(FailContributionPaymentCommand command, CancellationToken cancellationToken)
     {
         EnsureCanManagePayments();

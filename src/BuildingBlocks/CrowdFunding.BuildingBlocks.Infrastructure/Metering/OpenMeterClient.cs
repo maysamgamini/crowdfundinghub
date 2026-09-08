@@ -18,12 +18,18 @@ public sealed class OpenMeterClient : IUsageMeteringClient
     private readonly HttpClient _httpClient;
     private readonly ILogger<OpenMeterClient> _logger;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="OpenMeterClient"/> class.
+    /// </summary>
+    /// <param name="httpClient">The configured and resilient HTTP client.</param>
+    /// <param name="logger">The logger instance.</param>
     public OpenMeterClient(HttpClient httpClient, ILogger<OpenMeterClient> logger)
     {
         _httpClient = httpClient;
         _logger = logger;
     }
 
+    /// <inheritdoc/>
     public async Task IngestAsync(CloudEvent cloudEvent, CancellationToken cancellationToken = default)
     {
         try

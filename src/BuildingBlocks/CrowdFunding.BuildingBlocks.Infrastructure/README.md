@@ -1,11 +1,16 @@
-﻿# Crowd Funding Building Blocks Infrastructure
+# Building Blocks: Infrastructure Layer
 
 ## Purpose
-Provides reusable infrastructure helpers for persistence and event publishing.
+Provides shared technical implementations for persistence, transactional outbox management, domain event dispatching, and usage metering services.
 
-## Files
-- `CrowdFunding.BuildingBlocks.Infrastructure.csproj`: Project file that defines dependencies, target framework, and assembly references for this area.
-
-## Child Folders
-- `Events`: Contains infrastructure implementations that resolve and invoke application event handlers.
-- `Persistence`: Contains shared persistence helpers such as outbox storage and EF Core model configuration extensions.
+## Subdirectories
+- `Events`:
+  - `ServiceProviderEventPublisher.cs`: Implements `IEventPublisher` by discovering and invoking all registered `IEventHandler<TNotification>` implementations from the ASP.NET Core `IServiceProvider`.
+- `Metering`:
+  - `OpenMeterClient.cs`: Implements `IUsageMeteringClient` over resilient HTTP (`Microsoft.Extensions.Http.Resilience`) targeting OpenMeter Cloud.
+  - `OpenMeterOptions.cs`: Binds to configuration settings for OpenMeter endpoints and tokens.
+  - `MeteringDependencyInjection.cs`: Extension methods wiring OpenMeter clients and resilient HTTP pipelines.
+- `Persistence`:
+  - `OutboxMessage.cs`: Persistence model representing outbox records, storing serialized JSON payloads, event discriminator, occurrence time, processed time, and error trace.
+  - `ModelBuilderExtensions.cs`: Fluent EF Core configuration extensions (`ConfigureOutbox`, `ConfigureDeadLetter`) for mapping outbox and DLQ tables uniformly across modular DbContexts.
+  - `DomainEventAccessor.cs`: Utility for extracting and clearing uncommitted `BaseEvent` instances from tracked aggregate roots in EF Core `ChangeTracker`.

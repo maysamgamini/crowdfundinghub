@@ -28,6 +28,7 @@ public sealed class PledgeConfirmedMeteringEventHandler : IEventHandler<Contribu
         _feeOptions = feeOptions;
     }
 
+    /// <inheritdoc/>
     public Task Handle(ContributionPaymentConfirmedApplicationEvent notification, CancellationToken cancellationToken)
     {
         var grossAmountCents = (long)Math.Round(notification.Amount * 100m, MidpointRounding.AwayFromZero);

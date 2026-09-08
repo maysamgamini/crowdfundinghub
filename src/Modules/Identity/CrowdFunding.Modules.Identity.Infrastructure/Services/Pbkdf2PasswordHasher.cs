@@ -17,6 +17,7 @@ public sealed class Pbkdf2PasswordHasher : IPasswordHasher
     // as a real hash of the same iteration count.
     public string DummyHash { get; } = ComputeDummyHash();
 
+    /// <inheritdoc/>
     public string HashPassword(string password)
     {
         if (string.IsNullOrWhiteSpace(password))
@@ -30,6 +31,7 @@ public sealed class Pbkdf2PasswordHasher : IPasswordHasher
         return string.Join('.', Iterations, Convert.ToBase64String(salt), Convert.ToBase64String(hash));
     }
 
+    /// <inheritdoc/>
     public bool VerifyPassword(string passwordHash, string password)
     {
         if (string.IsNullOrWhiteSpace(passwordHash) || string.IsNullOrWhiteSpace(password))

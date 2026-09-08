@@ -20,6 +20,11 @@ public sealed class EventTypeRegistry
 {
     private readonly ConcurrentDictionary<(string EventType, int Version), Type> _types = new();
 
+    /// <summary>
+    /// Registers an application event type with its associated discriminator name and version.
+    /// </summary>
+    /// <param name="eventType">The application event type deriving from <see cref="BaseApplicationEvent"/>.</param>
+    /// <exception cref="ArgumentException">Thrown when eventType does not derive from <see cref="BaseApplicationEvent"/>.</exception>
     public void Register(Type eventType)
     {
         if (!typeof(BaseApplicationEvent).IsAssignableFrom(eventType))
@@ -32,10 +37,27 @@ public sealed class EventTypeRegistry
         _types[(eventType.Name, version)] = eventType;
     }
 
+    /// <summary>
+    /// Attempts to resolve a CLR type matching the given discriminator and version.
+    /// </summary>
+    /// <param name="eventType">The discriminator string name of the event.</param>
+    /// <param name="version">The schema version integer of the event.</param>
+    /// <param name="resolvedType">The resolved CLR type if found, otherwise null.</param>
+    /// <returns>True if a matching type is registered; otherwise false.</returns>
     public bool TryResolve(string eventType, int version, out Type? resolvedType)
         => _types.TryGetValue((eventType, version), out resolvedType);
 
+    /// <summary>
+    /// Returns the discriminator name string for a given event CLR type.
+    /// </summary>
+    /// <param name="eventType">The event CLR type.</param>
+    /// <returns>The simple name of the type.</returns>
     public static string GetDiscriminator(Type eventType) => eventType.Name;
 
+    /// <summary>
+    /// Returns the version integer configured on the event type via <see cref="EventVersionAttribute"/>, defaulting to 1.
+    /// </summary>
+    /// <param name="eventType">The event CLR type.</param>
+    /// <returns>The version integer.</returns>
     public static int GetVersion(Type eventType) => eventType.GetCustomAttribute<EventVersionAttribute>()?.Version ?? 1;
 }

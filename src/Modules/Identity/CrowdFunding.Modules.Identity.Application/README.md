@@ -1,12 +1,13 @@
-﻿# Crowd Funding Modules Identity Application
+# Identity: Application Layer
 
 ## Purpose
-Contains the application-layer orchestration for the Identity module, including handlers, validators, and service abstractions.
+Orchestrates authentication and user management workflows, including self-registration, credential validation, current-user querying, and out-of-band administrator account provisioning.
 
-## Files
-- `CrowdFunding.Modules.Identity.Application.csproj`: Project file that defines dependencies, target framework, and assembly references for this area.
-
-## Child Folders
-- `Abstractions`: Contains source files related to Abstractions.
-- `DependencyInjection`: Registers Identity services, handlers, validators, and infrastructure components with the dependency injection container.
-- `Features`: Contains source files related to Features.
+## Subdirectories
+- `Abstractions`: Persistence abstractions (`IUserRepository`), transaction executors (`IIdentityTransactionExecutor`), token services (`IJwtTokenService`), password hasher (`IPasswordHasher`), and time providers (`IIdentityDateTimeProvider`).
+- `DependencyInjection`: Extension methods (`AddIdentityApplication`) registering handlers with the DI container.
+- `Features`:
+  - `Users/Commands/RegisterUser`: Handles new user self-registration with password hashing and default `User` role assignment.
+  - `Users/Commands/Login`: Validates email/password credentials and issues asymmetric ES256 JWT access tokens.
+  - `Users/Commands/SeedAdmin`: Out-of-band CLI handler for creating or promoting the platform administrator.
+  - `Users/Queries/GetCurrentUser`: Queries profile details for the authenticated user based on claims context.

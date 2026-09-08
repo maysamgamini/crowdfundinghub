@@ -5,6 +5,11 @@
 /// </summary>
 public static class RolePermissionCatalog
 {
+    /// <summary>
+    /// Resolves the default set of fine-grained permissions associated with a given role.
+    /// </summary>
+    /// <param name="role">The role name.</param>
+    /// <returns>A read-only collection of permission strings.</returns>
     public static IReadOnlyCollection<string> GetPermissionsForRole(string role)
     {
         return role switch

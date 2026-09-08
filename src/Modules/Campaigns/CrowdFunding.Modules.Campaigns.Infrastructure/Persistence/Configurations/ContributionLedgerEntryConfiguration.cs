@@ -9,6 +9,10 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Configuratio
 /// </summary>
 public sealed class ContributionLedgerEntryConfiguration : IEntityTypeConfiguration<ContributionLedgerEntry>
 {
+    /// <summary>
+    /// Configures EF Core mapping and constraints for <see cref="ContributionLedgerEntry"/>.
+    /// </summary>
+    /// <param name="builder">The entity type builder.</param>
     public void Configure(EntityTypeBuilder<ContributionLedgerEntry> builder)
     {
         builder.ToTable("campaign_contributions_ledger");

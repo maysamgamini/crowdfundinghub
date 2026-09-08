@@ -15,6 +15,11 @@ namespace CrowdFunding.Modules.Campaigns.Application.DependencyInjection;
 /// </summary>
 public static class CampaignsApplicationDependencyInjection
 {
+    /// <summary>
+    /// Registers Campaigns application services, command handlers, and query handlers.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <returns>The configured service collection.</returns>
     public static IServiceCollection AddCampaignsApplication(this IServiceCollection services)
     {
         services.AddScoped<AddContributionToCampaignCommandHandler>();

@@ -12,6 +12,11 @@ namespace CrowdFunding.Modules.Contributions.Application.DependencyInjection;
 /// </summary>
 public static class ContributionsApplicationDependencyInjection
 {
+    /// <summary>
+    /// Registers Contributions application services, command handlers, and query handlers.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <returns>The configured service collection.</returns>
     public static IServiceCollection AddContributionsApplication(this IServiceCollection services)
     {
         services.AddScoped<ConfirmContributionPaymentCommandHandler>();

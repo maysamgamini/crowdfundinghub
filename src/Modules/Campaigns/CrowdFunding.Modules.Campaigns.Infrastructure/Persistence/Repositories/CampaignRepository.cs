@@ -24,17 +24,20 @@ public sealed class CampaignRepository : ICampaignRepository
         _logger = logger;
     }
 
+    /// <inheritdoc/>
     public async Task AddAsync(Campaign campaign, CancellationToken cancellationToken)
     {
         await _dbContext.Campaigns.AddAsync(campaign, cancellationToken);
     }
 
+    /// <inheritdoc/>
     public async Task<Campaign?> GetByIdAsync(Guid campaignId, CancellationToken cancellationToken)
     {
         return await _dbContext.Campaigns
             .FirstOrDefaultAsync(x => x.Id == campaignId, cancellationToken);
     }
 
+    /// <inheritdoc/>
     public async Task UpdateAsync(Campaign campaign, CancellationToken cancellationToken)
     {
         _dbContext.Campaigns.Update(campaign);

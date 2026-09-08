@@ -1,13 +1,19 @@
-﻿# Contributions
+# Contributions Module
 
 ## Purpose
-Contains source files related to Contributions.
+The Contributions module manages the financial lifecycle of backer pledges, payment verification, transaction settlement, and revenue usage metering.
 
-## Files
-- No direct files live in this folder; it primarily organizes child folders.
+## Capabilities & Workflows
+- **Pledge Creation**: Backers create pledges for active campaigns (`MakeContributionCommand`). Invariants verify campaign funding headroom and active status.
+- **Payment Processing**:
+  - `ConfirmPaymentCommand`: Marks the contribution as `Confirmed`, records payment reference, and raises `ContributionPaymentConfirmedApplicationEvent`.
+  - `FailPaymentCommand`: Transitions the contribution to `Failed` upon payment provider rejection.
+  - `CancelContributionCommand`: Cancels a pending pledge prior to settlement.
+- **Optimistic Concurrency & Advisory Locks**: Prevents double-spend and race conditions using aggregate concurrency tokens (`xmin`) and PostgreSQL transaction-level advisory locks.
+- **Monetization & Metering**: Confirmed pledges trigger `PledgeConfirmedMeteringEventHandler` which calculates platform fees and emits normalized CloudEvents to OpenMeter.
 
-## Child Folders
-- `CrowdFunding.Modules.Contributions.Application`: Contains the application-layer orchestration for the Contributions module, including handlers, validators, and service abstractions.
-- `CrowdFunding.Modules.Contributions.Contracts`: Contains integration-facing contracts for the Contributions module, such as cross-module commands, queries, and events.
-- `CrowdFunding.Modules.Contributions.Domain`: Contains the core domain model for the Contributions module, including invariants, events, and enums.
-- `CrowdFunding.Modules.Contributions.Infrastructure`: Contains infrastructure implementations for the Contributions module, including EF Core persistence, services, and transaction executors.
+## Projects & Layers
+- `CrowdFunding.Modules.Contributions.Domain`: Contains `Contribution` aggregate root, `ContributionStatus` enum, and domain events.
+- `CrowdFunding.Modules.Contributions.Application`: Orchestrates contribution commands, query handlers, and event handlers.
+- `CrowdFunding.Modules.Contributions.Infrastructure`: EF Core `ContributionsDbContext`, persistence configurations, repositories, and outbox tables.
+- `CrowdFunding.Modules.Contributions.Contracts`: Cross-module contracts and events (`ContributionPaymentConfirmedApplicationEvent`).

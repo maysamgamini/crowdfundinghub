@@ -1,4 +1,4 @@
-﻿namespace CrowdFunding.BuildingBlocks.Domain.ValueObjects;
+namespace CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 
 /// <summary>
 /// Represents a monetary value with a normalized currency code.
@@ -8,6 +8,12 @@ public sealed class Money : IEquatable<Money>
     public decimal Amount { get; }
     public string Currency { get; }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="Money"/> value object.
+    /// </summary>
+    /// <param name="amount">The non-negative decimal amount, rounded to two decimal places.</param>
+    /// <param name="currency">The 3-letter ISO currency code.</param>
+    /// <exception cref="ArgumentException">Thrown when amount is negative or currency is invalid.</exception>
     public Money(decimal amount, string currency)
     {
         if (amount < 0)
@@ -29,14 +35,31 @@ public sealed class Money : IEquatable<Money>
         Currency = currency.Trim().ToUpperInvariant();
     }
 
+    /// <summary>
+    /// Creates a zero-value <see cref="Money"/> instance for the specified currency.
+    /// </summary>
+    /// <param name="currency">The 3-letter ISO currency code.</param>
+    /// <returns>A new <see cref="Money"/> instance with an amount of zero.</returns>
     public static Money Zero(string currency) => new(0m, currency);
 
+    /// <summary>
+    /// Adds another <see cref="Money"/> value of matching currency.
+    /// </summary>
+    /// <param name="other">The money to add.</param>
+    /// <returns>A new <see cref="Money"/> instance representing the sum.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when currencies do not match.</exception>
     public Money Add(Money other)
     {
         EnsureSameCurrency(other);
         return new Money(Amount + other.Amount, Currency);
     }
 
+    /// <summary>
+    /// Subtracts another <see cref="Money"/> value of matching currency.
+    /// </summary>
+    /// <param name="other">The money to subtract.</param>
+    /// <returns>A new <see cref="Money"/> instance representing the difference.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when currencies mismatch or result would be negative.</exception>
     public Money Subtract(Money other)
     {
         EnsureSameCurrency(other);
@@ -62,6 +85,11 @@ public sealed class Money : IEquatable<Money>
         }
     }
 
+    /// <summary>
+    /// Determines whether the specified <see cref="Money"/> object is equal to the current instance.
+    /// </summary>
+    /// <param name="other">The money instance to compare.</param>
+    /// <returns>True if both amount and currency match; otherwise false.</returns>
     public bool Equals(Money? other)
     {
         if (other is null)
@@ -72,9 +100,12 @@ public sealed class Money : IEquatable<Money>
         return Amount == other.Amount && Currency == other.Currency;
     }
 
+    /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as Money);
 
+    /// <inheritdoc/>
     public override int GetHashCode() => HashCode.Combine(Amount, Currency);
 
+    /// <inheritdoc/>
     public override string ToString() => $"{Amount:0.00} {Currency}";
 }

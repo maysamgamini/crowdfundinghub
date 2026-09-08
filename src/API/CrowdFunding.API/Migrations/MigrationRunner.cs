@@ -17,6 +17,12 @@ namespace CrowdFunding.API.Migrations;
 /// </summary>
 public static class MigrationRunner
 {
+    /// <summary>
+    /// Executes EF Core migrations sequentially across all module DbContexts.
+    /// </summary>
+    /// <param name="services">The application root service provider.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>A task representing the asynchronous migration operation.</returns>
     public static async Task RunAsync(IServiceProvider services, CancellationToken cancellationToken = default)
     {
         await using var scope = services.CreateAsyncScope();

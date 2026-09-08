@@ -1,4 +1,4 @@
-﻿using CrowdFunding.API.Contracts.Moderation;
+using CrowdFunding.API.Contracts.Moderation;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Commands.ApproveCampaignReview;
@@ -12,10 +12,11 @@ using Microsoft.AspNetCore.Mvc;
 namespace CrowdFunding.API.Controllers;
 
 /// <summary>
-/// Exposes HTTP endpoints for Moderation.
+/// Exposes HTTP endpoints for Moderation: campaign compliance reviews, approvals, and rejection feedback.
 /// </summary>
 [ApiController]
 [Route("api/moderation/campaigns")]
+[Tags("Moderation")]
 public sealed class ModerationController : ControllerBase
 {
     private readonly ICommandDispatcher _commandDispatcher;
@@ -38,6 +39,13 @@ public sealed class ModerationController : ControllerBase
         _mapper = mapper;
     }
 
+    /// <summary>
+    /// Retrieves moderation review details for a specific campaign.
+    /// </summary>
+    /// <param name="campaignId">The unique identifier of the campaign.</param>
+    /// <param name="cancellationToken">Cancellation token for asynchronous operation.</param>
+    /// <response code="200">Returns moderation review details including review status and notes.</response>
+    /// <response code="404">Campaign review not found.</response>
     [HttpGet("{campaignId:guid}")]
     [ProducesResponseType(typeof(CampaignReviewResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -50,10 +58,23 @@ public sealed class ModerationController : ControllerBase
         return Ok(_mapper.Map<CampaignReviewResponse>(result));
     }
 
+    /// <summary>
+    /// Approves a campaign review, enabling the creator to publish the campaign.
+    /// </summary>
+    /// <param name="campaignId">The unique identifier of the campaign to approve.</param>
+    /// <param name="request">The approval request payload containing optional review notes.</param>
+    /// <param name="cancellationToken">Cancellation token for asynchronous operation.</param>
+    /// <response code="200">Campaign review approved successfully.</response>
+    /// <response code="400">Review cannot be approved or validation errors occurred.</response>
+    /// <response code="401">Unauthorized if the request lacks a valid Bearer token.</response>
+    /// <response code="403">Forbidden if the caller lacks the 'moderation:review' permission.</response>
+    /// <response code="404">Campaign review not found.</response>
     [Authorize(Policy = PermissionConstants.ModerationReview)]
     [HttpPost("{campaignId:guid}/approve")]
     [ProducesResponseType(typeof(CampaignReviewResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<CampaignReviewResponse>> Approve(
         Guid campaignId,
@@ -78,10 +99,23 @@ public sealed class ModerationController : ControllerBase
         return Ok(_mapper.Map<CampaignReviewResponse>(review));
     }
 
+    /// <summary>
+    /// Rejects a campaign review, providing feedback notes explaining required changes.
+    /// </summary>
+    /// <param name="campaignId">The unique identifier of the campaign to reject.</param>
+    /// <param name="request">The rejection request payload containing review notes.</param>
+    /// <param name="cancellationToken">Cancellation token for asynchronous operation.</param>
+    /// <response code="200">Campaign review rejected.</response>
+    /// <response code="400">Review cannot be rejected or validation errors occurred.</response>
+    /// <response code="401">Unauthorized if the request lacks a valid Bearer token.</response>
+    /// <response code="403">Forbidden if the caller lacks the 'moderation:review' permission.</response>
+    /// <response code="404">Campaign review not found.</response>
     [Authorize(Policy = PermissionConstants.ModerationReview)]
     [HttpPost("{campaignId:guid}/reject")]
     [ProducesResponseType(typeof(CampaignReviewResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<CampaignReviewResponse>> Reject(
         Guid campaignId,

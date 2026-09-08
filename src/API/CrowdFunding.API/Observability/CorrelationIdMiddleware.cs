@@ -13,11 +13,20 @@ public sealed class CorrelationIdMiddleware
 
     private readonly RequestDelegate _next;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="CorrelationIdMiddleware"/> class.
+    /// </summary>
+    /// <param name="next">The next middleware in the request pipeline.</param>
     public CorrelationIdMiddleware(RequestDelegate next)
     {
         _next = next;
     }
 
+    /// <summary>
+    /// Captures or derives a correlation ID, pushes it to Serilog's LogContext, and echoes it in response headers.
+    /// </summary>
+    /// <param name="context">The HTTP context.</param>
+    /// <returns>A task representing the asynchronous middleware execution.</returns>
     public async Task InvokeAsync(HttpContext context)
     {
         var correlationId = System.Diagnostics.Activity.Current?.TraceId.ToHexString()

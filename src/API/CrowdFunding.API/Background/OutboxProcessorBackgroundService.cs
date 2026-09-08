@@ -24,11 +24,16 @@ public sealed class OutboxProcessorBackgroundService : BackgroundService
     private readonly IServiceProvider _serviceProvider;
     private readonly string _workerId = $"{Environment.MachineName}:{Environment.ProcessId}";
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="OutboxProcessorBackgroundService"/> class.
+    /// </summary>
+    /// <param name="serviceProvider">The application root service provider used to create execution scopes.</param>
     public OutboxProcessorBackgroundService(IServiceProvider serviceProvider)
     {
         _serviceProvider = serviceProvider;
     }
 
+    /// <inheritdoc/>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var timer = new PeriodicTimer(PollInterval);

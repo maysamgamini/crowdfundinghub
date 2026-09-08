@@ -1,4 +1,4 @@
-﻿using CrowdFunding.API.Contracts.Identity;
+using CrowdFunding.API.Contracts.Identity;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.AssignRoleToUser;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.GrantPermissionToUser;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.LoginUser;
@@ -13,6 +13,10 @@ namespace CrowdFunding.API.Mapping;
 /// </summary>
 public static class IdentityMappingConfig
 {
+    /// <summary>
+    /// Registers Mapster type mappings between API contracts and Identity application models.
+    /// </summary>
+    /// <param name="config">The Mapster configuration instance.</param>
     public static void Register(TypeAdapterConfig config)
     {
         config.NewConfig<RegisterUserRequest, RegisterUserCommand>();

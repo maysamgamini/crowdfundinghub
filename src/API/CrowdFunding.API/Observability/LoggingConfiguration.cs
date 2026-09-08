@@ -10,6 +10,11 @@ namespace CrowdFunding.API.Observability;
 /// </summary>
 public static class LoggingConfiguration
 {
+    /// <summary>
+    /// Configures Serilog structured JSON logging to console and rolling file targets with environment enrichment.
+    /// </summary>
+    /// <param name="host">The host builder to configure.</param>
+    /// <returns>The configured host builder.</returns>
     public static ConfigureHostBuilder UseCrowdFundingSerilog(this ConfigureHostBuilder host)
     {
         host.UseSerilog((context, services, configuration) =>

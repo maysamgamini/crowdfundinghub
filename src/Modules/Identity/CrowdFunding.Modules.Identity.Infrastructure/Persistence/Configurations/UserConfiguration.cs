@@ -9,6 +9,10 @@ namespace CrowdFunding.Modules.Identity.Infrastructure.Persistence.Configuration
 /// </summary>
 public sealed class UserConfiguration : IEntityTypeConfiguration<User>
 {
+    /// <summary>
+    /// Configures the EF Core mapping and constraints for <see cref="User"/> and child collections.
+    /// </summary>
+    /// <param name="builder">The entity type builder.</param>
     public void Configure(EntityTypeBuilder<User> builder)
     {
         builder.ToTable("users");

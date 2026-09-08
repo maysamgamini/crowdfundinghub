@@ -4,6 +4,9 @@ using CrowdFunding.Modules.Moderation.Application.Abstractions.Transactions;
 
 namespace CrowdFunding.UnitTests;
 
+/// <summary>
+/// In-memory test double for <see cref="ICampaignTransactionExecutor"/>.
+/// </summary>
 internal sealed class FakeCampaignTransactionExecutor : ICampaignTransactionExecutor
 {
     public int InvocationCount { get; private set; }
@@ -23,6 +26,9 @@ internal sealed class FakeCampaignTransactionExecutor : ICampaignTransactionExec
     }
 }
 
+/// <summary>
+/// In-memory test double for <see cref="IContributionTransactionExecutor"/>.
+/// </summary>
 internal sealed class FakeContributionTransactionExecutor : IContributionTransactionExecutor
 {
     public int InvocationCount { get; private set; }
@@ -34,6 +40,9 @@ internal sealed class FakeContributionTransactionExecutor : IContributionTransac
     }
 }
 
+/// <summary>
+/// In-memory test double for <see cref="IModerationTransactionExecutor"/>.
+/// </summary>
 internal sealed class FakeModerationTransactionExecutor : IModerationTransactionExecutor
 {
     public int InvocationCount { get; private set; }

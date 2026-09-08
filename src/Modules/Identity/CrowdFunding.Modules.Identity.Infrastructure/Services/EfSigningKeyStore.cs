@@ -24,6 +24,7 @@ public sealed class EfSigningKeyStore : ISigningKeyStore
         _scopeFactory = scopeFactory;
     }
 
+    /// <inheritdoc/>
     public async Task WarmUpAsync(CancellationToken cancellationToken)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
@@ -56,10 +57,12 @@ public sealed class EfSigningKeyStore : ISigningKeyStore
         _publicSigningKeys = [new SigningKeyMaterial(activeRecord.Kid, publicOnly)];
     }
 
+    /// <inheritdoc/>
     public SigningKeyMaterial GetActiveSigningKey()
         => _activeSigningKey ?? throw new InvalidOperationException(
             $"{nameof(EfSigningKeyStore)} was not warmed up. Call {nameof(WarmUpAsync)} during application startup.");
 
+    /// <inheritdoc/>
     public IReadOnlyList<SigningKeyMaterial> GetPublicSigningKeys()
         => _publicSigningKeys ?? throw new InvalidOperationException(
             $"{nameof(EfSigningKeyStore)} was not warmed up. Call {nameof(WarmUpAsync)} during application startup.");

@@ -9,6 +9,10 @@ namespace CrowdFunding.Modules.Moderation.Infrastructure.Persistence.Configurati
 /// </summary>
 public sealed class CampaignReviewConfiguration : IEntityTypeConfiguration<CampaignReview>
 {
+    /// <summary>
+    /// Configures EF Core mapping and constraints for <see cref="CampaignReview"/>.
+    /// </summary>
+    /// <param name="builder">The entity type builder.</param>
     public void Configure(EntityTypeBuilder<CampaignReview> builder)
     {
         builder.ToTable("campaign_reviews");

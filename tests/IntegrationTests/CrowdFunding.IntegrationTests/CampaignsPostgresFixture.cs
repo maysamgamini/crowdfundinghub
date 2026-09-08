@@ -19,8 +19,12 @@ public sealed class CampaignsPostgresFixture : IAsyncLifetime
         .WithPassword("postgres")
         .Build();
 
+    /// <summary>
+    /// The connection string to the running PostgreSQL container.
+    /// </summary>
     public string ConnectionString => _container.GetConnectionString();
 
+    /// <inheritdoc/>
     public async Task InitializeAsync()
     {
         await _container.StartAsync();
@@ -33,11 +37,16 @@ public sealed class CampaignsPostgresFixture : IAsyncLifetime
         await dbContext.Database.MigrateAsync();
     }
 
+    /// <inheritdoc/>
     public async Task DisposeAsync()
     {
         await _container.DisposeAsync();
     }
 
+    /// <summary>
+    /// Creates a new <see cref="CampaignsDbContext"/> connected to the containerized database.
+    /// </summary>
+    /// <returns>A configured <see cref="CampaignsDbContext"/> instance.</returns>
     public CampaignsDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<CampaignsDbContext>()

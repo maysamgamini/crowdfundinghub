@@ -34,6 +34,7 @@ public sealed class MakeContributionCommandHandler : ICommandHandler<MakeContrib
         _transactionExecutor = transactionExecutor;
     }
 
+    /// <inheritdoc/>
     public async Task<MakeContributionResult> Handle(MakeContributionCommand command, CancellationToken cancellationToken)
     {
         EnsureCanContribute();

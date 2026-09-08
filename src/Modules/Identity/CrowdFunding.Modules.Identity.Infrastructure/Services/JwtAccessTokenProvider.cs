@@ -40,6 +40,7 @@ public sealed class JwtAccessTokenProvider : IAccessTokenProvider
         }
     }
 
+    /// <inheritdoc/>
     public AccessToken Create(User user, IReadOnlyCollection<string> permissions)
     {
         var issuedAtUtc = _dateTimeProvider.UtcNow;

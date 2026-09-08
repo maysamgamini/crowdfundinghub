@@ -17,6 +17,15 @@ namespace CrowdFunding.API.Migrations;
 /// </summary>
 public static class AdminSeeder
 {
+    /// <summary>
+    /// Dispatches <see cref="SeedAdminCommand"/> via the command dispatcher to provision or promote the system administrator.
+    /// </summary>
+    /// <param name="services">The application root service provider.</param>
+    /// <param name="email">The administrator email address.</param>
+    /// <param name="password">The plain-text password for the account.</param>
+    /// <param name="displayName">The administrator's display name.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>A task representing the asynchronous seeding operation.</returns>
     public static async Task RunAsync(IServiceProvider services, string email, string password, string displayName, CancellationToken cancellationToken = default)
     {
         await using var scope = services.CreateAsyncScope();

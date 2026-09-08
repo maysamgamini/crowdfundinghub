@@ -12,6 +12,7 @@ namespace CrowdFunding.Modules.Notifications.Application.Events;
 /// </summary>
 public sealed class CampaignPublishedNotificationHandler : IEventHandler<CampaignPublishedApplicationEvent>
 {
+    /// <inheritdoc/>
     public Task Handle(CampaignPublishedApplicationEvent notification, CancellationToken cancellationToken) => Task.CompletedTask;
 }
 
@@ -20,6 +21,7 @@ public sealed class CampaignPublishedNotificationHandler : IEventHandler<Campaig
 /// </summary>
 public sealed class CampaignCancelledNotificationHandler : IEventHandler<CampaignCancelledApplicationEvent>
 {
+    /// <inheritdoc/>
     public Task Handle(CampaignCancelledApplicationEvent notification, CancellationToken cancellationToken) => Task.CompletedTask;
 }
 
@@ -28,6 +30,7 @@ public sealed class CampaignCancelledNotificationHandler : IEventHandler<Campaig
 /// </summary>
 public sealed class ContributionPaymentConfirmedNotificationHandler : IEventHandler<ContributionPaymentConfirmedApplicationEvent>
 {
+    /// <inheritdoc/>
     public Task Handle(ContributionPaymentConfirmedApplicationEvent notification, CancellationToken cancellationToken) => Task.CompletedTask;
 }
 
@@ -36,6 +39,7 @@ public sealed class ContributionPaymentConfirmedNotificationHandler : IEventHand
 /// </summary>
 public sealed class CampaignReviewApprovedNotificationHandler : IEventHandler<CampaignReviewApprovedApplicationEvent>
 {
+    /// <inheritdoc/>
     public Task Handle(CampaignReviewApprovedApplicationEvent notification, CancellationToken cancellationToken) => Task.CompletedTask;
 }
 
@@ -44,5 +48,6 @@ public sealed class CampaignReviewApprovedNotificationHandler : IEventHandler<Ca
 /// </summary>
 public sealed class CampaignReviewRejectedNotificationHandler : IEventHandler<CampaignReviewRejectedApplicationEvent>
 {
+    /// <inheritdoc/>
     public Task Handle(CampaignReviewRejectedApplicationEvent notification, CancellationToken cancellationToken) => Task.CompletedTask;
 }

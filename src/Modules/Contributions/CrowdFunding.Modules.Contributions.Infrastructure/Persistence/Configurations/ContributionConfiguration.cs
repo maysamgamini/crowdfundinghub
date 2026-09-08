@@ -11,6 +11,10 @@ namespace CrowdFunding.Modules.Contributions.Infrastructure.Persistence.Configur
 /// </summary>
 public sealed class ContributionConfiguration : IEntityTypeConfiguration<Contribution>
 {
+    /// <summary>
+    /// Configures the EF Core mapping and constraints for <see cref="Contribution"/>.
+    /// </summary>
+    /// <param name="builder">The entity type builder.</param>
     public void Configure(EntityTypeBuilder<Contribution> builder)
     {
         builder.ToTable("contributions");

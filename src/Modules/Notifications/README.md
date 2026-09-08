@@ -1,12 +1,17 @@
-﻿# Notifications
+# Notifications Module
 
 ## Purpose
-Contains source files related to Notifications.
+The Notifications module consumes integration events across all modules and dispatches multi-channel user alerts (such as email, push, or console summaries).
 
-## Files
-- No direct files live in this folder; it primarily organizes child folders.
+## Capabilities & Event Subscriptions
+The module listens for core business milestones via `NotificationEventHandlers`:
+- `CampaignPublishedApplicationEvent`: Alerts followers that a campaign is officially live and accepting pledges.
+- `CampaignCancelledApplicationEvent`: Alerts backers that a campaign has been terminated.
+- `ContributionPaymentConfirmedApplicationEvent`: Dispatches pledge receipts and thank-you notifications to backers and campaign creators.
+- `CampaignReviewApprovedApplicationEvent`: Informs campaign creators that their campaign has passed moderation review and is ready to publish.
+- `CampaignReviewRejectedApplicationEvent`: Delivers moderation rejection notices and reviewer feedback to creators.
 
-## Child Folders
-- `CrowdFunding.Modules.Notifications.Application`: Contains the application-layer orchestration for the Notifications module, including handlers, validators, and service abstractions.
-- `CrowdFunding.Modules.Notifications.Domain`: Contains the core domain model for the Notifications module, including invariants, events, and enums.
-- `CrowdFunding.Modules.Notifications.Infrastructure`: Contains infrastructure implementations for the Notifications module, including EF Core persistence, services, and transaction executors.
+## Projects & Layers
+- `CrowdFunding.Modules.Notifications.Domain`: Houses core notification rules and event models.
+- `CrowdFunding.Modules.Notifications.Application`: Orchestrates notification event handlers and channel dispatchers.
+- `CrowdFunding.Modules.Notifications.Infrastructure`: Dispatches notifications via console/external transport integrations.

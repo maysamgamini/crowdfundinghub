@@ -14,12 +14,18 @@ public sealed class SignalRCampaignRealtimeNotifier : ICampaignRealtimeNotifier
     private readonly IHubContext<CampaignHub> _hubContext;
     private readonly ILogger<SignalRCampaignRealtimeNotifier> _logger;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="SignalRCampaignRealtimeNotifier"/> class.
+    /// </summary>
+    /// <param name="hubContext">The SignalR hub context for <see cref="CampaignHub"/>.</param>
+    /// <param name="logger">The logger instance.</param>
     public SignalRCampaignRealtimeNotifier(IHubContext<CampaignHub> hubContext, ILogger<SignalRCampaignRealtimeNotifier> logger)
     {
         _hubContext = hubContext;
         _logger = logger;
     }
 
+    /// <inheritdoc/>
     public async Task NotifyPledgeReceivedAsync(
         Guid campaignId,
         decimal raisedAmount,

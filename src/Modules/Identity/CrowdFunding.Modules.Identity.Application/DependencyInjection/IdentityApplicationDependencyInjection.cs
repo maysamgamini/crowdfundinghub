@@ -13,6 +13,11 @@ namespace CrowdFunding.Modules.Identity.Application.DependencyInjection;
 /// </summary>
 public static class IdentityApplicationDependencyInjection
 {
+    /// <summary>
+    /// Registers Identity application services, command handlers, and query handlers.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <returns>The configured service collection.</returns>
     public static IServiceCollection AddIdentityApplication(this IServiceCollection services)
     {
         services.AddScoped<RegisterUserCommandHandler>();

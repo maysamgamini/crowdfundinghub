@@ -14,6 +14,11 @@ namespace CrowdFunding.API.Security;
 /// </summary>
 public static class JwksEndpoint
 {
+    /// <summary>
+    /// Serves the public JWKS JSON payload containing active ES256 verification keys.
+    /// </summary>
+    /// <param name="signingKeyStore">The asymmetric signing key store service.</param>
+    /// <returns>A JSON result conforming to RFC 7517 JSON Web Key Set.</returns>
     public static IResult Get(ISigningKeyStore signingKeyStore)
     {
         var keys = signingKeyStore.GetPublicSigningKeys().Select(key =>

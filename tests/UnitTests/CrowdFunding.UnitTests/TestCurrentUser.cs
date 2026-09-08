@@ -2,6 +2,9 @@ using CrowdFunding.BuildingBlocks.Application.Security;
 
 namespace CrowdFunding.UnitTests;
 
+/// <summary>
+/// Controllable in-memory test double for <see cref="ICurrentUser"/>.
+/// </summary>
 internal sealed class TestCurrentUser : ICurrentUser
 {
     public bool IsAuthenticated { get; init; } = true;

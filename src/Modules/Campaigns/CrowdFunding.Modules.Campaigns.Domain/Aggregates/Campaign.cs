@@ -78,6 +78,10 @@ public sealed class Campaign : BaseEntity
         return campaign;
     }
 
+    /// <summary>
+    /// Publishes the campaign from Draft to Active status.
+    /// </summary>
+    /// <param name="currentUtc">The current UTC timestamp.</param>
     public void Publish(DateTime currentUtc)
     {
         if (Status != CampaignStatus.Draft)
@@ -94,6 +98,9 @@ public sealed class Campaign : BaseEntity
         AddDomainEvent(new CampaignPublishedDomainEvent(Id, OwnerId));
     }
 
+    /// <summary>
+    /// Cancels the campaign.
+    /// </summary>
     public void Cancel()
     {
         if (Status == CampaignStatus.Cancelled)
@@ -110,6 +117,10 @@ public sealed class Campaign : BaseEntity
         AddDomainEvent(new CampaignCancelledDomainEvent(Id, OwnerId));
     }
 
+    /// <summary>
+    /// Applies a confirmed monetary contribution to the raised balance.
+    /// </summary>
+    /// <param name="contribution">The monetary contribution to apply.</param>
     public void ApplyConfirmedContribution(Money contribution)
     {
         if (Status != CampaignStatus.Published)

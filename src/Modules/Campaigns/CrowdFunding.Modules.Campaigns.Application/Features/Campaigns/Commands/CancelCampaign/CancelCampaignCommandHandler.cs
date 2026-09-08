@@ -26,6 +26,7 @@ public sealed class CancelCampaignCommandHandler : ICommandHandler<CancelCampaig
         _transactionExecutor = transactionExecutor;
     }
 
+    /// <inheritdoc/>
     public async Task<CancelCampaignResult> Handle(CancelCampaignCommand command, CancellationToken cancellationToken)
     {
         // Same advisory lock as AddContributionToCampaignCommandHandler, and the campaign is

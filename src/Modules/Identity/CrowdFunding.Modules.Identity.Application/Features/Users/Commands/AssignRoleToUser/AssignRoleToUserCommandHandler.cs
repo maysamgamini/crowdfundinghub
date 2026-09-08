@@ -19,6 +19,7 @@ public sealed class AssignRoleToUserCommandHandler : ICommandHandler<AssignRoleT
         _userRepository = userRepository;
     }
 
+    /// <inheritdoc/>
     public async Task<AssignRoleToUserResult> Handle(AssignRoleToUserCommand command, CancellationToken cancellationToken)
     {
         EnsureCanAssignRoles();

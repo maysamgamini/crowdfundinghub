@@ -13,6 +13,11 @@ namespace CrowdFunding.Modules.Moderation.Application.DependencyInjection;
 /// </summary>
 public static class ModerationApplicationDependencyInjection
 {
+    /// <summary>
+    /// Registers Moderation application services, command handlers, and query handlers.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <returns>The configured service collection.</returns>
     public static IServiceCollection AddModerationApplication(this IServiceCollection services)
     {
         services.AddScoped<CreateCampaignReviewCommandHandler>();

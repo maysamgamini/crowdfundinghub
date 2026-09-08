@@ -33,6 +33,7 @@ public sealed class ConfirmContributionPaymentCommandHandler : ICommandHandler<C
         _transactionExecutor = transactionExecutor;
     }
 
+    /// <inheritdoc/>
     public async Task<ConfirmContributionPaymentResult> Handle(ConfirmContributionPaymentCommand command, CancellationToken cancellationToken)
     {
         EnsureCanManagePayments();

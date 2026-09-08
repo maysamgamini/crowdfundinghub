@@ -14,11 +14,16 @@ public sealed class DbContextHealthCheck<TContext> : IHealthCheck
 {
     private readonly TContext _dbContext;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DbContextHealthCheck{TContext}"/> class.
+    /// </summary>
+    /// <param name="dbContext">The EF Core DbContext to probe.</param>
     public DbContextHealthCheck(TContext dbContext)
     {
         _dbContext = dbContext;
     }
 
+    /// <inheritdoc/>
     public async Task<HealthCheckResult> CheckHealthAsync(
         HealthCheckContext context,
         CancellationToken cancellationToken = default)

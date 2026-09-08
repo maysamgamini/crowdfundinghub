@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Application.Pagination;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
@@ -426,7 +427,7 @@ public sealed class PublishCampaignCommandHandlerTests
 
         var action = async () => await handler.Handle(new PublishCampaignCommand(campaign.Id), CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(action);
+        var exception = await Assert.ThrowsAsync<ResourceConflictException>(action);
 
         Assert.Equal("Campaign must be approved by moderation before it can be published.", exception.Message);
         Assert.Equal(0, transactionExecutor.InvocationCount);

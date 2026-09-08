@@ -29,6 +29,7 @@ public sealed class RejectCampaignReviewCommandHandler : ICommandHandler<RejectC
         _transactionExecutor = transactionExecutor;
     }
 
+    /// <inheritdoc/>
     public async Task<RejectCampaignReviewResult> Handle(RejectCampaignReviewCommand command, CancellationToken cancellationToken)
     {
         EnsureCanReview();

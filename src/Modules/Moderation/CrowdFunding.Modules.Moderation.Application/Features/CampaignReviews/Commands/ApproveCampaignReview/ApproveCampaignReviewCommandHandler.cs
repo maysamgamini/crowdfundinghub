@@ -29,6 +29,7 @@ public sealed class ApproveCampaignReviewCommandHandler : ICommandHandler<Approv
         _transactionExecutor = transactionExecutor;
     }
 
+    /// <inheritdoc/>
     public async Task<ApproveCampaignReviewResult> Handle(ApproveCampaignReviewCommand command, CancellationToken cancellationToken)
     {
         EnsureCanReview();

@@ -1,4 +1,4 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
 
@@ -11,13 +11,19 @@ public sealed class HttpContextCurrentUser : ICurrentUser
 {
     private readonly IHttpContextAccessor _httpContextAccessor;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="HttpContextCurrentUser"/> class.
+    /// </summary>
+    /// <param name="httpContextAccessor">The HTTP context accessor.</param>
     public HttpContextCurrentUser(IHttpContextAccessor httpContextAccessor)
     {
         _httpContextAccessor = httpContextAccessor;
     }
 
+    /// <inheritdoc/>
     public bool IsAuthenticated => _httpContextAccessor.HttpContext?.User?.Identity?.IsAuthenticated == true;
 
+    /// <inheritdoc/>
     public Guid UserId
     {
         get
@@ -27,17 +33,22 @@ public sealed class HttpContextCurrentUser : ICurrentUser
         }
     }
 
+    /// <inheritdoc/>
     public string? Email => _httpContextAccessor.HttpContext?.User?.FindFirstValue(ClaimTypes.Email);
 
+    /// <inheritdoc/>
     public IReadOnlyCollection<string> Roles => GetClaimValues(ClaimTypes.Role);
 
+    /// <inheritdoc/>
     public IReadOnlyCollection<string> Permissions => GetClaimValues(CustomClaimTypes.Permission);
 
+    /// <inheritdoc/>
     public bool HasPermission(string permission)
     {
         return Permissions.Contains(permission, StringComparer.OrdinalIgnoreCase);
     }
 
+    /// <inheritdoc/>
     public bool IsInRole(string role)
     {
         return Roles.Contains(role, StringComparer.OrdinalIgnoreCase);

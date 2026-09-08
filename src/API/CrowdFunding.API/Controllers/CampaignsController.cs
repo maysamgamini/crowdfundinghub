@@ -1,4 +1,4 @@
-﻿using CrowdFunding.API.Contracts.Common;
+using CrowdFunding.API.Contracts.Common;
 using CrowdFunding.API.Contracts.Campaigns;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Pagination;
@@ -17,10 +17,11 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace CrowdFunding.API.Controllers;
 
 /// <summary>
-/// Exposes HTTP endpoints for Campaigns.
+/// Exposes HTTP endpoints for Campaigns: creation, listing, details, publishing, and cancellation.
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
+[Tags("Campaigns")]
 public sealed class CampaignsController : ControllerBase
 {
     private readonly ICommandDispatcher _commandDispatcher;
@@ -46,6 +47,16 @@ public sealed class CampaignsController : ControllerBase
         _publishCampaignValidator = publishCampaignValidator;
     }
 
+    /// <summary>
+    /// Retrieves a paginated list of campaigns with optional filters.
+    /// </summary>
+    /// <param name="pageNumber">The page number to retrieve (1-based, default: 1).</param>
+    /// <param name="pageSize">The number of items per page (default: 10).</param>
+    /// <param name="ownerId">Optional filter for campaigns owned by a specific user.</param>
+    /// <param name="category">Optional category filter.</param>
+    /// <param name="status">Optional status filter (Draft, Published, Completed, Cancelled).</param>
+    /// <param name="cancellationToken">Cancellation token for asynchronous operation.</param>
+    /// <response code="200">Returns the requested page of campaigns.</response>
     [HttpGet]
     [ProducesResponseType(typeof(PagedResponse<ListCampaignsResponse>), StatusCodes.Status200OK)]
     public async Task<ActionResult<PagedResponse<ListCampaignsResponse>>> List(
@@ -73,10 +84,21 @@ public sealed class CampaignsController : ControllerBase
         return Ok(response);
     }
 
+    /// <summary>
+    /// Creates a new crowdfunding campaign in Draft status.
+    /// </summary>
+    /// <param name="request">The campaign creation payload including title, story, category, goal amount, currency, and deadline.</param>
+    /// <param name="cancellationToken">Cancellation token for asynchronous operation.</param>
+    /// <response code="201">Campaign created successfully in Draft status.</response>
+    /// <response code="400">Invalid campaign parameters or validation errors.</response>
+    /// <response code="401">Unauthorized if the request lacks a valid Bearer token.</response>
+    /// <response code="403">Forbidden if the caller lacks the 'campaigns:create' permission.</response>
     [Authorize(Policy = PermissionConstants.CampaignsCreate)]
     [HttpPost]
     [ProducesResponseType(typeof(CreateCampaignResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> Create(
         [FromBody] CreateCampaignRequest request,
         CancellationToken cancellationToken)
@@ -96,10 +118,22 @@ public sealed class CampaignsController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = response.CampaignId }, response);
     }
 
+    /// <summary>
+    /// Publishes an approved campaign, making it active for contributions.
+    /// </summary>
+    /// <param name="id">The unique identifier of the campaign to publish.</param>
+    /// <param name="cancellationToken">Cancellation token for asynchronous operation.</param>
+    /// <response code="200">Campaign published successfully.</response>
+    /// <response code="400">Campaign cannot be published (e.g. not approved or invalid state).</response>
+    /// <response code="401">Unauthorized if the request lacks a valid Bearer token.</response>
+    /// <response code="403">Forbidden if the caller lacks the 'campaigns:publish' permission.</response>
+    /// <response code="404">Campaign not found.</response>
     [Authorize(Policy = PermissionConstants.CampaignsPublish)]
     [HttpPost("{id:guid}/publish")]
     [ProducesResponseType(typeof(PublishCampaignResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<PublishCampaignResponse>> Publish(Guid id, CancellationToken cancellationToken)
     {
@@ -116,10 +150,22 @@ public sealed class CampaignsController : ControllerBase
         return Ok(_mapper.Map<PublishCampaignResponse>(result));
     }
 
+    /// <summary>
+    /// Cancels an ongoing campaign.
+    /// </summary>
+    /// <param name="id">The unique identifier of the campaign to cancel.</param>
+    /// <param name="cancellationToken">Cancellation token for asynchronous operation.</param>
+    /// <response code="200">Campaign cancelled successfully.</response>
+    /// <response code="400">Campaign cannot be cancelled in its current state.</response>
+    /// <response code="401">Unauthorized if the request lacks a valid Bearer token.</response>
+    /// <response code="403">Forbidden if the caller lacks the 'campaigns:cancel' permission.</response>
+    /// <response code="404">Campaign not found.</response>
     [Authorize(Policy = PermissionConstants.CampaignsCancel)]
     [HttpPost("{id:guid}/cancel")]
     [ProducesResponseType(typeof(CancelCampaignResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<CancelCampaignResponse>> Cancel(Guid id, CancellationToken cancellationToken)
     {
@@ -136,6 +182,13 @@ public sealed class CampaignsController : ControllerBase
         return Ok(_mapper.Map<CancelCampaignResponse>(result));
     }
 
+    /// <summary>
+    /// Retrieves campaign details by its unique identifier.
+    /// </summary>
+    /// <param name="id">The unique identifier of the campaign.</param>
+    /// <param name="cancellationToken">Cancellation token for asynchronous operation.</param>
+    /// <response code="200">Returns the campaign details.</response>
+    /// <response code="404">Campaign not found.</response>
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(GetCampaignByIdResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

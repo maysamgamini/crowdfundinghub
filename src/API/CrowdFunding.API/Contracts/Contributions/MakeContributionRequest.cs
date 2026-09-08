@@ -1,8 +1,10 @@
-﻿namespace CrowdFunding.API.Contracts.Contributions;
+namespace CrowdFunding.API.Contracts.Contributions;
 
 /// <summary>
-/// Represents the HTTP request payload for Make Contribution.
+/// Represents the HTTP request payload for creating a new contribution pledge to a campaign.
 /// </summary>
+/// <param name="Amount">The monetary amount to contribute (must be greater than 0).</param>
+/// <param name="Currency">The three-letter ISO 4217 currency code (e.g. USD, EUR).</param>
 public sealed record MakeContributionRequest(
     decimal Amount,
     string Currency);

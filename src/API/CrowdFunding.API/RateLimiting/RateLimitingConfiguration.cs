@@ -14,6 +14,11 @@ public static class RateLimitingConfiguration
     public const string AuthPolicy = "auth-strict";
     public const string PaymentPolicy = "payment-strict";
 
+    /// <summary>
+    /// Registers IP- and user-partitioned rate limiting policies for authentication and payment routes.
+    /// </summary>
+    /// <param name="services">The service collection to configure.</param>
+    /// <returns>The configured service collection.</returns>
     public static IServiceCollection AddCrowdFundingRateLimiting(this IServiceCollection services)
     {
         services.AddRateLimiter(options =>

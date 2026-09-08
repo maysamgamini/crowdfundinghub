@@ -31,6 +31,7 @@ public sealed class CreateCampaignCommandHandler : ICommandHandler<CreateCampaig
         _transactionExecutor = transactionExecutor;
     }
 
+    /// <inheritdoc/>
     public async Task<CreateCampaignResult> Handle(CreateCampaignCommand command, CancellationToken cancellationToken)
     {
         EnsureCanCreateCampaign();

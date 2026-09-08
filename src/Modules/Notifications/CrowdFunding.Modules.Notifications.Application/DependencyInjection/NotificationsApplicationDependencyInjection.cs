@@ -7,6 +7,11 @@ namespace CrowdFunding.Modules.Notifications.Application.DependencyInjection;
 /// </summary>
 public static class NotificationsApplicationDependencyInjection
 {
+    /// <summary>
+    /// Registers Notifications application services and event handlers.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <returns>The configured service collection.</returns>
     public static IServiceCollection AddNotificationsApplication(this IServiceCollection services)
     {
         return services;

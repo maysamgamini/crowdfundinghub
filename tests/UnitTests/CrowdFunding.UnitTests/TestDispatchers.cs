@@ -2,6 +2,9 @@ using CrowdFunding.BuildingBlocks.Application.Messaging;
 
 namespace CrowdFunding.UnitTests;
 
+/// <summary>
+/// In-memory test double for <see cref="ICommandDispatcher"/> that records dispatched commands.
+/// </summary>
 internal sealed class RecordingCommandDispatcher : ICommandDispatcher
 {
     private readonly object? _result;

@@ -4,6 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -29,6 +31,7 @@
     <ProjectReference Include="..\..\Modules\Identity\CrowdFunding.Modules.Identity.Contracts\CrowdFunding.Modules.Identity.Contracts.csproj" />
     <ProjectReference Include="..\..\Modules\Campaigns\CrowdFunding.Modules.Campaigns.Infrastructure\CrowdFunding.Modules.Campaigns.Infrastructure.csproj" />
     <ProjectReference Include="..\..\Modules\Campaigns\CrowdFunding.Modules.Campaigns.Contracts\CrowdFunding.Modules.Campaigns.Contracts.csproj" />
+    <ProjectReference Include="..\..\Modules\Contributions\CrowdFunding.Modules.Contributions.Contracts\CrowdFunding.Modules.Contributions.Contracts.csproj" />
     <ProjectReference Include="..\..\Modules\Contributions\CrowdFunding.Modules.Contributions.Infrastructure\CrowdFunding.Modules.Contributions.Infrastructure.csproj" />
     <ProjectReference Include="..\..\Modules\CampaignUpdates\CrowdFunding.Modules.CampaignUpdates.Infrastructure\CrowdFunding.Modules.CampaignUpdates.Infrastructure.csproj" />
     <ProjectReference Include="..\..\Modules\Notifications\CrowdFunding.Modules.Notifications.Infrastructure\CrowdFunding.Modules.Notifications.Infrastructure.csproj" />

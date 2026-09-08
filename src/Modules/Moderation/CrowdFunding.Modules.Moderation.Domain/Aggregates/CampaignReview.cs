@@ -29,6 +29,12 @@ public sealed class CampaignReview : BaseEntity
         Status = CampaignReviewStatus.Pending;
     }
 
+    /// <summary>
+    /// Creates a new campaign review in Pending status.
+    /// </summary>
+    /// <param name="campaignId">The unique identifier of the campaign.</param>
+    /// <param name="createdAtUtc">The UTC timestamp when the review was created.</param>
+    /// <returns>A new <see cref="CampaignReview"/> instance.</returns>
     public static CampaignReview Create(Guid campaignId, DateTime createdAtUtc)
     {
         if (campaignId == Guid.Empty)
@@ -39,6 +45,12 @@ public sealed class CampaignReview : BaseEntity
         return new CampaignReview(Guid.NewGuid(), campaignId, createdAtUtc);
     }
 
+    /// <summary>
+    /// Approves the campaign review submission.
+    /// </summary>
+    /// <param name="moderatorId">The unique identifier of the reviewing moderator.</param>
+    /// <param name="notes">Optional approval notes.</param>
+    /// <param name="reviewedAtUtc">The UTC timestamp when review was approved.</param>
     public void Approve(Guid moderatorId, string? notes, DateTime reviewedAtUtc)
     {
         EnsurePending();
@@ -51,6 +63,12 @@ public sealed class CampaignReview : BaseEntity
         AddDomainEvent(new CampaignReviewApprovedDomainEvent(CampaignId, ModeratorId!.Value, Notes));
     }
 
+    /// <summary>
+    /// Rejects the campaign review submission with reviewer feedback.
+    /// </summary>
+    /// <param name="moderatorId">The unique identifier of the reviewing moderator.</param>
+    /// <param name="notes">Rejection explanation and feedback.</param>
+    /// <param name="reviewedAtUtc">The UTC timestamp when review was rejected.</param>
     public void Reject(Guid moderatorId, string? notes, DateTime reviewedAtUtc)
     {
         EnsurePending();

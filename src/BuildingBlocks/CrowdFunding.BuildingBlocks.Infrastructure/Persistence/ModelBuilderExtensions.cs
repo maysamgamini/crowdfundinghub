@@ -7,6 +7,12 @@ namespace CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
 /// </summary>
 public static class ModelBuilderExtensions
 {
+    /// <summary>
+    /// Maps and indexes the <see cref="OutboxMessage"/> entity to the specified database table.
+    /// </summary>
+    /// <param name="modelBuilder">The model builder being configured.</param>
+    /// <param name="tableName">The target table name (e.g. "campaigns_outbox").</param>
+    /// <returns>The configured model builder.</returns>
     public static ModelBuilder ConfigureOutbox(this ModelBuilder modelBuilder, string tableName)
     {
         modelBuilder.Entity<OutboxMessage>(builder =>
@@ -33,6 +39,12 @@ public static class ModelBuilderExtensions
         return modelBuilder;
     }
 
+    /// <summary>
+    /// Maps and indexes the <see cref="DeadLetterEvent"/> entity to the specified database table.
+    /// </summary>
+    /// <param name="modelBuilder">The model builder being configured.</param>
+    /// <param name="tableName">The target table name (e.g. "campaigns_dead_letter").</param>
+    /// <returns>The configured model builder.</returns>
     public static ModelBuilder ConfigureDeadLetter(this ModelBuilder modelBuilder, string tableName)
     {
         modelBuilder.Entity<DeadLetterEvent>(builder =>

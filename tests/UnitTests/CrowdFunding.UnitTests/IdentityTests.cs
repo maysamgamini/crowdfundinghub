@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Services;
@@ -117,7 +118,7 @@ public sealed class RegisterUserCommandHandlerTests
             new RegisterUserCommand(" creator@example.com ", "Creator", "supersecret"),
             CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(action);
+        var exception = await Assert.ThrowsAsync<ResourceConflictException>(action);
 
         Assert.Equal("A user with email ' creator@example.com ' already exists.", exception.Message);
     }

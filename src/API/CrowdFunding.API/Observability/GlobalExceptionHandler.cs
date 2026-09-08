@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net;
+using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
@@ -18,11 +19,16 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
 {
     private readonly ILogger<GlobalExceptionHandler> _logger;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="GlobalExceptionHandler"/> class.
+    /// </summary>
+    /// <param name="logger">The logger instance.</param>
     public GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger)
     {
         _logger = logger;
     }
 
+    /// <inheritdoc/>
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
         var traceId = Activity.Current?.TraceId.ToHexString() ?? httpContext.TraceIdentifier;
@@ -34,6 +40,12 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
             UnauthorizedAccessException => (HttpStatusCode.Unauthorized, "Unauthorized", "Authentication required or invalid credentials."),
             ForbiddenAccessException => (HttpStatusCode.Forbidden, "Forbidden", "You do not have permission to perform this action."),
             KeyNotFoundException => (HttpStatusCode.NotFound, "Not Found", exception.Message),
+            // Resource-state conflicts (RFC 9110 §15.5.10) — duplicate unique values, invalid
+            // state-machine transitions — are distinct from malformed input (400).
+            ResourceConflictException => (HttpStatusCode.Conflict, "Conflict", exception.Message),
+            // A losing optimistic-concurrency writer is also a conflict, not a server failure —
+            // the client can safely retry with a fresh read.
+            ConcurrencyConflictException => (HttpStatusCode.Conflict, "Conflict", "The resource was modified by another request. Please retry with the latest data."),
             _ => (HttpStatusCode.InternalServerError, "Internal Server Error", "An unexpected error occurred. Please contact support quoting the TraceId.")
         };
 

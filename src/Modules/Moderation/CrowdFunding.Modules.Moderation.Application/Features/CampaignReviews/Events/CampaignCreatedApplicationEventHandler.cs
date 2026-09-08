@@ -17,6 +17,7 @@ public sealed class CampaignCreatedApplicationEventHandler : IEventHandler<Campa
         _commandDispatcher = commandDispatcher;
     }
 
+    /// <inheritdoc/>
     public async Task Handle(CampaignCreatedApplicationEvent notification, CancellationToken cancellationToken)
     {
         await _commandDispatcher.SendAsync<CreateCampaignReviewResult>(

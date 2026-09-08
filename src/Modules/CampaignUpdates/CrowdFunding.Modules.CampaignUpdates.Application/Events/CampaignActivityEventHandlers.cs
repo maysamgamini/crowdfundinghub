@@ -13,6 +13,7 @@ namespace CrowdFunding.Modules.CampaignUpdates.Application.Events;
 /// </summary>
 public sealed class CampaignCreatedActivityHandler : IEventHandler<CampaignCreatedApplicationEvent>
 {
+    /// <inheritdoc/>
     public Task Handle(CampaignCreatedApplicationEvent notification, CancellationToken cancellationToken) => Task.CompletedTask;
 }
 
@@ -21,6 +22,7 @@ public sealed class CampaignCreatedActivityHandler : IEventHandler<CampaignCreat
 /// </summary>
 public sealed class CampaignPublishedActivityHandler : IEventHandler<CampaignPublishedApplicationEvent>
 {
+    /// <inheritdoc/>
     public Task Handle(CampaignPublishedApplicationEvent notification, CancellationToken cancellationToken) => Task.CompletedTask;
 }
 
@@ -29,6 +31,7 @@ public sealed class CampaignPublishedActivityHandler : IEventHandler<CampaignPub
 /// </summary>
 public sealed class CampaignCancelledActivityHandler : IEventHandler<CampaignCancelledApplicationEvent>
 {
+    /// <inheritdoc/>
     public Task Handle(CampaignCancelledApplicationEvent notification, CancellationToken cancellationToken) => Task.CompletedTask;
 }
 
@@ -37,6 +40,7 @@ public sealed class CampaignCancelledActivityHandler : IEventHandler<CampaignCan
 /// </summary>
 public sealed class ContributionPaymentConfirmedActivityHandler : IEventHandler<ContributionPaymentConfirmedApplicationEvent>
 {
+    /// <inheritdoc/>
     public Task Handle(ContributionPaymentConfirmedApplicationEvent notification, CancellationToken cancellationToken) => Task.CompletedTask;
 }
 
@@ -45,6 +49,7 @@ public sealed class ContributionPaymentConfirmedActivityHandler : IEventHandler<
 /// </summary>
 public sealed class CampaignReviewApprovedActivityHandler : IEventHandler<CampaignReviewApprovedApplicationEvent>
 {
+    /// <inheritdoc/>
     public Task Handle(CampaignReviewApprovedApplicationEvent notification, CancellationToken cancellationToken) => Task.CompletedTask;
 }
 
@@ -53,5 +58,6 @@ public sealed class CampaignReviewApprovedActivityHandler : IEventHandler<Campai
 /// </summary>
 public sealed class CampaignReviewRejectedActivityHandler : IEventHandler<CampaignReviewRejectedApplicationEvent>
 {
+    /// <inheritdoc/>
     public Task Handle(CampaignReviewRejectedApplicationEvent notification, CancellationToken cancellationToken) => Task.CompletedTask;
 }

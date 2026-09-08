@@ -1,4 +1,4 @@
-﻿using CrowdFunding.API.Contracts.Identity;
+using CrowdFunding.API.Contracts.Identity;
 using CrowdFunding.API.RateLimiting;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.AssignRoleToUser;
@@ -16,10 +16,11 @@ using Microsoft.AspNetCore.RateLimiting;
 namespace CrowdFunding.API.Controllers;
 
 /// <summary>
-/// Exposes HTTP endpoints for Identity.
+/// Exposes HTTP endpoints for Identity: authentication, user registration, role assignment, and permission management.
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
+[Tags("Identity")]
 public sealed class IdentityController : ControllerBase
 {
     private readonly ICommandDispatcher _commandDispatcher;
@@ -48,6 +49,13 @@ public sealed class IdentityController : ControllerBase
         _registerValidator = registerValidator;
     }
 
+    /// <summary>
+    /// Registers a new user account with default Member role.
+    /// </summary>
+    /// <param name="request">The user registration payload containing email, display name, and password.</param>
+    /// <param name="cancellationToken">Cancellation token for asynchronous operation.</param>
+    /// <response code="201">User was registered successfully and assigned the default Member role.</response>
+    /// <response code="400">Invalid registration data, duplicate email, or password complexity failure.</response>
     [AllowAnonymous]
     [EnableRateLimiting(RateLimitingConfiguration.AuthPolicy)]
     [HttpPost("register")]
@@ -70,6 +78,13 @@ public sealed class IdentityController : ControllerBase
         return CreatedAtAction(nameof(Me), _mapper.Map<RegisterUserResponse>(result));
     }
 
+    /// <summary>
+    /// Authenticates a user and returns an asymmetric ES256 JWT access token.
+    /// </summary>
+    /// <param name="request">The login credentials containing email and password.</param>
+    /// <param name="cancellationToken">Cancellation token for asynchronous operation.</param>
+    /// <response code="200">Authentication successful. Returns the ES256 JWT access token and expiration timestamp.</response>
+    /// <response code="400">Invalid credentials or malformed request payload.</response>
     [AllowAnonymous]
     [EnableRateLimiting(RateLimitingConfiguration.AuthPolicy)]
     [HttpPost("login")]
@@ -92,19 +107,38 @@ public sealed class IdentityController : ControllerBase
         return Ok(_mapper.Map<LoginUserResponse>(result));
     }
 
+    /// <summary>
+    /// Retrieves the profile, assigned roles, and effective permissions of the currently authenticated user.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token for asynchronous operation.</param>
+    /// <response code="200">Returns the authenticated user's ID, email, display name, roles, and effective permissions.</response>
+    /// <response code="401">Unauthorized if the request lacks a valid Bearer token.</response>
     [Authorize]
     [HttpGet("me")]
     [ProducesResponseType(typeof(CurrentUserResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<CurrentUserResponse>> Me(CancellationToken cancellationToken)
     {
         var result = await _queryDispatcher.QueryAsync<GetCurrentUserResult>(new GetCurrentUserQuery(), cancellationToken);
         return Ok(_mapper.Map<CurrentUserResponse>(result));
     }
 
+    /// <summary>
+    /// Assigns an application role to the specified user.
+    /// </summary>
+    /// <param name="userId">The unique identifier of the user to update.</param>
+    /// <param name="request">The role assignment payload containing the role name.</param>
+    /// <param name="cancellationToken">Cancellation token for asynchronous operation.</param>
+    /// <response code="200">Role assigned successfully. Returns updated roles and permissions.</response>
+    /// <response code="400">Invalid role or validation error.</response>
+    /// <response code="401">Unauthorized if the request lacks a valid Bearer token.</response>
+    /// <response code="403">Forbidden if the caller lacks the 'identity:roles:assign' permission.</response>
     [Authorize(Policy = PermissionConstants.IdentityRolesAssign)]
     [HttpPost("users/{userId:guid}/roles")]
     [ProducesResponseType(typeof(AssignRoleToUserResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<AssignRoleToUserResponse>> AssignRole(
         Guid userId,
         [FromBody] AssignRoleToUserRequest request,
@@ -123,10 +157,22 @@ public sealed class IdentityController : ControllerBase
         return Ok(_mapper.Map<AssignRoleToUserResponse>(result));
     }
 
+    /// <summary>
+    /// Grants a fine-grained permission directly to the specified user.
+    /// </summary>
+    /// <param name="userId">The unique identifier of the user to update.</param>
+    /// <param name="request">The permission grant payload containing the permission name.</param>
+    /// <param name="cancellationToken">Cancellation token for asynchronous operation.</param>
+    /// <response code="200">Permission granted successfully. Returns updated explicit and effective permissions.</response>
+    /// <response code="400">Invalid permission or validation error.</response>
+    /// <response code="401">Unauthorized if the request lacks a valid Bearer token.</response>
+    /// <response code="403">Forbidden if the caller lacks the 'identity:permissions:grant' permission.</response>
     [Authorize(Policy = PermissionConstants.IdentityPermissionsGrant)]
     [HttpPost("users/{userId:guid}/permissions")]
     [ProducesResponseType(typeof(GrantPermissionToUserResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<GrantPermissionToUserResponse>> GrantPermission(
         Guid userId,
         [FromBody] GrantPermissionToUserRequest request,

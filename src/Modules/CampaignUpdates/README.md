@@ -1,12 +1,17 @@
-﻿# Campaign Updates
+# Campaign Updates & Activity Feed Module
 
 ## Purpose
-Contains source files related to Campaign Updates.
+The Campaign Updates module consumes campaign lifecycle and contribution milestones to build real-time activity timelines, backer update streams, and public audit history.
 
-## Files
-- No direct files live in this folder; it primarily organizes child folders.
+## Capabilities & Event Subscriptions
+Subscribes to system events via `CampaignActivityEventHandlers`:
+- `CampaignCreatedApplicationEvent`: Records initial draft registration in the public audit ledger.
+- `CampaignPublishedApplicationEvent`: Posts public launch announcement into the campaign's activity feed.
+- `CampaignCancelledApplicationEvent`: Appends cancellation event and timestamp to the campaign timeline.
+- `ContributionPaymentConfirmedApplicationEvent`: Emits funding milestone progress and backer acknowledgment entries.
+- `CampaignReviewApprovedApplicationEvent` & `CampaignReviewRejectedApplicationEvent`: Records moderation decision timeline records.
 
-## Child Folders
-- `CrowdFunding.Modules.CampaignUpdates.Application`: Contains the application-layer orchestration for the Campaign Updates module, including handlers, validators, and service abstractions.
-- `CrowdFunding.Modules.CampaignUpdates.Domain`: Contains the core domain model for the Campaign Updates module, including invariants, events, and enums.
-- `CrowdFunding.Modules.CampaignUpdates.Infrastructure`: Contains infrastructure implementations for the Campaign Updates module, including EF Core persistence, services, and transaction executors.
+## Projects & Layers
+- `CrowdFunding.Modules.CampaignUpdates.Domain`: Models campaign timeline entries and activity status.
+- `CrowdFunding.Modules.CampaignUpdates.Application`: Orchestrates activity event handlers and query abstractions.
+- `CrowdFunding.Modules.CampaignUpdates.Infrastructure`: Manages update feeds and persistent timeline sinks.

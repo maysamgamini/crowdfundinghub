@@ -17,6 +17,7 @@ public sealed class ContributionPaymentConfirmedApplicationEventHandler : IEvent
         _commandDispatcher = commandDispatcher;
     }
 
+    /// <inheritdoc/>
     public async Task Handle(ContributionPaymentConfirmedApplicationEvent notification, CancellationToken cancellationToken)
     {
         await _commandDispatcher.SendAsync<AddContributionToCampaignResult>(

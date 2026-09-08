@@ -1,4 +1,4 @@
-﻿using CrowdFunding.API.Contracts.Common;
+using CrowdFunding.API.Contracts.Common;
 using CrowdFunding.API.Contracts.Contributions;
 using CrowdFunding.API.RateLimiting;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
@@ -17,10 +17,11 @@ using Microsoft.AspNetCore.RateLimiting;
 namespace CrowdFunding.API.Controllers;
 
 /// <summary>
-/// Exposes HTTP endpoints for Contributions.
+/// Exposes HTTP endpoints for Contributions: creating pledges, listing contributions, and handling payment confirmations and failures.
 /// </summary>
 [ApiController]
 [Route("api/campaigns/{campaignId:guid}/[controller]")]
+[Tags("Contributions")]
 public sealed class ContributionsController : ControllerBase
 {
     private readonly ICommandDispatcher _commandDispatcher;
@@ -46,6 +47,17 @@ public sealed class ContributionsController : ControllerBase
         _validator = validator;
     }
 
+    /// <summary>
+    /// Retrieves a paginated list of contributions for a specific campaign.
+    /// </summary>
+    /// <param name="campaignId">The unique identifier of the campaign.</param>
+    /// <param name="pageNumber">The page number to retrieve (1-based, default: 1).</param>
+    /// <param name="pageSize">The number of items per page (default: 10).</param>
+    /// <param name="contributorId">Optional filter for contributions made by a specific contributor.</param>
+    /// <param name="currency">Optional currency filter (e.g. USD, EUR).</param>
+    /// <param name="status">Optional contribution status filter (Pending, Succeeded, Failed).</param>
+    /// <param name="cancellationToken">Cancellation token for asynchronous operation.</param>
+    /// <response code="200">Returns the requested page of contributions.</response>
     [HttpGet]
     [ProducesResponseType(typeof(PagedResponse<ListContributionsResponse>), StatusCodes.Status200OK)]
     public async Task<ActionResult<PagedResponse<ListContributionsResponse>>> ListByCampaign(
@@ -74,11 +86,24 @@ public sealed class ContributionsController : ControllerBase
         return Ok(response);
     }
 
+    /// <summary>
+    /// Pledges a new financial contribution to an active campaign.
+    /// </summary>
+    /// <param name="campaignId">The unique identifier of the target campaign.</param>
+    /// <param name="request">The contribution request containing amount and currency.</param>
+    /// <param name="cancellationToken">Cancellation token for asynchronous operation.</param>
+    /// <response code="201">Contribution created successfully in Pending status.</response>
+    /// <response code="400">Invalid contribution amount, currency mismatch, or validation errors.</response>
+    /// <response code="401">Unauthorized if the request lacks a valid Bearer token.</response>
+    /// <response code="403">Forbidden if the caller lacks the 'campaigns:contribute' permission.</response>
+    /// <response code="404">Target campaign not found or not active.</response>
     [Authorize(Policy = PermissionConstants.CampaignsContribute)]
     [EnableRateLimiting(RateLimitingConfiguration.PaymentPolicy)]
     [HttpPost]
     [ProducesResponseType(typeof(MakeContributionResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<MakeContributionResponse>> Create(
         Guid campaignId,
@@ -100,10 +125,24 @@ public sealed class ContributionsController : ControllerBase
         return CreatedAtAction(nameof(ListByCampaign), new { campaignId }, response);
     }
 
+    /// <summary>
+    /// Confirms successful payment processing for a pending contribution.
+    /// </summary>
+    /// <param name="campaignId">The unique identifier of the campaign.</param>
+    /// <param name="contributionId">The unique identifier of the contribution to confirm.</param>
+    /// <param name="request">The confirmation payload containing external payment gateway reference.</param>
+    /// <param name="cancellationToken">Cancellation token for asynchronous operation.</param>
+    /// <response code="200">Payment confirmed successfully.</response>
+    /// <response code="400">Payment confirmation failed or invalid state transition.</response>
+    /// <response code="401">Unauthorized if the request lacks a valid Bearer token.</response>
+    /// <response code="403">Forbidden if the caller lacks the 'contributions:payments:manage' permission.</response>
+    /// <response code="404">Contribution or campaign not found.</response>
     [Authorize(Policy = PermissionConstants.ContributionsPaymentsManage)]
     [HttpPost("{contributionId:guid}/confirm-payment")]
     [ProducesResponseType(typeof(ConfirmContributionPaymentResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ConfirmContributionPaymentResponse>> ConfirmPayment(
         Guid campaignId,
@@ -124,10 +163,24 @@ public sealed class ContributionsController : ControllerBase
         return Ok(_mapper.Map<ConfirmContributionPaymentResponse>(result));
     }
 
+    /// <summary>
+    /// Marks a pending contribution as failed due to payment processing issues.
+    /// </summary>
+    /// <param name="campaignId">The unique identifier of the campaign.</param>
+    /// <param name="contributionId">The unique identifier of the contribution to mark as failed.</param>
+    /// <param name="request">The failure details payload containing the reason for failure.</param>
+    /// <param name="cancellationToken">Cancellation token for asynchronous operation.</param>
+    /// <response code="200">Contribution marked as failed.</response>
+    /// <response code="400">Validation error or invalid state transition.</response>
+    /// <response code="401">Unauthorized if the request lacks a valid Bearer token.</response>
+    /// <response code="403">Forbidden if the caller lacks the 'contributions:payments:manage' permission.</response>
+    /// <response code="404">Contribution or campaign not found.</response>
     [Authorize(Policy = PermissionConstants.ContributionsPaymentsManage)]
     [HttpPost("{contributionId:guid}/fail-payment")]
     [ProducesResponseType(typeof(FailContributionPaymentResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<FailContributionPaymentResponse>> FailPayment(
         Guid campaignId,

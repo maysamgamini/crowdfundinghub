@@ -17,12 +17,14 @@ public sealed class UserRepository : IUserRepository
         _dbContext = dbContext;
     }
 
+    /// <inheritdoc/>
     public async Task AddAsync(User user, CancellationToken cancellationToken)
     {
         await _dbContext.Users.AddAsync(user, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    /// <inheritdoc/>
     public Task<User?> GetByIdAsync(Guid userId, CancellationToken cancellationToken)
     {
         return _dbContext.Users
@@ -31,6 +33,7 @@ public sealed class UserRepository : IUserRepository
             .SingleOrDefaultAsync(x => x.Id == userId, cancellationToken);
     }
 
+    /// <inheritdoc/>
     public Task<User?> GetByNormalizedEmailAsync(string normalizedEmail, CancellationToken cancellationToken)
     {
         return _dbContext.Users
@@ -39,11 +42,13 @@ public sealed class UserRepository : IUserRepository
             .SingleOrDefaultAsync(x => x.NormalizedEmail == normalizedEmail, cancellationToken);
     }
 
+    /// <inheritdoc/>
     public Task<bool> AnyAsync(CancellationToken cancellationToken)
     {
         return _dbContext.Users.AnyAsync(cancellationToken);
     }
 
+    /// <inheritdoc/>
     public async Task UpdateAsync(User user, CancellationToken cancellationToken)
     {
         _dbContext.Users.Update(user);

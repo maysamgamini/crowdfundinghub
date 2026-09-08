@@ -1,4 +1,4 @@
-﻿using CrowdFunding.API.Contracts.Moderation;
+using CrowdFunding.API.Contracts.Moderation;
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Queries.GetCampaignReviewByCampaignId;
 using Mapster;
 
@@ -9,6 +9,10 @@ namespace CrowdFunding.API.Mapping;
 /// </summary>
 public static class ModerationMappingConfig
 {
+    /// <summary>
+    /// Registers Mapster type mappings between API contracts and Moderation application models.
+    /// </summary>
+    /// <param name="config">The Mapster configuration instance.</param>
     public static void Register(TypeAdapterConfig config)
     {
         config.NewConfig<GetCampaignReviewByCampaignIdResult, CampaignReviewResponse>();

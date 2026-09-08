@@ -19,6 +19,7 @@ public sealed class GrantPermissionToUserCommandHandler : ICommandHandler<GrantP
         _userRepository = userRepository;
     }
 
+    /// <inheritdoc/>
     public async Task<GrantPermissionToUserResult> Handle(GrantPermissionToUserCommand command, CancellationToken cancellationToken)
     {
         EnsureCanGrantPermissions();

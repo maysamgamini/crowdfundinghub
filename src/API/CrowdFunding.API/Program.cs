@@ -1,5 +1,6 @@
 using System.Text;
 using CrowdFunding.API.Background;
+using CrowdFunding.API.Documentation;
 using CrowdFunding.API.Mapping;
 using CrowdFunding.API.Migrations;
 using CrowdFunding.API.Observability;
@@ -35,8 +36,12 @@ using Mapster;
 using MapsterMapper;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Http.Metadata;
+using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi;
+using Swashbuckle.AspNetCore.SwaggerUI;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -47,7 +52,7 @@ var jwtAudience = builder.Configuration["Jwt:Audience"] ?? throw new InvalidOper
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddCrowdFundingSwagger();
 
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
@@ -186,8 +191,7 @@ if (args.Length > 0 && args[0] == "seed-admin")
 if (app.Environment.IsDevelopment())
 {
     await MigrationRunner.RunAsync(app.Services);
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseCrowdFundingSwagger();
 }
 
 await using (var scope = app.Services.CreateAsyncScope())
@@ -205,15 +209,17 @@ app.MapHealthChecks("/health/live", new HealthCheckOptions
 {
     Predicate = _ => false,
     ResponseWriter = HealthCheckResponseWriter.WriteResponseAsync,
-});
+}).WithTags("System");
 
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
     Predicate = check => check.Tags.Contains("ready"),
     ResponseWriter = HealthCheckResponseWriter.WriteResponseAsync,
-});
+}).WithTags("System");
 
-app.MapGet("/.well-known/jwks.json", JwksEndpoint.Get).AllowAnonymous();
+app.MapGet("/.well-known/jwks.json", JwksEndpoint.Get)
+    .AllowAnonymous()
+    .WithTags("System");
 
 app.UseRateLimiter();
 

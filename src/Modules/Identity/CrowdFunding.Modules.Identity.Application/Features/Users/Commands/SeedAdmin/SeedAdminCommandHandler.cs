@@ -26,6 +26,7 @@ public sealed class SeedAdminCommandHandler : ICommandHandler<SeedAdminCommand, 
         _userRepository = userRepository;
     }
 
+    /// <inheritdoc/>
     public async Task<SeedAdminResult> Handle(SeedAdminCommand command, CancellationToken cancellationToken)
     {
         var normalizedEmail = User.NormalizeEmailAddress(command.Email);

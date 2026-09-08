@@ -51,6 +51,12 @@ public sealed class OutboxMessage
     public string? LockedBy { get; private set; }
     public DateTime? LockedUntilUtc { get; private set; }
 
+    /// <summary>
+    /// Creates a new <see cref="OutboxMessage"/> by serializing the specified domain or application event.
+    /// </summary>
+    /// <param name="applicationEvent">The event object to serialize and persist in the outbox.</param>
+    /// <param name="occurredOnUtc">The UTC timestamp when the event occurred.</param>
+    /// <returns>A new <see cref="OutboxMessage"/> initialized in <see cref="OutboxMessageStatus.Pending"/> status.</returns>
     public static OutboxMessage Create(object applicationEvent, DateTime occurredOnUtc)
     {
         ArgumentNullException.ThrowIfNull(applicationEvent);
@@ -100,6 +106,10 @@ public sealed class OutboxMessage
         }
     }
 
+    /// <summary>
+    /// Marks the outbox message as successfully processed and clears worker locking metadata.
+    /// </summary>
+    /// <param name="processedOnUtc">The UTC timestamp when processing completed.</param>
     public void MarkProcessed(DateTime processedOnUtc)
     {
         Status = OutboxMessageStatus.Processed;

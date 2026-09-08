@@ -1,12 +1,17 @@
-﻿# Building Blocks
+# Building Blocks Layer
 
 ## Purpose
-Holds reusable cross-cutting abstractions shared by multiple modules.
+Contains foundational, shared, cross-cutting primitives, abstractions, value objects, and infrastructure patterns utilized across all functional modules in the modular monolith.
 
-## Files
-- No direct files live in this folder; it primarily organizes child folders.
+## Architecture & Boundaries
+To maintain strict clean architecture and domain isolation:
+- **Zero Module Dependencies**: Building block libraries never reference any business module (`Campaigns`, `Contributions`, `Identity`, etc.).
+- **Strict Inward Dependency Flow**:
+  - `CrowdFunding.BuildingBlocks.Domain` has zero external dependencies.
+  - `CrowdFunding.BuildingBlocks.Application` references only `BuildingBlocks.Domain`.
+  - `CrowdFunding.BuildingBlocks.Infrastructure` implements application and domain contracts using concrete frameworks (EF Core, Npgsql, OpenMeter, etc.).
 
-## Child Folders
-- `CrowdFunding.BuildingBlocks.Application`: Provides reusable application-layer primitives such as dispatchers, pagination models, events, and security abstractions.
-- `CrowdFunding.BuildingBlocks.Domain`: Provides reusable domain primitives such as base entities, domain events, and value objects.
-- `CrowdFunding.BuildingBlocks.Infrastructure`: Provides reusable infrastructure helpers for persistence and event publishing.
+## Projects
+- `CrowdFunding.BuildingBlocks.Domain`: Core entity bases (`BaseEntity`), domain events (`BaseEvent`), common value objects (`Money`), and concurrency locking primitives (`AdvisoryLockKey`).
+- `CrowdFunding.BuildingBlocks.Application`: In-process CQRS messaging (`ICommand`, `IQuery`, `ICommandHandler`, `IQueryHandler`), event bus abstractions (`IEventPublisher`, `IEventHandler`), CloudEvents usage metering interfaces (`IUsageMeteringClient`), pagination contracts (`PageRequest`, `PagedResult`), technology-agnostic exceptions (`ConcurrencyConflictException`), and security context contracts (`ICurrentUser`).
+- `CrowdFunding.BuildingBlocks.Infrastructure`: Transactional outbox persistence (`OutboxMessage`, `ModelBuilderExtensions`), domain event dispatchers (`ServiceProviderEventPublisher`), and OpenMeter HTTP metering integrations (`OpenMeterClient`).

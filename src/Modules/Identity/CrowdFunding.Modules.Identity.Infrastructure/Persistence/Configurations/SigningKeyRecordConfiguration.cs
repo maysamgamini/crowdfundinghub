@@ -3,8 +3,15 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace CrowdFunding.Modules.Identity.Infrastructure.Persistence.Configurations;
 
+/// <summary>
+/// Configures Entity Framework Core mapping, table conventions, and constraints for <see cref="SigningKeyRecord"/>.
+/// </summary>
 public sealed class SigningKeyRecordConfiguration : IEntityTypeConfiguration<SigningKeyRecord>
 {
+    /// <summary>
+    /// Configures the entity properties, primary key, and unique index on <see cref="SigningKeyRecord.Kid"/>.
+    /// </summary>
+    /// <param name="builder">The builder used to configure the entity type.</param>
     public void Configure(EntityTypeBuilder<SigningKeyRecord> builder)
     {
         builder.ToTable("identity_signing_keys");

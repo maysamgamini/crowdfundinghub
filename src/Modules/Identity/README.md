@@ -1,13 +1,17 @@
-﻿# Identity
+# Identity Module
 
 ## Purpose
-Contains source files related to Identity.
+The Identity module manages user registration, password hashing, credential authentication, asymmetric ECDSA (ES256) JSON Web Token (JWT) issuance, dynamic JWKS key rotation, and role-based access control (RBAC).
 
-## Files
-- No direct files live in this folder; it primarily organizes child folders.
+## Capabilities & Workflows
+- **User Self-Registration**: Public endpoint creates accounts with normalized email and assigns standard `User` role (`RegisterUserCommand`).
+- **Administrative Provisioning**: Out-of-band CLI runner creates initial `Admin` user (`SeedAdminCommand`).
+- **Asymmetric Authentication**: Generates ES256 JWT access tokens signed with ECDSA private keys.
+- **Dynamic Key Management**: Stores private and public signing keys in the database (`identity_signing_keys`), supporting seamless zero-downtime key rotation.
+- **Role & Permission Mapping**: Maps roles (`Admin`, `Moderator`, `User`) to granular permissions (`Campaigns.Create`, `Campaigns.Publish`, `Reviews.Approve`, etc.) via `RolePermissionCatalog`.
 
-## Child Folders
-- `CrowdFunding.Modules.Identity.Application`: Contains the application-layer orchestration for the Identity module, including handlers, validators, and service abstractions.
-- `CrowdFunding.Modules.Identity.Contracts`: Contains integration-facing contracts for the Identity module, such as cross-module commands, queries, and events.
-- `CrowdFunding.Modules.Identity.Domain`: Contains the core domain model for the Identity module, including invariants, events, and enums.
-- `CrowdFunding.Modules.Identity.Infrastructure`: Contains infrastructure implementations for the Identity module, including EF Core persistence, services, and transaction executors.
+## Projects & Layers
+- `CrowdFunding.Modules.Identity.Domain`: Contains the `User` aggregate root, `UserRole` child entity, and domain events.
+- `CrowdFunding.Modules.Identity.Application`: Implements login, registration, and user query handlers.
+- `CrowdFunding.Modules.Identity.Infrastructure`: EF Core `IdentityDbContext`, password hasher (PBKDF2/Argon2), `DatabaseSigningKeyStore`, and token generators.
+- `CrowdFunding.Modules.Identity.Contracts`: Authorization constants (`RoleConstants`, `PermissionConstants`, `CustomClaimTypes`).

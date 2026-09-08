@@ -1,4 +1,5 @@
-﻿using CrowdFunding.BuildingBlocks.Application.Messaging;
+﻿using CrowdFunding.BuildingBlocks.Application.Exceptions;
+using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
@@ -33,6 +34,7 @@ public sealed class PublishCampaignCommandHandler : ICommandHandler<PublishCampa
         _transactionExecutor = transactionExecutor;
     }
 
+    /// <inheritdoc/>
     public async Task<PublishCampaignResult> Handle(PublishCampaignCommand command, CancellationToken cancellationToken)
     {
         var campaign = await _campaignRepository.GetByIdAsync(command.CampaignId, cancellationToken);
@@ -49,7 +51,9 @@ public sealed class PublishCampaignCommandHandler : ICommandHandler<PublishCampa
 
         if (!string.Equals(review.Status, "Approved", StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException("Campaign must be approved by moderation before it can be published.");
+            // State-machine conflict (RFC 9110 §15.5.10), not a malformed request — 409 lets
+            // clients distinguish this from a validation failure.
+            throw new ResourceConflictException("Campaign must be approved by moderation before it can be published.");
         }
 
         await _transactionExecutor.ExecuteAsync(async ct =>

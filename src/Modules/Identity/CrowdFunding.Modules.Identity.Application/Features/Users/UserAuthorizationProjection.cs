@@ -8,6 +8,11 @@ namespace CrowdFunding.Modules.Identity.Application.Features.Users;
 /// </summary>
 internal static class UserAuthorizationProjection
 {
+    /// <summary>
+    /// Extracts role names assigned to the user.
+    /// </summary>
+    /// <param name="user">The user aggregate.</param>
+    /// <returns>An array of role strings.</returns>
     public static string[] GetRoles(User user)
     {
         return user.Roles
@@ -17,6 +22,11 @@ internal static class UserAuthorizationProjection
             .ToArray();
     }
 
+    /// <summary>
+    /// Extracts explicit permissions directly granted to the user.
+    /// </summary>
+    /// <param name="user">The user aggregate.</param>
+    /// <returns>An array of permission strings.</returns>
     public static string[] GetExplicitPermissions(User user)
     {
         return user.Permissions
@@ -26,6 +36,11 @@ internal static class UserAuthorizationProjection
             .ToArray();
     }
 
+    /// <summary>
+    /// Computes the union of role-derived and explicit permissions for the user.
+    /// </summary>
+    /// <param name="user">The user aggregate.</param>
+    /// <returns>An array of effective permission strings.</returns>
     public static string[] GetEffectivePermissions(User user)
     {
         return GetRoles(user)

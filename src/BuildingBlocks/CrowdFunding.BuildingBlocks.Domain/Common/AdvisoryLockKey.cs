@@ -13,6 +13,11 @@ namespace CrowdFunding.BuildingBlocks.Domain.Common;
 /// </summary>
 public static class AdvisoryLockKey
 {
+    /// <summary>
+    /// Derives a 64-bit integer key from a GUID using XOR folding of high and low 64-bit blocks.
+    /// </summary>
+    /// <param name="id">The GUID to fold into a 64-bit advisory key.</param>
+    /// <returns>A 64-bit signed integer suitable for PostgreSQL advisory locks.</returns>
     public static long FromGuid(Guid id)
     {
         Span<byte> bytes = stackalloc byte[16];

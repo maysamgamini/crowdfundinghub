@@ -18,8 +18,12 @@ public sealed class ContributionsPostgresFixture : IAsyncLifetime
         .WithPassword("postgres")
         .Build();
 
+    /// <summary>
+    /// The connection string to the running PostgreSQL container.
+    /// </summary>
     public string ConnectionString => _container.GetConnectionString();
 
+    /// <inheritdoc/>
     public async Task InitializeAsync()
     {
         await _container.StartAsync();
@@ -32,11 +36,16 @@ public sealed class ContributionsPostgresFixture : IAsyncLifetime
         await dbContext.Database.MigrateAsync();
     }
 
+    /// <inheritdoc/>
     public async Task DisposeAsync()
     {
         await _container.DisposeAsync();
     }
 
+    /// <summary>
+    /// Creates a new <see cref="ContributionsDbContext"/> connected to the containerized database.
+    /// </summary>
+    /// <returns>A configured <see cref="ContributionsDbContext"/> instance.</returns>
     public ContributionsDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<ContributionsDbContext>()
@@ -47,5 +56,8 @@ public sealed class ContributionsPostgresFixture : IAsyncLifetime
     }
 }
 
+/// <summary>
+/// xUnit collection definition fixture for shared Contributions PostgreSQL container instances.
+/// </summary>
 [CollectionDefinition(nameof(ContributionsPostgresCollection))]
 public sealed class ContributionsPostgresCollection : ICollectionFixture<ContributionsPostgresFixture>;

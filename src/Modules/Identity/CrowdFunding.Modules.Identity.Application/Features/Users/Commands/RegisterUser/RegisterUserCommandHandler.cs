@@ -1,4 +1,5 @@
-﻿using CrowdFunding.BuildingBlocks.Application.Messaging;
+﻿using CrowdFunding.BuildingBlocks.Application.Exceptions;
+using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Services;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
@@ -34,7 +35,10 @@ public sealed class RegisterUserCommandHandler : ICommandHandler<RegisterUserCom
 
         if (existingUser is not null)
         {
-            throw new InvalidOperationException($"A user with email '{command.Email}' already exists.");
+            // A duplicate email is a resource conflict (RFC 9110 §15.5.10), not a malformed
+            // request — mapped to 409 by GlobalExceptionHandler instead of 400, so clients can
+            // distinguish "fix your input" from "this account already exists, try logging in".
+            throw new ResourceConflictException($"A user with email '{command.Email}' already exists.");
         }
 
         var user = User.Register(

@@ -1,4 +1,4 @@
-﻿using CrowdFunding.Modules.Identity.Domain.Entities;
+using CrowdFunding.Modules.Identity.Domain.Entities;
 
 namespace CrowdFunding.Modules.Identity.Domain.Aggregates;
 
@@ -61,6 +61,10 @@ public sealed class User
             createdAtUtc);
     }
 
+    /// <summary>
+    /// Assigns a role to the user if not already present.
+    /// </summary>
+    /// <param name="role">The role name to assign.</param>
     public void AssignRole(string role)
     {
         var normalizedRole = NormalizeValue(role, nameof(role));
@@ -73,6 +77,10 @@ public sealed class User
         Roles.Add(new UserRoleAssignment(normalizedRole));
     }
 
+    /// <summary>
+    /// Grants an explicit permission to the user if not already present.
+    /// </summary>
+    /// <param name="permission">The permission string to grant.</param>
     public void GrantPermission(string permission)
     {
         var normalizedPermission = NormalizeValue(permission, nameof(permission));
@@ -85,11 +93,19 @@ public sealed class User
         Permissions.Add(new UserPermissionGrant(normalizedPermission));
     }
 
+    /// <summary>
+    /// Deactivates the user account.
+    /// </summary>
     public void Deactivate()
     {
         IsActive = false;
     }
 
+    /// <summary>
+    /// Trims and converts an email address to lowercase for normalized lookups.
+    /// </summary>
+    /// <param name="email">The email address to normalize.</param>
+    /// <returns>The normalized lowercase email address.</returns>
     public static string NormalizeEmailAddress(string email)
     {
         if (string.IsNullOrWhiteSpace(email))
