@@ -11,5 +11,11 @@ services:
     volumes:
       - crowdfunding_postgres_data:/var/lib/postgresql/data
 
+  crowdfunding-redis:
+    image: redis:7-alpine
+    container_name: crowdfunding-redis
+    ports:
+      - "6379:6379"
+
 volumes:
   crowdfunding_postgres_data:

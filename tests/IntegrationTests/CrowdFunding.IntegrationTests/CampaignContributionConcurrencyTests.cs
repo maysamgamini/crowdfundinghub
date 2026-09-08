@@ -6,6 +6,10 @@ using CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Repositories;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Transactions;
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace CrowdFunding.IntegrationTests;
 
@@ -18,6 +22,9 @@ namespace CrowdFunding.IntegrationTests;
 [Collection(nameof(CampaignsPostgresCollection))]
 public sealed class CampaignContributionConcurrencyTests
 {
+    private static readonly IDistributedCache NoOpDistributedCache =
+        new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
+
     private readonly CampaignsPostgresFixture _fixture;
 
     public CampaignContributionConcurrencyTests(CampaignsPostgresFixture fixture)
@@ -91,7 +98,7 @@ public sealed class CampaignContributionConcurrencyTests
         // Each call gets its own DbContext/repository/executor, mirroring separate concurrent
         // requests/outbox-consumer instances hitting the same campaign row.
         await using var dbContext = _fixture.CreateDbContext();
-        var repository = new CampaignRepository(dbContext);
+        var repository = new CampaignRepository(dbContext, NoOpDistributedCache, NullLogger<CampaignRepository>.Instance);
         var ledger = new ContributionLedger(dbContext);
         var transactionExecutor = new CampaignTransactionExecutor(dbContext);
         var handler = new AddContributionToCampaignCommandHandler(repository, ledger, transactionExecutor, new NoOpCampaignRealtimeNotifier());

@@ -8,8 +8,10 @@ using CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Repositories;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Services;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Transactions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace CrowdFunding.Modules.Campaigns.Infrastructure.DependencyInjection;
 
@@ -24,15 +26,28 @@ public static class CampaignsInfrastructureDependencyInjection
     {
         var connectionString = configuration.GetConnectionString("DefaultConnection")
                                ?? throw new InvalidOperationException("Connection string 'DefaultConnection' was not found.");
+        var redisConnectionString = configuration.GetConnectionString("Redis")
+                                    ?? throw new InvalidOperationException("Connection string 'Redis' was not found.");
 
         services.AddDbContext<CampaignsDbContext>(options =>
             options.UseNpgsql(connectionString, npgsql =>
                 npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "campaigns")));
 
+        services.AddStackExchangeRedisCache(options =>
+        {
+            options.Configuration = redisConnectionString;
+            options.InstanceName = "crowdfunding:";
+        });
+
         services.AddScoped<ICampaignContributionAvailabilityReader, CampaignContributionAvailabilityReader>();
         services.AddScoped<ICampaignRepository, CampaignRepository>();
         services.AddScoped<IContributionLedger, ContributionLedger>();
-        services.AddScoped<ICampaignReadService, CampaignReadService>();
+        services.AddScoped<CampaignReadService>();
+        services.AddScoped<ICampaignReadService, CachedCampaignReadService>(sp =>
+            new CachedCampaignReadService(
+                sp.GetRequiredService<CampaignReadService>(),
+                sp.GetRequiredService<IDistributedCache>(),
+                sp.GetRequiredService<ILogger<CachedCampaignReadService>>()));
         services.AddScoped<ICampaignTransactionExecutor, CampaignTransactionExecutor>();
         services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();
 
