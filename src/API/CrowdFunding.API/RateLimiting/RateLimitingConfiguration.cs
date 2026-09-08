@@ -16,11 +16,20 @@ public static class RateLimitingConfiguration
 
     /// <summary>
     /// Registers IP- and user-partitioned rate limiting policies for authentication and payment routes.
+    /// Limits/windows are configurable (<c>RateLimiting:Auth:*</c>/<c>RateLimiting:Payment:*</c>) so
+    /// integration tests running many requests through a single simulated client/IP can raise them,
+    /// without changing the hardcoded production defaults below.
     /// </summary>
     /// <param name="services">The service collection to configure.</param>
+    /// <param name="configuration">The application configuration.</param>
     /// <returns>The configured service collection.</returns>
-    public static IServiceCollection AddCrowdFundingRateLimiting(this IServiceCollection services)
+    public static IServiceCollection AddCrowdFundingRateLimiting(this IServiceCollection services, IConfiguration configuration)
     {
+        var authPermitLimit = configuration.GetValue("RateLimiting:Auth:PermitLimit", 10);
+        var authWindowSeconds = configuration.GetValue("RateLimiting:Auth:WindowSeconds", 60);
+        var paymentPermitLimit = configuration.GetValue("RateLimiting:Payment:PermitLimit", 20);
+        var paymentWindowSeconds = configuration.GetValue("RateLimiting:Payment:WindowSeconds", 60);
+
         services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -31,8 +40,8 @@ public static class RateLimitingConfiguration
                 partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                 factory: _ => new FixedWindowRateLimiterOptions
                 {
-                    PermitLimit = 10,
-                    Window = TimeSpan.FromMinutes(1),
+                    PermitLimit = authPermitLimit,
+                    Window = TimeSpan.FromSeconds(authWindowSeconds),
                 }));
 
             // Contribution endpoints are authenticated, so partition per user when available and
@@ -43,8 +52,8 @@ public static class RateLimitingConfiguration
                     ?? "unknown",
                 factory: _ => new FixedWindowRateLimiterOptions
                 {
-                    PermitLimit = 20,
-                    Window = TimeSpan.FromMinutes(1),
+                    PermitLimit = paymentPermitLimit,
+                    Window = TimeSpan.FromSeconds(paymentWindowSeconds),
                 }));
         });
 

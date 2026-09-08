@@ -45,7 +45,11 @@ public sealed class OutboxProcessorBackgroundService : BackgroundService
         }
     }
 
-    private async Task ProcessOutboxBatchAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// Runs a single outbox claim-and-publish pass immediately. Public so integration tests can
+    /// deterministically advance the outbox state machine instead of waiting on <see cref="PollInterval"/>.
+    /// </summary>
+    public async Task ProcessOutboxBatchAsync(CancellationToken cancellationToken)
     {
         await using var scope = _serviceProvider.CreateAsyncScope();
         var services = scope.ServiceProvider;

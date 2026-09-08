@@ -56,7 +56,7 @@ builder.Services.AddCrowdFundingSwagger();
 
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
-builder.Services.AddCrowdFundingRateLimiting();
+builder.Services.AddCrowdFundingRateLimiting(builder.Configuration);
 
 builder.Services.AddHealthChecks()
     .AddCheck<DbContextHealthCheck<CampaignsDbContext>>("campaigns-db", tags: ["ready"])
@@ -188,7 +188,7 @@ if (args.Length > 0 && args[0] == "seed-admin")
     return;
 }
 
-if (app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
 {
     await MigrationRunner.RunAsync(app.Services);
     app.UseCrowdFundingSwagger();
@@ -228,3 +228,7 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapHub<CampaignHub>("/hubs/campaigns");
 app.Run();
+
+// Exposes the generated Program class so WebApplicationFactory<Program> can reference it
+// from CrowdFunding.IntegrationTests (top-level statements otherwise produce an internal type).
+public partial class Program;
