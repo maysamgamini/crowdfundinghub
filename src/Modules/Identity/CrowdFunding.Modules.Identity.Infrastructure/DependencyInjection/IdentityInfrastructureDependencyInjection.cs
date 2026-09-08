@@ -29,6 +29,7 @@ public static class IdentityInfrastructureDependencyInjection
         services.AddScoped<IAccessTokenProvider, JwtAccessTokenProvider>();
         services.AddScoped<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddSingleton<IIdentityDateTimeProvider, SystemDateTimeProvider>();
+        services.AddSingleton<ISigningKeyStore, EfSigningKeyStore>();
 
         return services;
     }

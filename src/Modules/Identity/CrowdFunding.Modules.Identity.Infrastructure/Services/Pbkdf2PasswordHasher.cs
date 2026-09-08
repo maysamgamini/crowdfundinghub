@@ -12,6 +12,11 @@ public sealed class Pbkdf2PasswordHasher : IPasswordHasher
     private const int SaltSize = 16;
     private const int KeySize = 32;
 
+    // Fixed salt/password so DummyHash is deterministic across instances and process restarts —
+    // it never needs to verify successfully, it only needs to cost exactly as much PBKDF2 work
+    // as a real hash of the same iteration count.
+    public string DummyHash { get; } = ComputeDummyHash();
+
     public string HashPassword(string password)
     {
         if (string.IsNullOrWhiteSpace(password))
@@ -44,5 +49,13 @@ public sealed class Pbkdf2PasswordHasher : IPasswordHasher
         var actualHash = Rfc2898DeriveBytes.Pbkdf2(password, salt, iterations, HashAlgorithmName.SHA256, expectedHash.Length);
 
         return CryptographicOperations.FixedTimeEquals(expectedHash, actualHash);
+    }
+
+    private static string ComputeDummyHash()
+    {
+        var salt = "dummy-salt-not-a-real-account-000000"u8.ToArray()[..SaltSize];
+        var hash = Rfc2898DeriveBytes.Pbkdf2("dummy-password", salt, Iterations, HashAlgorithmName.SHA256, KeySize);
+
+        return string.Join('.', Iterations, Convert.ToBase64String(salt), Convert.ToBase64String(hash));
     }
 }

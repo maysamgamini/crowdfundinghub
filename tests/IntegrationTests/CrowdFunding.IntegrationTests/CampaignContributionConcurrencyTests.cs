@@ -1,3 +1,4 @@
+using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.AddContributionToCampaign;
 using CrowdFunding.Modules.Campaigns.Contracts.Commands.AddContributionToCampaign;
 using CrowdFunding.Modules.Campaigns.Domain.Aggregates;
@@ -93,7 +94,7 @@ public sealed class CampaignContributionConcurrencyTests
         var repository = new CampaignRepository(dbContext);
         var ledger = new ContributionLedger(dbContext);
         var transactionExecutor = new CampaignTransactionExecutor(dbContext);
-        var handler = new AddContributionToCampaignCommandHandler(repository, ledger, transactionExecutor);
+        var handler = new AddContributionToCampaignCommandHandler(repository, ledger, transactionExecutor, new NoOpCampaignRealtimeNotifier());
 
         await handler.Handle(
             new AddContributionToCampaignCommand(campaignId, contributionId, amount, currency),
@@ -103,3 +104,13 @@ public sealed class CampaignContributionConcurrencyTests
 
 [CollectionDefinition(nameof(CampaignsPostgresCollection))]
 public sealed class CampaignsPostgresCollection : ICollectionFixture<CampaignsPostgresFixture>;
+
+internal sealed class NoOpCampaignRealtimeNotifier : ICampaignRealtimeNotifier
+{
+    public Task NotifyPledgeReceivedAsync(
+        Guid campaignId,
+        decimal raisedAmount,
+        string currency,
+        CancellationToken cancellationToken = default)
+        => Task.CompletedTask;
+}

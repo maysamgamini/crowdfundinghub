@@ -15,26 +15,26 @@ namespace CrowdFunding.Modules.Identity.Infrastructure.Services;
 public sealed class JwtAccessTokenProvider : IAccessTokenProvider
 {
     private readonly IIdentityDateTimeProvider _dateTimeProvider;
+    private readonly ISigningKeyStore _signingKeyStore;
     private readonly JwtOptions _options;
 
     public JwtAccessTokenProvider(
         IConfiguration configuration,
-        IIdentityDateTimeProvider dateTimeProvider)
+        IIdentityDateTimeProvider dateTimeProvider,
+        ISigningKeyStore signingKeyStore)
     {
         _dateTimeProvider = dateTimeProvider;
+        _signingKeyStore = signingKeyStore;
         _options = new JwtOptions
         {
             Issuer = configuration[$"{JwtOptions.SectionName}:Issuer"] ?? string.Empty,
             Audience = configuration[$"{JwtOptions.SectionName}:Audience"] ?? string.Empty,
-            SigningKey = configuration[$"{JwtOptions.SectionName}:SigningKey"] ?? string.Empty,
             ExpirationMinutes = int.TryParse(configuration[$"{JwtOptions.SectionName}:ExpirationMinutes"], out var minutes)
                 ? minutes
                 : 60
         };
 
-        if (string.IsNullOrWhiteSpace(_options.Issuer)
-            || string.IsNullOrWhiteSpace(_options.Audience)
-            || string.IsNullOrWhiteSpace(_options.SigningKey))
+        if (string.IsNullOrWhiteSpace(_options.Issuer) || string.IsNullOrWhiteSpace(_options.Audience))
         {
             throw new InvalidOperationException("JWT settings are not configured correctly.");
         }
@@ -44,8 +44,9 @@ public sealed class JwtAccessTokenProvider : IAccessTokenProvider
     {
         var issuedAtUtc = _dateTimeProvider.UtcNow;
         var expiresAtUtc = issuedAtUtc.AddMinutes(_options.ExpirationMinutes);
-        var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_options.SigningKey));
-        var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
+        var signingKey = _signingKeyStore.GetActiveSigningKey();
+        var securityKey = new ECDsaSecurityKey(signingKey.Key) { KeyId = signingKey.Kid };
+        var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.EcdsaSha256);
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),

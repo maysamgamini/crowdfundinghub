@@ -1,4 +1,5 @@
 ﻿using CrowdFunding.API.Contracts.Identity;
+using CrowdFunding.API.RateLimiting;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.AssignRoleToUser;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.GrantPermissionToUser;
@@ -10,6 +11,7 @@ using FluentValidation;
 using MapsterMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace CrowdFunding.API.Controllers;
 
@@ -47,6 +49,7 @@ public sealed class IdentityController : ControllerBase
     }
 
     [AllowAnonymous]
+    [EnableRateLimiting(RateLimitingConfiguration.AuthPolicy)]
     [HttpPost("register")]
     [ProducesResponseType(typeof(RegisterUserResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
@@ -68,6 +71,7 @@ public sealed class IdentityController : ControllerBase
     }
 
     [AllowAnonymous]
+    [EnableRateLimiting(RateLimitingConfiguration.AuthPolicy)]
     [HttpPost("login")]
     [ProducesResponseType(typeof(LoginUserResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]

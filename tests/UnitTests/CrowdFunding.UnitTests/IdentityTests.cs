@@ -167,9 +167,33 @@ public sealed class LoginUserCommandHandlerTests
             new LoginUserCommand("creator@example.com", "supersecret"),
             CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(action);
+        // Same generic exception as "wrong password"/"no such user" — previously this threw a
+        // distinct "account is inactive" message, which confirmed to an attacker that the email
+        // belongs to a real (if disabled) account (improvement.md §2.8).
+        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(action);
 
-        Assert.Equal("The user account is inactive.", exception.Message);
+        Assert.Equal("Invalid email or password.", exception.Message);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldVerifyAgainstDummyHash_WhenUserDoesNotExist()
+    {
+        var hasher = new RecordingPasswordHasher();
+        var handler = new LoginUserCommandHandler(
+            new FakeAccessTokenProvider(),
+            hasher,
+            new FakeUserRepository());
+
+        var action = async () => await handler.Handle(
+            new LoginUserCommand("nobody@example.com", "whatever"),
+            CancellationToken.None);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(action);
+
+        // Constant-time login: even with no matching user, VerifyPassword must still run against
+        // DummyHash, so a missing account costs the same PBKDF2 work as a wrong password.
+        Assert.Equal(1, hasher.VerifyPasswordCallCount);
+        Assert.Equal(hasher.DummyHash, hasher.LastVerifiedHash);
     }
 }
 
@@ -479,6 +503,8 @@ internal sealed class FakeIdentityDateTimeProvider : IIdentityDateTimeProvider
 
 internal sealed class FakePasswordHasher : IPasswordHasher
 {
+    public string DummyHash { get; } = "hashed:__dummy__";
+
     public string HashPassword(string password)
     {
         return $"hashed:{password}";
@@ -487,6 +513,22 @@ internal sealed class FakePasswordHasher : IPasswordHasher
     public bool VerifyPassword(string passwordHash, string password)
     {
         return passwordHash == $"hashed:{password}";
+    }
+}
+
+internal sealed class RecordingPasswordHasher : IPasswordHasher
+{
+    public string DummyHash { get; } = "dummy-hash";
+    public int VerifyPasswordCallCount { get; private set; }
+    public string? LastVerifiedHash { get; private set; }
+
+    public string HashPassword(string password) => $"hashed:{password}";
+
+    public bool VerifyPassword(string passwordHash, string password)
+    {
+        VerifyPasswordCallCount++;
+        LastVerifiedHash = passwordHash;
+        return false;
     }
 }
 

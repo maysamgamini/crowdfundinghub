@@ -2,6 +2,7 @@ using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
+using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Campaigns.Contracts.Commands.AddContributionToCampaign;
 
@@ -23,15 +24,18 @@ public sealed class AddContributionToCampaignCommandHandler : ICommandHandler<Ad
     private readonly ICampaignRepository _campaignRepository;
     private readonly IContributionLedger _contributionLedger;
     private readonly ICampaignTransactionExecutor _transactionExecutor;
+    private readonly ICampaignRealtimeNotifier _realtimeNotifier;
 
     public AddContributionToCampaignCommandHandler(
         ICampaignRepository campaignRepository,
         IContributionLedger contributionLedger,
-        ICampaignTransactionExecutor transactionExecutor)
+        ICampaignTransactionExecutor transactionExecutor,
+        ICampaignRealtimeNotifier realtimeNotifier)
     {
         _campaignRepository = campaignRepository;
         _contributionLedger = contributionLedger;
         _transactionExecutor = transactionExecutor;
+        _realtimeNotifier = realtimeNotifier;
     }
 
     public async Task<AddContributionToCampaignResult> Handle(
@@ -50,6 +54,7 @@ public sealed class AddContributionToCampaignCommandHandler : ICommandHandler<Ad
                 var campaignId = Guid.Empty;
                 var raisedAmount = 0m;
                 var raisedCurrency = string.Empty;
+                var wasRecorded = false;
 
                 await _transactionExecutor.ExecuteAsync(advisoryLockKey, async ct =>
                 {
@@ -85,9 +90,18 @@ public sealed class AddContributionToCampaignCommandHandler : ICommandHandler<Ad
                     campaignId = campaign.Id;
                     raisedAmount = campaign.RaisedAmount.Amount;
                     raisedCurrency = campaign.RaisedAmount.Currency;
+                    wasRecorded = recorded;
 
                     return 0;
                 }, cancellationToken);
+
+                if (wasRecorded)
+                {
+                    // Only broadcast when the balance actually changed — redelivery of an
+                    // already-recorded contribution is a no-op and would otherwise push a
+                    // duplicate, stale-looking update to connected clients.
+                    await _realtimeNotifier.NotifyPledgeReceivedAsync(campaignId, raisedAmount, raisedCurrency, cancellationToken);
+                }
 
                 return new AddContributionToCampaignResult(campaignId, raisedAmount, raisedCurrency);
             }

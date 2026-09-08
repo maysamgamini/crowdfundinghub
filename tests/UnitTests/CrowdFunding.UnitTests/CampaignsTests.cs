@@ -466,7 +466,8 @@ public sealed class AddContributionToCampaignCommandHandlerTests
         var handler = new CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.AddContributionToCampaign.AddContributionToCampaignCommandHandler(
             repository,
             ledger,
-            transactionExecutor);
+            transactionExecutor,
+            new FakeCampaignRealtimeNotifier());
 
         var result = await handler.Handle(
             new AddContributionToCampaignCommand(campaign.Id, Guid.NewGuid(), 125m, "usd"),
@@ -499,7 +500,8 @@ public sealed class AddContributionToCampaignCommandHandlerTests
         var handler = new CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.AddContributionToCampaign.AddContributionToCampaignCommandHandler(
             repository,
             ledger,
-            transactionExecutor);
+            transactionExecutor,
+            new FakeCampaignRealtimeNotifier());
 
         var contributionId = Guid.NewGuid();
 
@@ -524,7 +526,8 @@ public sealed class AddContributionToCampaignCommandHandlerTests
         var handler = new CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.AddContributionToCampaign.AddContributionToCampaignCommandHandler(
             new FakeCampaignRepository(),
             new FakeContributionLedger(),
-            transactionExecutor);
+            transactionExecutor,
+            new FakeCampaignRealtimeNotifier());
 
         var action = async () => await handler.Handle(
             new AddContributionToCampaignCommand(Guid.NewGuid(), Guid.NewGuid(), 125m, "usd"),
@@ -876,6 +879,21 @@ internal sealed class FakeContributionLedger : IContributionLedger
     {
         RecordAttemptCount++;
         return Task.FromResult(_recordedContributionIds.Add(contributionId));
+    }
+}
+
+internal sealed class FakeCampaignRealtimeNotifier : ICampaignRealtimeNotifier
+{
+    public int NotificationCount { get; private set; }
+
+    public Task NotifyPledgeReceivedAsync(
+        Guid campaignId,
+        decimal raisedAmount,
+        string currency,
+        CancellationToken cancellationToken = default)
+    {
+        NotificationCount++;
+        return Task.CompletedTask;
     }
 }
 

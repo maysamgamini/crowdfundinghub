@@ -3,6 +3,8 @@ using CrowdFunding.API.Background;
 using CrowdFunding.API.Mapping;
 using CrowdFunding.API.Migrations;
 using CrowdFunding.API.Observability;
+using CrowdFunding.API.RateLimiting;
+using CrowdFunding.API.RealTime;
 using CrowdFunding.API.Security;
 using CrowdFunding.BuildingBlocks.Application.Events;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
@@ -10,12 +12,14 @@ using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.BuildingBlocks.Infrastructure.Events;
 using CrowdFunding.BuildingBlocks.Infrastructure.Metering;
 using CrowdFunding.Modules.CampaignUpdates.Application.DependencyInjection;
+using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
 using CrowdFunding.Modules.Campaigns.Application.DependencyInjection;
 using CrowdFunding.Modules.Campaigns.Infrastructure.DependencyInjection;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.Contributions.Application.DependencyInjection;
 using CrowdFunding.Modules.Contributions.Infrastructure.DependencyInjection;
 using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.DbContexts;
+using CrowdFunding.Modules.Identity.Application.Abstractions.Services;
 using CrowdFunding.Modules.Identity.Application.DependencyInjection;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
 using CrowdFunding.Modules.Identity.Infrastructure.DependencyInjection;
@@ -40,7 +44,6 @@ builder.Host.UseCrowdFundingSerilog();
 
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? throw new InvalidOperationException("Jwt:Issuer was not configured.");
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? throw new InvalidOperationException("Jwt:Audience was not configured.");
-var jwtSigningKey = builder.Configuration["Jwt:SigningKey"] ?? throw new InvalidOperationException("Jwt:SigningKey was not configured.");
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -48,6 +51,7 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
+builder.Services.AddCrowdFundingRateLimiting();
 
 builder.Services.AddHealthChecks()
     .AddCheck<DbContextHealthCheck<CampaignsDbContext>>("campaigns-db", tags: ["ready"])
@@ -56,6 +60,9 @@ builder.Services.AddHealthChecks()
     .AddCheck<DbContextHealthCheck<ModerationDbContext>>("moderation-db", tags: ["ready"]);
 
 builder.Services.AddOpenMeterMetering(builder.Configuration);
+
+builder.Services.AddSignalR();
+builder.Services.AddScoped<ICampaignRealtimeNotifier, SignalRCampaignRealtimeNotifier>();
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
@@ -95,10 +102,22 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidAudience = jwtAudience,
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSigningKey)),
             ValidateLifetime = true,
             ClockSkew = TimeSpan.Zero
         };
+    });
+
+// Asymmetric ES256 verification (improvement.md §2.8/§3.8 #2): the resolver reads only the
+// public half of the signing key from ISigningKeyStore. A downstream verifier that only had the
+// public JWKS (see the /.well-known/jwks.json mapping below) could never forge a token, unlike
+// the previous symmetric HMAC secret shared with every verifier.
+builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+    .Configure<ISigningKeyStore>((options, signingKeyStore) =>
+    {
+        options.TokenValidationParameters.IssuerSigningKeyResolver = (_, _, kid, _) =>
+            signingKeyStore.GetPublicSigningKeys()
+                .Where(key => kid is null || key.Kid == kid)
+                .Select(key => (SecurityKey)new ECDsaSecurityKey(key.Key) { KeyId = key.Kid });
     });
 
 builder.Services.AddAuthorization(options =>
@@ -156,6 +175,12 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+await using (var scope = app.Services.CreateAsyncScope())
+{
+    var signingKeyStore = scope.ServiceProvider.GetRequiredService<ISigningKeyStore>();
+    await signingKeyStore.WarmUpAsync(CancellationToken.None);
+}
+
 app.UseHttpsRedirection();
 
 app.UseExceptionHandler();
@@ -173,7 +198,12 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
     ResponseWriter = HealthCheckResponseWriter.WriteResponseAsync,
 });
 
+app.MapGet("/.well-known/jwks.json", JwksEndpoint.Get).AllowAnonymous();
+
+app.UseRateLimiter();
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<CampaignHub>("/hubs/campaigns");
 app.Run();

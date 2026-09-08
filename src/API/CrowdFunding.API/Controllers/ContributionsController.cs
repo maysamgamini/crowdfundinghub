@@ -1,5 +1,6 @@
 ﻿using CrowdFunding.API.Contracts.Common;
 using CrowdFunding.API.Contracts.Contributions;
+using CrowdFunding.API.RateLimiting;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Pagination;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.ConfirmContributionPayment;
@@ -11,6 +12,7 @@ using FluentValidation;
 using MapsterMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace CrowdFunding.API.Controllers;
 
@@ -73,6 +75,7 @@ public sealed class ContributionsController : ControllerBase
     }
 
     [Authorize(Policy = PermissionConstants.CampaignsContribute)]
+    [EnableRateLimiting(RateLimitingConfiguration.PaymentPolicy)]
     [HttpPost]
     [ProducesResponseType(typeof(MakeContributionResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
