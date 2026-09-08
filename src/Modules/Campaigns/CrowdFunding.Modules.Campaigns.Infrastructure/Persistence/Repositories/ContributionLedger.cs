@@ -26,11 +26,15 @@ public sealed class ContributionLedger : IContributionLedger
         string currency,
         CancellationToken cancellationToken)
     {
+        // Column names are double-quoted to match EF's default PascalCase mapping for this
+        // entity (no HasColumnName overrides configured); the table name and the unique index
+        // name on ContributionId, by contrast, are explicitly snake_case in
+        // ContributionLedgerEntryConfiguration.
         var rowsInserted = await _dbContext.Database.ExecuteSqlInterpolatedAsync(
             $"""
-             INSERT INTO campaign_contributions_ledger (id, campaign_id, contribution_id, amount, currency, recorded_at_utc)
+             INSERT INTO campaign_contributions_ledger ("Id", "CampaignId", "ContributionId", "Amount", "Currency", "RecordedAtUtc")
              VALUES ({Guid.NewGuid()}, {campaignId}, {contributionId}, {amount}, {currency}, {DateTime.UtcNow})
-             ON CONFLICT (contribution_id) DO NOTHING
+             ON CONFLICT ("ContributionId") DO NOTHING
              """,
             cancellationToken);
 

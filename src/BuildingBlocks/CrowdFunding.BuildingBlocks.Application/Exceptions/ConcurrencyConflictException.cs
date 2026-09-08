@@ -6,10 +6,5 @@ namespace CrowdFunding.BuildingBlocks.Application.Exceptions;
 /// Kept infrastructure-agnostic so application-layer command handlers can catch and retry
 /// without depending on Entity Framework Core.
 /// </summary>
-public sealed class ConcurrencyConflictException : Exception
-{
-    public ConcurrencyConflictException(string message, Exception innerException)
-        : base(message, innerException)
-    {
-    }
-}
+public sealed class ConcurrencyConflictException(string message, Exception innerException)
+    : Exception(message, innerException);

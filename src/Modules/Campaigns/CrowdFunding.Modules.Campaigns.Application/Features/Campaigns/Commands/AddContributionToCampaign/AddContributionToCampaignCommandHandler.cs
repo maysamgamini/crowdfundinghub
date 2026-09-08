@@ -45,17 +45,27 @@ public sealed class AddContributionToCampaignCommandHandler : ICommandHandler<Ad
 
         for (var attempt = 1; ; attempt++)
         {
-            var campaign = await _campaignRepository.GetByIdAsync(command.CampaignId, cancellationToken);
-
-            if (campaign is null)
-            {
-                throw new KeyNotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
-            }
-
             try
             {
+                var campaignId = Guid.Empty;
+                var raisedAmount = 0m;
+                var raisedCurrency = string.Empty;
+
                 await _transactionExecutor.ExecuteAsync(advisoryLockKey, async ct =>
                 {
+                    // The campaign is (re-)loaded *inside* the locked critical section, not
+                    // before it. Loading it before waiting on pg_advisory_xact_lock would let a
+                    // queued writer hold a snapshot that is already stale by the time its turn
+                    // comes, defeating the lock's purpose and starving the xmin retry loop under
+                    // real contention (reproduced against real PostgreSQL: 20 concurrent writers
+                    // exhausted 3 retries when the read happened before the lock).
+                    var campaign = await _campaignRepository.GetByIdAsync(command.CampaignId, ct);
+
+                    if (campaign is null)
+                    {
+                        throw new KeyNotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
+                    }
+
                     // Idempotency guard: at-least-once delivery of the payment-confirmed event
                     // must not double-credit the campaign. If this contribution was already
                     // recorded, treat the retry as a no-op instead of re-applying the balance.
@@ -72,16 +82,21 @@ public sealed class AddContributionToCampaignCommandHandler : ICommandHandler<Ad
                         await _campaignRepository.UpdateAsync(campaign, ct);
                     }
 
+                    campaignId = campaign.Id;
+                    raisedAmount = campaign.RaisedAmount.Amount;
+                    raisedCurrency = campaign.RaisedAmount.Currency;
+
                     return 0;
                 }, cancellationToken);
 
-                return new AddContributionToCampaignResult(campaign.Id, campaign.RaisedAmount.Amount, campaign.RaisedAmount.Currency);
+                return new AddContributionToCampaignResult(campaignId, raisedAmount, raisedCurrency);
             }
             catch (ConcurrencyConflictException) when (attempt < MaxConcurrencyRetries)
             {
-                // Another writer's xmin token won the race despite the advisory lock (e.g. a
-                // concurrent update outside this lock's coverage). Re-fetch and retry with
-                // jittered backoff rather than surfacing a transient conflict as a failure.
+                // Defense-in-depth: should be rare now that the read happens inside the lock,
+                // but a writer that bypasses this executor (e.g. a future direct migration
+                // script) could still race the xmin token. Retry with jittered backoff rather
+                // than surfacing a transient conflict as a failure.
                 var delay = RetryDelays[Math.Min(attempt - 1, RetryDelays.Length - 1)];
                 var jitter = TimeSpan.FromMilliseconds(Random.Shared.Next(0, 25));
                 await Task.Delay(delay + jitter, cancellationToken);

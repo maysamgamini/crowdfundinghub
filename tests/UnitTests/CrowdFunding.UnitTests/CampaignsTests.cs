@@ -531,7 +531,11 @@ public sealed class AddContributionToCampaignCommandHandlerTests
             CancellationToken.None);
 
         await Assert.ThrowsAsync<KeyNotFoundException>(action);
-        Assert.Equal(0, transactionExecutor.InvocationCount);
+
+        // The existence check now runs inside the locked critical section (the campaign is
+        // loaded after the advisory lock is acquired, not before), so the executor is invoked
+        // once even though the aggregate turns out not to exist.
+        Assert.Equal(1, transactionExecutor.InvocationCount);
     }
 }
 
