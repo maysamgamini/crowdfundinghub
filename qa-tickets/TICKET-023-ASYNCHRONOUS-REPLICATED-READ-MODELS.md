@@ -51,7 +51,20 @@ When breaking the Monolith into independent microservices (`Campaigns.Service`, 
 
 ---
 
-## 3. Affected Files & Modules
+## 3. Educational Rationale: Teaching Principals & Architects
+
+### The Pedagogical Objective
+Teach architects the profound difference between **In-Process Interface Decoupling** and **Runtime Temporal Decoupling**. Many modular monoliths claim to be "decoupled" simply because they inject C# interfaces (`ICampaignReader`). However, if calling that interface blocks execution and queries the other module's database tables synchronously, the modules remain physically and temporally intertwined.
+
+### Monolith First, Microservices Ready
+The outcome of this project is **not to deploy microservices today**, but to build a clean **Modular Monolith** that is 100% prepared to be extracted tomorrow. By implementing an asynchronous replicated read model (`active_campaigns_cache`) inside the monolith, the `Contributions` module reads its own local schema in sub-millisecond time. When the day comes to extract `Contributions` into a containerized microservice, **not a single line of pledge validation code needs to change**, because it already owns its read model.
+
+### What Breaks Tomorrow If Ignored Today?
+If you rely on synchronous in-process readers within your monolith, the moment you extract `Contributions` into an independent microservice, that C# interface call transforms into an HTTP or gRPC network request. If `Campaigns` has a latency spike or goes down for maintenance, `Contributions` instantly fails—turning your system into the worst architectural anti-pattern: **The Distributed Monolith**.
+
+---
+
+## 4. Affected Files & Modules
 
 - [`src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs)
 - [`src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Contracts/ReadServices/ICampaignContributionAvailabilityReader.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Contracts/ReadServices/ICampaignContributionAvailabilityReader.cs)

@@ -35,7 +35,20 @@ If the database commit fails, the backer receives a receipt for a failed pledge.
 
 ---
 
-## 3. Affected Files & Modules
+## 3. Educational Rationale: Teaching Principals & Architects
+
+### The Pedagogical Objective
+Demonstrate the **Dual-Write Hazard with External APIs**. An enterprise architect must know the exact boundary where database ACID transactions end and distributed eventual consistency begins. An external third-party API (SendGrid, AWS SES) cannot join a PostgreSQL transaction.
+
+### Monolith First, Microservices Ready
+The outcome of this project is a **Modular Monolith, NOT microservices**. However, even in a single-process monolith, sending an email is an **external network I/O call**. If you call `_emailSender.SendEmailAsync()` inside an in-memory event handler, a network glitch or SendGrid rate limit rolls back the user's HTTP request or loses the receipt. By utilizing the Outbox pattern inside the monolith, the receipt email command is saved atomically with the database commit. When the `Notifications` module is eventually extracted into an autonomous microservice, **its outbox delivery mechanics are already 100% resilient and decoupled**.
+
+### What Breaks Tomorrow If Ignored Today?
+If a monolith allows direct in-memory calls to external email services, under high load (e.g. viral campaign reaching funding target), SendGrid HTTP 429 rate limits cause synchronous HTTP 500 errors to propagate all the way back to paying backers, terminating healthy checkout transactions.
+
+---
+
+## 4. Affected Files & Modules
 
 - [`src/Modules/Notifications/CrowdFunding.Modules.Notifications.Application/`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Notifications/CrowdFunding.Modules.Notifications.Application/)
 - [`src/Modules/Notifications/CrowdFunding.Modules.Notifications.Infrastructure/`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Notifications/CrowdFunding.Modules.Notifications.Infrastructure/)

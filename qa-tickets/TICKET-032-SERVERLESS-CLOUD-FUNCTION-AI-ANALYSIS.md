@@ -38,7 +38,20 @@ Executing AI analysis models takes between **3 and 15 seconds**.
 
 ---
 
-## 3. Affected Files & Modules
+## 3. Educational Rationale: Teaching Principals & Architects
+
+### The Pedagogical Objective
+Teach the architectural boundary between **Synchronous Request-Response APIs and Asynchronous Serverless Workflows**. Architects learn how to protect the core web application from long-running compute workloads (5–15 seconds) using asynchronous event offloading and secure webhook callbacks.
+
+### Monolith First, Microservices Ready
+The outcome of this project is a **Modular Monolith, NOT microservices**. However, modern enterprise monoliths frequently leverage **Serverless Cloud Functions** (AWS Lambda / Google Cloud Functions) for specialized satellite tasks like AI moderation, malware scanning, or image resizing. By designing this integration using the Outbox pattern and signed webhooks (`X-Cloud-Signature`), the Monolith treats the Cloud Function as an autonomous external service. When other parts of the monolith are later broken into microservices, the AI moderation pipeline **already conforms to asynchronous microservice integration standards**.
+
+### What Breaks Tomorrow If Ignored Today?
+If you attempt to run AI analysis or media validation synchronously inside `POST /api/campaigns`, client requests frequently breach the 30-second timeout ceiling of cloud load balancers and reverse proxies, leading to mysterious HTTP 504 errors and degraded platform availability.
+
+---
+
+## 4. Affected Files & Modules
 
 - [`src/Modules/Moderation/CrowdFunding.Modules.Moderation.Application/`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Moderation/CrowdFunding.Modules.Moderation.Application/)
 - [`src/Modules/Moderation/CrowdFunding.Modules.Moderation.Infrastructure/`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Moderation/CrowdFunding.Modules.Moderation.Infrastructure/)

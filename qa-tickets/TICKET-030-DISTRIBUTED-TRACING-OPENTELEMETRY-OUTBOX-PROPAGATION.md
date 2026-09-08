@@ -35,7 +35,20 @@ When the background outbox worker polls and claims the message:
 
 ---
 
-## 3. Affected Files & Modules
+## 3. Educational Rationale: Teaching Principals & Architects
+
+### The Pedagogical Objective
+Teach the necessity of **Context Propagation across Asynchronous Boundaries**. Software architects must realize that observability is not just for HTTP calls. The second an event is written to a database table or message broker, `AsyncLocal` memory state is destroyed. Without explicit serialization of W3C `traceparent` headers, distributed tracing fails completely.
+
+### Monolith First, Microservices Ready
+The outcome of this project is a **Modular Monolith, NOT microservices**. Inside our monolith, an HTTP request in `Campaigns` writes an outbox row that is processed seconds later by a background worker to notify `Moderation`. By capturing and restoring W3C `traceparent` headers inside the monolith today, students and developers can open Jaeger or Application Insights and see the **entire causal waterfall** from HTTP request to background outbox dispatch as a single connected trace. When turning these modules into microservices tomorrow, **distributed tracing is already working with zero changes**.
+
+### What Breaks Tomorrow If Ignored Today?
+If you ignore context propagation in the monolith, when you transition to microservices, every message consumed by RabbitMQ or Kafka appears as an orphaned root trace in Datadog/Jaeger. SREs cannot troubleshoot end-to-end latency, and diagnosing transaction failures across service boundaries becomes an expensive guessing game.
+
+---
+
+## 4. Affected Files & Modules
 
 - [`src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxMessage.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxMessage.cs)
 - [`src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs)

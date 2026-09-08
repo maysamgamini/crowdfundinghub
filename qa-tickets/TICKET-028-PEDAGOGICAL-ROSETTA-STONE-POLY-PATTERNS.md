@@ -31,7 +31,23 @@ When principal engineers and software architects inspect this codebase to learn 
 
 ---
 
-## 3. Affected Files & Modules
+## 3. Educational Rationale: Teaching Principals & Architects
+
+### The Pedagogical Objective
+Expose and cure **Architectural Dogmatism**. In enterprise engineering, architects frequently mandate a single architectural pattern (e.g. "Every endpoint in this company must use CQRS, Repositories, Domain Aggregates, and MediatR") regardless of business complexity. This ticket teaches students to evaluate the **Return on Investment (ROI) of Abstraction**.
+
+### Monolith First, Microservices Ready
+The outcome of this project is a **Modular Monolith, NOT microservices**. Inside a modular monolith, different modules and features have vastly different complexity profiles:
+- *Reference data, lookups, and simple CRUD* should be written with high developer velocity using Tier 1 Minimal APIs.
+- *High-value financial state machines and multi-step sagas* justify Tier 3 Rich DDD and Outbox events.
+By demonstrating both styles in the exact same codebase, students see that **decomposition-readiness does not require 14 files for every simple table insert**. A Minimal API slice that writes to its own isolated schema is just as extractable into a microservice as a heavyweight DDD aggregate!
+
+### What Breaks Tomorrow If Ignored Today?
+If teams apply heavy DDD uniformly across all features, development velocity grinds to a halt, engineers suffer cognitive fatigue, and simple CRUD features incur enormous maintenance overhead with zero microservice decomposition benefits.
+
+---
+
+## 4. Affected Files & Modules
 
 - Creation of a new dedicated sample directory: `src/Samples/RosettaStone/`
 - Documentation references in [`educational/01-architecture-paradigms/poly-pattern-architecture.md`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/educational/01-architecture-paradigms/poly-pattern-architecture.md)

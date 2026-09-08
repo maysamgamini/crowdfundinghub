@@ -41,7 +41,20 @@ foreach (var handler in handlers)
 
 ---
 
-## 3. Affected Files & Modules
+## 3. Educational Rationale: Teaching Principals & Architects
+
+### The Pedagogical Objective
+Demonstrate the **Dependency Inversion Principle at the Infrastructure Boundary**. Application event handlers should be completely agnostic of whether events are dispatched in-memory within a single .NET process or broadcast across a distributed cluster via RabbitMQ or Apache Kafka.
+
+### Monolith First, Microservices Ready
+The outcome of this project is a **Modular Monolith**, where the default deployment setting is `Messaging:Provider = "InProcess"`. Everything runs efficiently inside a single host process with zero extra infrastructure overhead (no Docker containers or cloud brokers required for local run). However, because the system binds to `IMessageBus` and wraps payloads in CNCF CloudEvents v1.0 envelopes, **turning any module into a microservice tomorrow requires toggling a single configuration key (`Messaging:Provider = "RabbitMQ"`)**, without touching a single application command or domain event handler.
+
+### What Breaks Tomorrow If Ignored Today?
+If a monolith hardcodes in-memory event dispatching (`IServiceProvider.GetServices`), when a team is tasked with extracting a high-traffic service, they must rewrite all event publishing and subscription logic, migrate message schemas, and refactor error-handling pipelines under immense delivery pressure.
+
+---
+
+## 4. Affected Files & Modules
 
 - [`src/BuildingBlocks/CrowdFunding.BuildingBlocks.Application/Abstractions/Events/IEventPublisher.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Application/Abstractions/Events/IEventPublisher.cs)
 - [`src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Events/ServiceProviderEventPublisher.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Events/ServiceProviderEventPublisher.cs)

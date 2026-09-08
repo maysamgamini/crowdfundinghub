@@ -37,7 +37,20 @@ Because all modules strictly require `"DefaultConnection"`, it is impossible to 
 
 ---
 
-## 3. Affected Files & Modules
+## 3. Educational Rationale: Teaching Principals & Architects
+
+### The Pedagogical Objective
+Teach the evolutionary pattern of **Progressive Data Layer Decoupling**. Architects should understand that you do not jump from a single shared database directly into multi-region microservice database clusters. There is an evolutionary path: Single DB with Shared Schemas $\to$ Single DB with Isolated Schemas $\to$ Multiple Logical Databases $\to$ Physically Isolated Database Clusters.
+
+### Monolith First, Microservices Ready
+The outcome of this project is a **single, unified Modular Monolith running against a single PostgreSQL database instance** (`DefaultConnection`). Developers run one Docker container or local PostgreSQL instance and the entire application works seamlessly. However, by designing the infrastructure layer with fallback hierarchical resolution (`CampaignsDb ?? DefaultConnection`), the Monolith is **100% physically decoupled at the connection boundary**. When turning any module into a microservice, SREs can provision an isolated AWS RDS instance for that service and supply its connection string via environment variables with zero C# code changes or re-compilation.
+
+### What Breaks Tomorrow If Ignored Today?
+If a monolith hardcodes a single `"DefaultConnection"` across all modules, you cannot perform blue/green database migrations for a single module, you cannot isolate connection pool starvation, and extracting a microservice requires painful code modifications to DbContext registrations across multiple assemblies.
+
+---
+
+## 4. Affected Files & Modules
 
 - [`src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/DependencyInjection/CampaignsInfrastructureDependencyInjection.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/DependencyInjection/CampaignsInfrastructureDependencyInjection.cs#L27)
 - [`src/Modules/Contributions/CrowdFunding.Modules.Contributions.Infrastructure/DependencyInjection/ContributionsInfrastructureDependencyInjection.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Infrastructure/DependencyInjection/ContributionsInfrastructureDependencyInjection.cs)

@@ -33,7 +33,20 @@ When a popular creator launches a campaign:
 
 ---
 
-## 3. Affected Files & Modules
+## 3. Educational Rationale: Teaching Principals & Architects
+
+### The Pedagogical Objective
+Teach the **True Justification for Domain-Driven Design Aggregate Invariants & Optimistic Concurrency**. Architects learn that DDD is not about folder structures or repository boilerplate; it is about protecting critical business invariants under high concurrency.
+
+### Monolith First, Microservices Ready
+The outcome of this project is a **Modular Monolith, NOT microservices**. Inside our monolith, limited physical reward perks (e.g. 50 limited vinyl records) represent a constrained physical inventory. Multiple users check out simultaneously. By modeling `RewardTier` as an aggregate root protected by PostgreSQL `xmin` system row versioning and managing a 15-minute reservation timer via domain events, the monolith guarantees zero overselling. If inventory fulfillment is later extracted into a dedicated Supply Chain / Warehouse Microservice, **the inventory reservation domain aggregate is already fully encapsulated and emission-ready**.
+
+### What Breaks Tomorrow If Ignored Today?
+If you build reward perks with anemic CRUD entities, concurrent checkouts will oversell limited tiers, resulting in embarrassing backer cancellations, customer support crises, and manual database cleanup.
+
+---
+
+## 4. Affected Files & Modules
 
 - Creation of `RewardTier` aggregate in `src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/RewardTier.cs`
 - Integration with Contributions in `src/Modules/Contributions/CrowdFunding.Modules.Contributions.Domain/`

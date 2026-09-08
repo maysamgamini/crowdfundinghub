@@ -40,7 +40,20 @@ public async Task ProcessOutboxBatchAsync(CancellationToken cancellationToken)
 
 ---
 
-## 3. Affected Files & Modules
+## 3. Educational Rationale: Teaching Principals & Architects
+
+### The Pedagogical Objective
+Teach the principle of **Autonomous Vertical Slices extending through Background Processing**. In a clean modular architecture, a module is not just a collection of domain entities and controllers; it is a self-sustaining bounded context that must own its asynchronous background processing lifecycle.
+
+### Monolith First, Microservices Ready
+The goal is to maintain a **single deployable Modular Monolith**, but ensure that each module registers its own hosted service (`services.AddHostedService<CampaignsOutboxBackgroundService>()`) within its own infrastructure assembly. In the monolith, these workers run concurrently on independent thread pools inside the same web process. When the business decides to break out `Contributions` into an autonomous microservice, the module already contains its own fully functional background outbox engine; **zero outbox processing code needs to be extracted from the API host**.
+
+### What Breaks Tomorrow If Ignored Today?
+If you build a centralized outbox processor in the monolith host, extracting a module requires surgery on the monolith's core background services, creates deployment synchronization risks, and risks race conditions where the old monolith worker and the new microservice worker attempt to drain the same outbox simultaneously.
+
+---
+
+## 4. Affected Files & Modules
 
 - [`src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs)
 - [`src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Outbox/`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/)

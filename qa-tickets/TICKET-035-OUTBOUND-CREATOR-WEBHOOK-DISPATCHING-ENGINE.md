@@ -32,7 +32,20 @@ await _httpClient.PostAsync(creatorWebhookUrl, content);
 
 ---
 
-## 3. Affected Files & Modules
+## 3. Educational Rationale: Teaching Principals & Architects
+
+### The Pedagogical Objective
+Teach **Fault-Tolerant Outbound Integration Architecture & SSRF Defense**. Architects learn how to integrate with untrusted third-party HTTP endpoints without risking process thread starvation, security compromise, or message loss.
+
+### Monolith First, Microservices Ready
+The outcome of this project is a **Modular Monolith, NOT microservices**. Inside our monolith, dispatching webhooks to creators' external CRM or ERP systems must never block the backer's checkout experience. By storing webhook tasks in an outbox and processing them via dedicated background workers with HMAC signatures and exponential retry backoff, the monolith achieves **enterprise-grade reliability**. If webhook dispatching is later moved into a dedicated Serverless Event Worker or microservice, **its domain model, security validation, and payload signing are already completely isolated**.
+
+### What Breaks Tomorrow If Ignored Today?
+If a monolith fires outbound webhooks synchronously inside HTTP request threads, a single misconfigured or hostile creator webhook endpoint can exhaust the monolith's connection pool and CPU threads, bringing down the entire platform for all users.
+
+---
+
+## 4. Affected Files & Modules
 
 - Creation of `WebhookSubscription` and `WebhookDeliveryAttempt` in `src/Modules/CampaignUpdates/CrowdFunding.Modules.CampaignUpdates.Domain/` or `src/Modules/Notifications/`
 - Background delivery worker in `src/API/CrowdFunding.API/Background/`

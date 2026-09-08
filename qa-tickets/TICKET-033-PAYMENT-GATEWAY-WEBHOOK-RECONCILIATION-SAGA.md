@@ -37,7 +37,20 @@ In real-world e-commerce and crowdfunding platforms, payment processing is **inh
 
 ---
 
-## 3. Affected Files & Modules
+## 3. Educational Rationale: Teaching Principals & Architects
+
+### The Pedagogical Objective
+Teach the necessity of **Idempotent Webhook Consumers & Event-Driven Financial State Machines**. Software architects must master handling out-of-order delivery, duplicate network retries, and race conditions where external payment gateways dispatch webhooks before the client browser returns.
+
+### Monolith First, Microservices Ready
+The outcome of this project is a **Modular Monolith, NOT microservices**. However, payment processing is inherently a distributed workflow because the Payment Service Provider (Stripe) lives outside our application boundary. By modeling the `Contribution` aggregate as a formal state machine (`PendingPayment` $\to$ `Succeeded` $\to$ `Refunded`) and maintaining a dedicated `processed_payment_webhooks` table inside the `Contributions` schema, the monolith handles real-world payment edge cases flawlessly. If `Contributions` is later spun off into a dedicated Financial Ledger Microservice, **its payment state machine and idempotency guarantees require zero changes**.
+
+### What Breaks Tomorrow If Ignored Today?
+If an architect models payments with naive CRUD (`status = 'Succeeded'`) without idempotency tracking, payment provider retries result in double-crediting backer balances, and out-of-order client redirects overwrite completed charges.
+
+---
+
+## 4. Affected Files & Modules
 
 - [`src/Modules/Contributions/CrowdFunding.Modules.Contributions.Domain/Aggregates/Contribution.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Domain/Aggregates/Contribution.cs)
 - [`src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/)

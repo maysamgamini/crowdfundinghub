@@ -36,7 +36,20 @@ Without this workflow implemented, the codebase fails to demonstrate the very pr
 
 ---
 
-## 3. Affected Files & Modules
+## 3. Educational Rationale: Teaching Principals & Architects
+
+### The Pedagogical Objective
+Teach the mechanics of **Event-Driven Choreographed Sagas with Compensating Actions** (handling distributed business transactions without Two-Phase Commit / 2PC).
+
+### Monolith First, Microservices Ready
+The outcome of this project is a **Modular Monolith, NOT deployed microservices**. However, if you build a monolith where cancelling a campaign opens a single SQL transaction that modifies both `campaigns.campaigns` and `contributions.contributions`, you have introduced a physical database foreign-key transaction coupling. By enforcing the boundary inside the monolith—where `Campaigns` updates only its own aggregate and emits `CampaignCancelledApplicationEvent` into its outbox, and `Contributions` reacts asynchronously to refund backers—the Monolith operates with **100% microservice-ready transaction boundaries**.
+
+### What Breaks Tomorrow If Ignored Today?
+If you rely on a single multi-module database transaction in your monolith, when you later separate `Campaigns` and `Contributions` into distinct services or databases, your cancellation and refund logic instantly shatters. You would be forced to redesign your financial transaction model from scratch under production deadlines.
+
+---
+
+## 4. Affected Files & Modules
 
 - [`src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs)
 - [`src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Contracts/Events/`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Contracts/Events/)

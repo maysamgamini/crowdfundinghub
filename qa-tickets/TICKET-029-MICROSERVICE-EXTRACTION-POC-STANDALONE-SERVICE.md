@@ -30,7 +30,20 @@ Without a working, deployable microservice host demonstrating extraction in prac
 
 ---
 
-## 3. Affected Files & Modules
+## 3. Educational Rationale: Teaching Principals & Architects
+
+### The Pedagogical Objective
+Demonstrate the **Strangler Fig Pattern & Empirical Verification of Modular Boundaries**. It is trivial to claim on a whiteboard that a monolith is "microservices-ready." True architectural verification requires proving empirically that a bounded context can be hosted in a separate process container without modifying a single line of its domain or application logic.
+
+### Monolith First, Microservices Ready
+**Crucial Architectural Clarification:** The outcome of this project is **NOT to convert this repository into microservices**. The primary deliverable remains a single, robust, unified **Modular Monolith**. This ticket does not dismantle the monolith; instead, it introduces an optional demonstration host (`CrowdFunding.Moderation.Service`) in a `services/` directory to serve as living, executable proof for students and architects. It shows that because our monolith enforced Contract Assemblies, Schema Isolation, and Asymmetric JWKS Authentication, extracting a module requires only a new `Program.cs` host assembly.
+
+### What Breaks Tomorrow If Ignored Today?
+Without a tangible verification template, architecture teams often design "modular monoliths" that suffer from hidden coupling—such as shared static state, in-memory singletons, or unmapped direct assembly dependencies—which only surface months later during a botched production microservice migration.
+
+---
+
+## 4. Affected Files & Modules
 
 - Creation of `services/CrowdFunding.Moderation.Service/`
 - Root `docker-compose.yml` and `Dockerfile`
