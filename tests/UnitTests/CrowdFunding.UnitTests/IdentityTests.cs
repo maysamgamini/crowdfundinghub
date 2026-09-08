@@ -56,6 +56,36 @@ public sealed class UserDomainTests
 
         Assert.False(user.IsActive);
     }
+
+    [Fact]
+    public void Register_ShouldThrow_WhenPasswordHashIsMissing()
+    {
+        var action = () => User.Register("user@example.com", "User", "   ", DateTime.UtcNow);
+
+        var exception = Assert.Throws<ArgumentException>(action);
+
+        Assert.Equal("Password hash is required. (Parameter 'passwordHash')", exception.Message);
+    }
+
+    [Fact]
+    public void Register_ShouldThrow_WhenDisplayNameExceedsMaximumLength()
+    {
+        var action = () => User.Register("user@example.com", new string('a', 101), "hash", DateTime.UtcNow);
+
+        var exception = Assert.Throws<ArgumentException>(action);
+
+        Assert.Equal("Display name cannot exceed 100 characters. (Parameter 'displayName')", exception.Message);
+    }
+
+    [Fact]
+    public void Register_ShouldThrow_WhenEmailIsMissingAtSymbol()
+    {
+        var action = () => User.Register("not-an-email", "User", "hash", DateTime.UtcNow);
+
+        var exception = Assert.Throws<ArgumentException>(action);
+
+        Assert.Equal("Email must be a valid email address. (Parameter 'email')", exception.Message);
+    }
 }
 
 public sealed class RegisterUserCommandHandlerTests

@@ -123,6 +123,71 @@ public sealed class ContributionDomainTests
 
         Assert.Equal("Failure reason is required. (Parameter 'failureReason')", exception.Message);
     }
+
+    [Fact]
+    public void Create_ShouldThrow_WhenCampaignIdIsEmpty()
+    {
+        var action = () => Contribution.Create(
+            Guid.Empty,
+            Guid.NewGuid(),
+            50m,
+            "USD",
+            DateTime.UtcNow);
+
+        var exception = Assert.Throws<ArgumentException>(action);
+
+        Assert.Equal("CampaignId is required. (Parameter 'campaignId')", exception.Message);
+    }
+
+    [Fact]
+    public void Create_ShouldThrow_WhenContributorIdIsEmpty()
+    {
+        var action = () => Contribution.Create(
+            Guid.NewGuid(),
+            Guid.Empty,
+            50m,
+            "USD",
+            DateTime.UtcNow);
+
+        var exception = Assert.Throws<ArgumentException>(action);
+
+        Assert.Equal("ContributorId is required. (Parameter 'contributorId')", exception.Message);
+    }
+
+    [Fact]
+    public void ConfirmPayment_ShouldThrow_WhenPaymentReferenceIsMissing()
+    {
+        var contribution = Contribution.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            50m,
+            "USD",
+            new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
+
+        var action = () => contribution.ConfirmPayment("   ", new DateTime(2026, 4, 6, 12, 15, 0, DateTimeKind.Utc));
+
+        var exception = Assert.Throws<ArgumentException>(action);
+
+        Assert.Equal("Payment reference is required. (Parameter 'paymentReference')", exception.Message);
+    }
+
+    [Fact]
+    public void FailPayment_ShouldThrow_WhenContributionIsAlreadyCompleted()
+    {
+        var contribution = Contribution.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            50m,
+            "USD",
+            new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
+        contribution.ConfirmPayment("PAY-123", new DateTime(2026, 4, 6, 12, 15, 0, DateTimeKind.Utc));
+
+        var action = () => contribution.FailPayment("Chargeback.", new DateTime(2026, 4, 6, 12, 20, 0, DateTimeKind.Utc));
+
+        var exception = Assert.Throws<InvalidOperationException>(action);
+
+        Assert.Equal("Only pending contributions can be failed.", exception.Message);
+    }
 }
 
 public sealed class MakeContributionCommandHandlerTests

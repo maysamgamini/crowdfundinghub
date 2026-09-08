@@ -82,6 +82,52 @@ public sealed class CampaignReviewDomainTests
 
         Assert.Equal("Only pending campaign reviews can be updated.", exception.Message);
     }
+
+    [Fact]
+    public void Create_ShouldThrow_WhenCampaignIdIsEmpty()
+    {
+        var action = () => CampaignReview.Create(Guid.Empty, DateTime.UtcNow);
+
+        var exception = Assert.Throws<ArgumentException>(action);
+
+        Assert.Equal("CampaignId is required. (Parameter 'campaignId')", exception.Message);
+    }
+
+    [Fact]
+    public void Approve_ShouldThrow_WhenModeratorIdIsEmpty()
+    {
+        var review = CampaignReview.Create(Guid.NewGuid(), new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
+
+        var action = () => review.Approve(Guid.Empty, "Notes.", new DateTime(2026, 4, 7, 12, 0, 0, DateTimeKind.Utc));
+
+        var exception = Assert.Throws<ArgumentException>(action);
+
+        Assert.Equal("ModeratorId is required. (Parameter 'moderatorId')", exception.Message);
+    }
+
+    [Fact]
+    public void Reject_ShouldThrow_WhenModeratorIdIsEmpty()
+    {
+        var review = CampaignReview.Create(Guid.NewGuid(), new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
+
+        var action = () => review.Reject(Guid.Empty, "Notes.", new DateTime(2026, 4, 7, 12, 0, 0, DateTimeKind.Utc));
+
+        var exception = Assert.Throws<ArgumentException>(action);
+
+        Assert.Equal("ModeratorId is required. (Parameter 'moderatorId')", exception.Message);
+    }
+
+    [Fact]
+    public void Approve_ShouldThrow_WhenNotesExceedMaximumLength()
+    {
+        var review = CampaignReview.Create(Guid.NewGuid(), new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
+
+        var action = () => review.Approve(Guid.NewGuid(), new string('a', 501), new DateTime(2026, 4, 7, 12, 0, 0, DateTimeKind.Utc));
+
+        var exception = Assert.Throws<ArgumentException>(action);
+
+        Assert.Equal("Review notes cannot exceed 500 characters. (Parameter 'notes')", exception.Message);
+    }
 }
 
 public sealed class CreateCampaignReviewCommandHandlerTests

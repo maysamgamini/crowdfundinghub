@@ -102,6 +102,127 @@ public sealed class CampaignDomainTests
     }
 
     [Fact]
+    public void Create_ShouldThrow_WhenOwnerIdIsEmpty()
+    {
+        var action = () => Campaign.Create(
+            Guid.Empty,
+            "Valid title",
+            "A story that is definitely longer than twenty characters.",
+            "Community",
+            new Money(100m, "USD"),
+            DateTime.UtcNow.AddDays(5),
+            DateTime.UtcNow);
+
+        var exception = Assert.Throws<ArgumentException>(action);
+
+        Assert.Equal("OwnerId is required. (Parameter 'ownerId')", exception.Message);
+    }
+
+    [Fact]
+    public void Create_ShouldThrow_WhenTitleIsBlank()
+    {
+        var action = () => Campaign.Create(
+            Guid.NewGuid(),
+            "   ",
+            "A story that is definitely longer than twenty characters.",
+            "Community",
+            new Money(100m, "USD"),
+            DateTime.UtcNow.AddDays(5),
+            DateTime.UtcNow);
+
+        var exception = Assert.Throws<ArgumentException>(action);
+
+        Assert.Equal("Campaign title is required. (Parameter 'title')", exception.Message);
+    }
+
+    [Fact]
+    public void Create_ShouldThrow_WhenTitleExceedsMaximumLength()
+    {
+        var action = () => Campaign.Create(
+            Guid.NewGuid(),
+            new string('a', 201),
+            "A story that is definitely longer than twenty characters.",
+            "Community",
+            new Money(100m, "USD"),
+            DateTime.UtcNow.AddDays(5),
+            DateTime.UtcNow);
+
+        var exception = Assert.Throws<ArgumentException>(action);
+
+        Assert.Equal("Campaign title cannot exceed 200 characters. (Parameter 'title')", exception.Message);
+    }
+
+    [Fact]
+    public void Create_ShouldThrow_WhenCategoryIsBlank()
+    {
+        var action = () => Campaign.Create(
+            Guid.NewGuid(),
+            "Valid title",
+            "A story that is definitely longer than twenty characters.",
+            "   ",
+            new Money(100m, "USD"),
+            DateTime.UtcNow.AddDays(5),
+            DateTime.UtcNow);
+
+        var exception = Assert.Throws<ArgumentException>(action);
+
+        Assert.Equal("Campaign category is required. (Parameter 'category')", exception.Message);
+    }
+
+    [Fact]
+    public void Create_ShouldThrow_WhenCategoryExceedsMaximumLength()
+    {
+        var action = () => Campaign.Create(
+            Guid.NewGuid(),
+            "Valid title",
+            "A story that is definitely longer than twenty characters.",
+            new string('a', 101),
+            new Money(100m, "USD"),
+            DateTime.UtcNow.AddDays(5),
+            DateTime.UtcNow);
+
+        var exception = Assert.Throws<ArgumentException>(action);
+
+        Assert.Equal("Campaign category cannot exceed 100 characters. (Parameter 'category')", exception.Message);
+    }
+
+    [Fact]
+    public void Create_ShouldThrow_WhenGoalAmountIsNotPositive()
+    {
+        var action = () => Campaign.Create(
+            Guid.NewGuid(),
+            "Valid title",
+            "A story that is definitely longer than twenty characters.",
+            "Community",
+            new Money(0m, "USD"),
+            DateTime.UtcNow.AddDays(5),
+            DateTime.UtcNow);
+
+        var exception = Assert.Throws<ArgumentException>(action);
+
+        Assert.Equal("Campaign goal amount must be greater than zero. (Parameter 'goalAmount')", exception.Message);
+    }
+
+    [Fact]
+    public void Create_ShouldThrow_WhenDeadlineIsNotAfterCreatedDate()
+    {
+        var createdAtUtc = new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc);
+
+        var action = () => Campaign.Create(
+            Guid.NewGuid(),
+            "Valid title",
+            "A story that is definitely longer than twenty characters.",
+            "Community",
+            new Money(100m, "USD"),
+            createdAtUtc,
+            createdAtUtc);
+
+        var exception = Assert.Throws<ArgumentException>(action);
+
+        Assert.Equal("Campaign deadline must be in the future. (Parameter 'deadlineUtc')", exception.Message);
+    }
+
+    [Fact]
     public void Publish_ShouldThrow_WhenCampaignIsNotDraft()
     {
         var createdAtUtc = new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc);
