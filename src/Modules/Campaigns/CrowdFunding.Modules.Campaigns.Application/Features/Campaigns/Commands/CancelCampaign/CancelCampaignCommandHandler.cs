@@ -1,5 +1,6 @@
-﻿using CrowdFunding.BuildingBlocks.Application.Messaging;
+using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
+using CrowdFunding.BuildingBlocks.Domain.Common;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
@@ -27,22 +28,31 @@ public sealed class CancelCampaignCommandHandler : ICommandHandler<CancelCampaig
 
     public async Task<CancelCampaignResult> Handle(CancelCampaignCommand command, CancellationToken cancellationToken)
     {
-        var campaign = await _campaignRepository.GetByIdAsync(command.CampaignId, cancellationToken);
-        if (campaign is null)
-        {
-            throw new KeyNotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
-        }
+        // Same advisory lock as AddContributionToCampaignCommandHandler, and the campaign is
+        // (re-)loaded inside it. Previously this loaded the campaign and ran Cancel() outside
+        // any lock, so a confirmed pledge being applied concurrently could interleave with a
+        // cancellation instead of being serialized against it.
+        var advisoryLockKey = AdvisoryLockKey.FromGuid(command.CampaignId);
+        var campaignId = Guid.Empty;
+        var status = string.Empty;
 
-        EnsureCanManageCampaign(campaign.OwnerId);
-
-        await _transactionExecutor.ExecuteAsync(async ct =>
+        await _transactionExecutor.ExecuteAsync(advisoryLockKey, async ct =>
         {
+            var campaign = await _campaignRepository.GetByIdAsync(command.CampaignId, ct)
+                ?? throw new KeyNotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
+
+            EnsureCanManageCampaign(campaign.OwnerId);
+
             campaign.Cancel();
             await _campaignRepository.UpdateAsync(campaign, ct);
+
+            campaignId = campaign.Id;
+            status = campaign.Status.ToString();
+
             return 0;
         }, cancellationToken);
 
-        return new CancelCampaignResult(campaign.Id, campaign.Status.ToString());
+        return new CancelCampaignResult(campaignId, status);
     }
 
     private void EnsureCanManageCampaign(Guid ownerId)

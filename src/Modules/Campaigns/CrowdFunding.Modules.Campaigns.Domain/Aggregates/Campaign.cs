@@ -96,6 +96,11 @@ public sealed class Campaign : BaseEntity
 
     public void Cancel()
     {
+        if (Status == CampaignStatus.Cancelled)
+        {
+            throw new InvalidOperationException("Campaign is already cancelled.");
+        }
+
         if (Status == CampaignStatus.Successful || Status == CampaignStatus.Failed)
         {
             throw new InvalidOperationException("Completed campaigns cannot be cancelled.");

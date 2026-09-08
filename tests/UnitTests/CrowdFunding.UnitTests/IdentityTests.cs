@@ -5,6 +5,7 @@ using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.AssignRo
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.GrantPermissionToUser;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.LoginUser;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.RegisterUser;
+using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.SeedAdmin;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Queries.GetCurrentUser;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
 using CrowdFunding.Modules.Identity.Domain.Aggregates;
@@ -59,8 +60,13 @@ public sealed class UserDomainTests
 public sealed class RegisterUserCommandHandlerTests
 {
     [Fact]
-    public async Task Handle_ShouldAssignAdminRoleToFirstUser()
+    public async Task Handle_ShouldNeverAssignAdminRole_EvenToTheFirstUserInAnEmptyDatabase()
     {
+        // Public self-registration must never grant Admin, including to the very first user —
+        // that used to be decided by an unlocked AnyAsync check (RegisterUserCommandHandler),
+        // which let two concurrent registrations against an empty database both observe zero
+        // users and both become Administrators. The initial admin is now seeded out-of-band via
+        // `dotnet run -- seed-admin` (AdminSeeder), never through this handler.
         var repository = new FakeUserRepository();
         var handler = new RegisterUserCommandHandler(
             new FakeIdentityDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
@@ -73,7 +79,9 @@ public sealed class RegisterUserCommandHandlerTests
 
         Assert.NotEqual(Guid.Empty, result.UserId);
         Assert.NotNull(repository.SavedUser);
-        Assert.Contains(RoleConstants.Admin, repository.SavedUser!.Roles.Select(x => x.Role));
+        Assert.DoesNotContain(RoleConstants.Admin, repository.SavedUser!.Roles.Select(x => x.Role));
+        Assert.Contains(RoleConstants.Creator, repository.SavedUser.Roles.Select(x => x.Role));
+        Assert.Contains(RoleConstants.Backer, repository.SavedUser.Roles.Select(x => x.Role));
     }
 
     [Fact]
@@ -112,6 +120,67 @@ public sealed class RegisterUserCommandHandlerTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(action);
 
         Assert.Equal("A user with email ' creator@example.com ' already exists.", exception.Message);
+    }
+}
+
+public sealed class SeedAdminCommandHandlerTests
+{
+    [Fact]
+    public async Task Handle_ShouldCreateNewAdminAccount_WhenUserDoesNotExist()
+    {
+        var repository = new FakeUserRepository();
+        var handler = new SeedAdminCommandHandler(
+            new FakeIdentityDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
+            new FakePasswordHasher(),
+            repository);
+
+        var result = await handler.Handle(
+            new SeedAdminCommand("admin@example.com", "supersecret", "Admin"),
+            CancellationToken.None);
+
+        Assert.True(result.WasNewlyCreated);
+        Assert.NotNull(repository.SavedUser);
+        Assert.Contains(RoleConstants.Admin, repository.SavedUser!.Roles.Select(x => x.Role));
+    }
+
+    [Fact]
+    public async Task Handle_ShouldPromoteExistingUser_WhenTheyAreNotAlreadyAdmin()
+    {
+        var existingUser = User.Register("creator@example.com", "Creator", "hash", DateTime.UtcNow);
+        existingUser.AssignRole(RoleConstants.Creator);
+        var repository = new FakeUserRepository(existingUser);
+        var handler = new SeedAdminCommandHandler(
+            new FakeIdentityDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
+            new FakePasswordHasher(),
+            repository);
+
+        var result = await handler.Handle(
+            new SeedAdminCommand("creator@example.com", "ignored", "ignored"),
+            CancellationToken.None);
+
+        Assert.False(result.WasNewlyCreated);
+        Assert.Equal(existingUser.Id, result.UserId);
+        Assert.Contains(RoleConstants.Admin, existingUser.Roles.Select(x => x.Role));
+        Assert.True(repository.WasUpdated);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldBeIdempotent_WhenUserIsAlreadyAdmin()
+    {
+        var existingUser = User.Register("admin@example.com", "Admin", "hash", DateTime.UtcNow);
+        existingUser.AssignRole(RoleConstants.Admin);
+        var repository = new FakeUserRepository(existingUser);
+        var handler = new SeedAdminCommandHandler(
+            new FakeIdentityDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
+            new FakePasswordHasher(),
+            repository);
+
+        var result = await handler.Handle(
+            new SeedAdminCommand("admin@example.com", "ignored", "ignored"),
+            CancellationToken.None);
+
+        Assert.False(result.WasNewlyCreated);
+        Assert.False(repository.WasUpdated);
     }
 }
 
@@ -484,8 +553,11 @@ internal sealed class FakeUserRepository : IUserRepository
         return Task.FromResult(_users.Count > 0);
     }
 
+    public bool WasUpdated { get; private set; }
+
     public Task UpdateAsync(User user, CancellationToken cancellationToken)
     {
+        WasUpdated = true;
         SavedUser = user;
         return Task.CompletedTask;
     }

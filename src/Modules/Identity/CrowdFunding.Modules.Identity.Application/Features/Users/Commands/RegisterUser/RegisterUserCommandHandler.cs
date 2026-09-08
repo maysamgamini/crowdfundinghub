@@ -43,15 +43,14 @@ public sealed class RegisterUserCommandHandler : ICommandHandler<RegisterUserCom
             _passwordHasher.HashPassword(command.Password),
             _dateTimeProvider.UtcNow);
 
-        if (!await _userRepository.AnyAsync(cancellationToken))
-        {
-            user.AssignRole(RoleConstants.Admin);
-        }
-        else
-        {
-            user.AssignRole(RoleConstants.Creator);
-            user.AssignRole(RoleConstants.Backer);
-        }
+        // Public self-registration always gets standard, non-privileged roles. This previously
+        // granted Admin to whichever request won the race to be "the first user" (checked via
+        // AnyAsync with no transaction/locking around it) — two concurrent registrations against
+        // an empty database could both observe zero users and both become full Administrators.
+        // Bootstrap the initial admin out-of-band instead: `dotnet run -- seed-admin` (see
+        // AdminSeeder), never through this public, unauthenticated endpoint.
+        user.AssignRole(RoleConstants.Creator);
+        user.AssignRole(RoleConstants.Backer);
 
         await _userRepository.AddAsync(user, cancellationToken);
 

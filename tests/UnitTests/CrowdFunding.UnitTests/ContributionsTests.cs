@@ -250,6 +250,39 @@ public sealed class MakeContributionCommandHandlerTests
         Assert.Equal($"Campaign '{campaignId}' cannot accept contributions while in 'Draft' status.", exception.Message);
         Assert.Equal(0, transactionExecutor.InvocationCount);
     }
+
+    [Fact]
+    public async Task Handle_ShouldThrow_WhenContributionCurrencyDoesNotMatchCampaignCurrency()
+    {
+        var campaignId = Guid.NewGuid();
+        var transactionExecutor = new FakeContributionTransactionExecutor();
+        var repository = new FakeContributionRepository();
+        var handler = new MakeContributionCommandHandler(
+            new FakeCampaignContributionAvailabilityReader(exists: true, canAcceptContributions: true, status: "Published", currency: "USD"),
+            new TestCurrentUser
+            {
+                UserId = Guid.NewGuid(),
+                Permissions = [PermissionConstants.CampaignsContribute]
+            },
+            new FakeContributionDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
+            repository,
+            transactionExecutor);
+
+        var action = async () => await handler.Handle(
+            new MakeContributionCommand(campaignId, 100m, "EUR"),
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(action);
+
+        // Rejected here, before any Contribution/payment record is created — catching this at
+        // MakeContribution time instead of leaving it to surface as Money.Add throwing much
+        // later (after payment confirmation) inside AddContributionToCampaignCommandHandler,
+        // which would permanently dead-letter the outbox message with no way to credit the
+        // campaign without manual intervention.
+        Assert.Equal("Contribution currency 'EUR' does not match campaign currency 'USD'.", exception.Message);
+        Assert.Equal(0, transactionExecutor.InvocationCount);
+        Assert.Null(repository.SavedContribution);
+    }
 }
 
 public sealed class ConfirmContributionPaymentCommandHandlerTests
@@ -666,12 +699,14 @@ internal sealed class FakeCampaignContributionAvailabilityReader : ICampaignCont
     private readonly bool _exists;
     private readonly bool _canAcceptContributions;
     private readonly string _status;
+    private readonly string? _currency;
 
-    public FakeCampaignContributionAvailabilityReader(bool exists, bool canAcceptContributions, string status)
+    public FakeCampaignContributionAvailabilityReader(bool exists, bool canAcceptContributions, string status, string? currency = "USD")
     {
         _exists = exists;
         _canAcceptContributions = canAcceptContributions;
         _status = status;
+        _currency = currency;
     }
 
     public Guid? CheckedCampaignId { get; private set; }
@@ -685,7 +720,8 @@ internal sealed class FakeCampaignContributionAvailabilityReader : ICampaignCont
             query.CampaignId,
             _exists,
             _canAcceptContributions,
-            _status));
+            _status,
+            _currency));
     }
 }
 

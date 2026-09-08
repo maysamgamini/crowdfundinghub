@@ -1,9 +1,11 @@
-﻿using CrowdFunding.BuildingBlocks.Domain.Common;
+﻿using CrowdFunding.BuildingBlocks.Application.Exceptions;
+using CrowdFunding.BuildingBlocks.Domain.Common;
 using CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPaymentConfirmed;
 using CrowdFunding.Modules.Contributions.Domain.Events;
 using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.DbContexts;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
 namespace CrowdFunding.Modules.Contributions.Infrastructure.Transactions;
@@ -50,6 +52,19 @@ public sealed class ContributionTransactionExecutor : IContributionTransactionEx
             }
 
             return result;
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+            }
+
+            // Translated to an infrastructure-agnostic exception so application-layer handlers
+            // can catch and retry without taking a dependency on Entity Framework Core (mirrors
+            // CampaignTransactionExecutor).
+            throw new ConcurrencyConflictException(
+                "The aggregate was modified by another transaction. Retry with a fresh read.", ex);
         }
         catch
         {

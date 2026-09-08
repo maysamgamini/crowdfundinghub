@@ -1,5 +1,6 @@
 using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
+using CrowdFunding.BuildingBlocks.Domain.Common;
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
@@ -44,8 +45,10 @@ public sealed class AddContributionToCampaignCommandHandler : ICommandHandler<Ad
     {
         // Derive a deterministic 64-bit key from the campaign id so every writer targeting the
         // same campaign contends for the same pg_advisory_xact_lock, serializing the
-        // read-modify-write below across concurrent instances/requests.
-        var advisoryLockKey = unchecked((long)command.CampaignId.GetHashCode());
+        // read-modify-write below across concurrent instances/requests. Uses the GUID's full 128
+        // bits (not Guid.GetHashCode(), which only has 32 bits of entropy and collides between
+        // unrelated campaigns often enough to cause real cross-campaign lock contention).
+        var advisoryLockKey = AdvisoryLockKey.FromGuid(command.CampaignId);
 
         for (var attempt = 1; ; attempt++)
         {

@@ -53,6 +53,17 @@ public sealed class MakeContributionCommandHandler : ICommandHandler<MakeContrib
                 $"Campaign '{command.CampaignId}' cannot accept contributions while in '{campaignAvailability.Status}' status.");
         }
 
+        // Reject a currency mismatch here, before any Contribution/payment record exists.
+        // Left unchecked, this surfaces much later as Money.Add throwing inside
+        // AddContributionToCampaignCommandHandler — after the payment was already confirmed —
+        // permanently dead-lettering the outbox message with no way to credit the campaign
+        // without manual intervention.
+        if (!string.Equals(campaignAvailability.Currency, command.Currency, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Contribution currency '{command.Currency}' does not match campaign currency '{campaignAvailability.Currency}'.");
+        }
+
         var contribution = Contribution.Create(
             command.CampaignId,
             _currentUser.UserId,

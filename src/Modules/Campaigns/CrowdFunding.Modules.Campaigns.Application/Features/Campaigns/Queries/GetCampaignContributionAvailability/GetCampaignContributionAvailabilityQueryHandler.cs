@@ -25,13 +25,14 @@ public sealed class GetCampaignContributionAvailabilityQueryHandler : IQueryHand
 
         if (campaign is null)
         {
-            return new GetCampaignContributionAvailabilityResult(query.CampaignId, false, false, "Missing");
+            return new GetCampaignContributionAvailabilityResult(query.CampaignId, false, false, "Missing", null);
         }
 
         return new GetCampaignContributionAvailabilityResult(
             campaign.Id,
             true,
             campaign.Status == CampaignStatus.Published,
-            campaign.Status.ToString());
+            campaign.Status.ToString(),
+            campaign.GoalAmount.Currency);
     }
 }

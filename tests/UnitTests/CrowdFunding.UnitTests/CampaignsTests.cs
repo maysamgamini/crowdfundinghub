@@ -113,6 +113,22 @@ public sealed class CampaignDomainTests
     }
 
     [Fact]
+    public void Cancel_ShouldThrow_WhenCampaignIsAlreadyCancelled()
+    {
+        var createdAtUtc = new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc);
+        var campaign = CreateDraftCampaign(createdAtUtc, createdAtUtc.AddDays(14));
+        campaign.Cancel();
+
+        var action = () => campaign.Cancel();
+
+        var exception = Assert.Throws<InvalidOperationException>(action);
+
+        // Previously this succeeded silently and re-raised a duplicate
+        // CampaignCancelledDomainEvent on every repeated call.
+        Assert.Equal("Campaign is already cancelled.", exception.Message);
+    }
+
+    [Fact]
     public void ApplyConfirmedContribution_ShouldIncreaseRaisedAmount_WhenCampaignIsPublished()
     {
         var createdAtUtc = new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc);
@@ -740,6 +756,7 @@ public sealed class GetCampaignContributionAvailabilityQueryHandlerTests
         Assert.True(result.Exists);
         Assert.True(result.CanAcceptContributions);
         Assert.Equal("Published", result.Status);
+        Assert.Equal("USD", result.Currency);
     }
 
     [Fact]

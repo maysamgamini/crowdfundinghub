@@ -7,4 +7,5 @@ public sealed record GetCampaignContributionAvailabilityResult(
     Guid CampaignId,
     bool Exists,
     bool CanAcceptContributions,
-    string Status);
+    string Status,
+    string? Currency);

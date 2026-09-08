@@ -168,6 +168,21 @@ if (args.Contains("migrate"))
     return;
 }
 
+// `dotnet run -- seed-admin <email> <password> <displayName>`: creates the initial
+// Administrator out-of-band, run once by an operator. Public self-registration
+// (RegisterUserCommandHandler) never grants Admin — see AdminSeeder's remarks for why.
+if (args.Length > 0 && args[0] == "seed-admin")
+{
+    if (args.Length < 4)
+    {
+        Console.Error.WriteLine("Usage: dotnet run -- seed-admin <email> <password> <displayName>");
+        return;
+    }
+
+    await AdminSeeder.RunAsync(app.Services, args[1], args[2], args[3]);
+    return;
+}
+
 if (app.Environment.IsDevelopment())
 {
     await MigrationRunner.RunAsync(app.Services);

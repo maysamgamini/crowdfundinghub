@@ -54,5 +54,17 @@ public sealed class ContributionConfiguration : IEntityTypeConfiguration<Contrib
             .IsRequired();
 
         builder.Property(x => x.ProcessedAtUtc);
+
+        // Optimistic concurrency token (mirrors CampaignConfiguration). Without it, a payment
+        // confirmation and a payment failure racing on the same Pending contribution silently
+        // overwrite each other's state instead of one of them failing with a detectable
+        // conflict — e.g. a contribution already marked Succeeded (with
+        // ContributionPaymentConfirmedDomainEvent already in the outbox) could be clobbered back
+        // to Failed by a losing concurrent write.
+        builder.Property<uint>("xmin")
+            .HasColumnName("xmin")
+            .HasColumnType("xid")
+            .ValueGeneratedOnAddOrUpdate()
+            .IsConcurrencyToken();
     }
 }

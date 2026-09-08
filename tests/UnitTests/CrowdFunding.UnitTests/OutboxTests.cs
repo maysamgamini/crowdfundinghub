@@ -1,7 +1,35 @@
 using CrowdFunding.BuildingBlocks.Application.Events;
+using CrowdFunding.BuildingBlocks.Domain.Common;
 using CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
 
 namespace CrowdFunding.UnitTests;
+
+public sealed class AdvisoryLockKeyTests
+{
+    [Fact]
+    public void FromGuid_ShouldBeDeterministic()
+    {
+        var id = Guid.NewGuid();
+
+        Assert.Equal(AdvisoryLockKey.FromGuid(id), AdvisoryLockKey.FromGuid(id));
+    }
+
+    [Fact]
+    public void FromGuid_ShouldUseAllSixteenBytes_NotJustTheHashCodeTruncation()
+    {
+        // Two GUIDs engineered to share the same 32-bit Guid.GetHashCode() would have collided
+        // under the old `(long)campaignId.GetHashCode()` derivation. Rather than search for such
+        // a pair, assert the actual property that fixes the bug: every byte of the GUID
+        // participates, so changing any byte changes the key (a hash truncated to 32 bits could
+        // never guarantee this for the high-order bytes it discards).
+        var original = Guid.NewGuid();
+        var bytes = original.ToByteArray();
+        bytes[15] ^= 0xFF;
+        var mutated = new Guid(bytes);
+
+        Assert.NotEqual(AdvisoryLockKey.FromGuid(original), AdvisoryLockKey.FromGuid(mutated));
+    }
+}
 
 public sealed class EventTypeRegistryTests
 {
