@@ -1,4 +1,6 @@
-﻿namespace CrowdFunding.Modules.Campaigns.Contracts.Queries.GetCampaignContributionAvailability;
+﻿using CrowdFunding.Modules.Campaigns.Contracts.Enums;
+
+namespace CrowdFunding.Modules.Campaigns.Contracts.Queries.GetCampaignContributionAvailability;
 
 /// <summary>
 /// Represents the outcome returned by Get Campaign Contribution Availability.
@@ -7,5 +9,5 @@ public sealed record GetCampaignContributionAvailabilityResult(
     Guid CampaignId,
     bool Exists,
     bool CanAcceptContributions,
-    string Status,
+    CampaignStatusContract? Status,
     string? Currency);

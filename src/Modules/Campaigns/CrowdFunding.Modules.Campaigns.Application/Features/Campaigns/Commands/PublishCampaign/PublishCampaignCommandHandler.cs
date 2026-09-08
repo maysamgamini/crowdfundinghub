@@ -5,6 +5,7 @@ using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
+using CrowdFunding.Modules.Moderation.Contracts.Enums;
 using CrowdFunding.Modules.Moderation.Contracts.Queries.GetCampaignReviewStatusByCampaignId;
 
 namespace CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.PublishCampaign;
@@ -49,7 +50,7 @@ public sealed class PublishCampaignCommandHandler : ICommandHandler<PublishCampa
             new GetCampaignReviewStatusByCampaignIdQuery(command.CampaignId),
             cancellationToken);
 
-        if (!string.Equals(review.Status, "Approved", StringComparison.OrdinalIgnoreCase))
+        if (review.Status != CampaignReviewStatusContract.Approved)
         {
             // State-machine conflict (RFC 9110 §15.5.10), not a malformed request — 409 lets
             // clients distinguish this from a validation failure.

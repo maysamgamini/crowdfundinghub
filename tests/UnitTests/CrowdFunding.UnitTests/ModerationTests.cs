@@ -12,6 +12,7 @@ using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Queri
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Queries.GetCampaignReviewStatusByCampaignId;
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Queries.ListCampaignReviews;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
+using CrowdFunding.Modules.Moderation.Contracts.Enums;
 using CrowdFunding.Modules.Moderation.Contracts.Queries.GetCampaignReviewStatusByCampaignId;
 using CrowdFunding.Modules.Moderation.Domain.Aggregates;
 using CrowdFunding.Modules.Moderation.Domain.Enums;
@@ -383,7 +384,7 @@ public sealed class GetCampaignReviewStatusByCampaignIdQueryHandlerTests
 
         var result = await handler.Handle(new GetCampaignReviewStatusByCampaignIdQuery(review.CampaignId), CancellationToken.None);
 
-        Assert.Equal(new GetCampaignReviewStatusByCampaignIdResult(review.CampaignId, "Approved"), result);
+        Assert.Equal(new GetCampaignReviewStatusByCampaignIdResult(review.CampaignId, CampaignReviewStatusContract.Approved), result);
         Assert.Equal(review.CampaignId, readService.ReceivedCampaignId);
     }
 

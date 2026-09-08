@@ -1,5 +1,6 @@
 ﻿using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Services;
+using CrowdFunding.Modules.Moderation.Contracts.Enums;
 using CrowdFunding.Modules.Moderation.Contracts.Queries.GetCampaignReviewStatusByCampaignId;
 
 namespace CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Queries.GetCampaignReviewStatusByCampaignId;
@@ -29,6 +30,6 @@ public sealed class GetCampaignReviewStatusByCampaignIdQueryHandler : IQueryHand
 
         return new GetCampaignReviewStatusByCampaignIdResult(
             result.CampaignId,
-            result.Status);
+            Enum.Parse<CampaignReviewStatusContract>(result.Status, ignoreCase: true));
     }
 }

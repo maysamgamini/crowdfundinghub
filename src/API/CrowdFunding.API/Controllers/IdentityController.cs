@@ -56,12 +56,14 @@ public sealed class IdentityController : ControllerBase
     /// <param name="request">The user registration payload containing email, display name, and password.</param>
     /// <param name="cancellationToken">Cancellation token for asynchronous operation.</param>
     /// <response code="201">User was registered successfully and assigned the default Member role.</response>
-    /// <response code="400">Invalid registration data, duplicate email, or password complexity failure.</response>
+    /// <response code="400">Invalid registration data or password complexity failure.</response>
+    /// <response code="409">A user with the given email already exists.</response>
     [AllowAnonymous]
     [EnableRateLimiting(RateLimitingConfiguration.AuthPolicy)]
     [HttpPost("register")]
     [ProducesResponseType(typeof(RegisterUserResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<RegisterUserResponse>> Register(
         [FromBody] RegisterUserRequest request,
         CancellationToken cancellationToken)

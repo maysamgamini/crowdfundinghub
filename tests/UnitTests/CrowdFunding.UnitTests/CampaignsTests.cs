@@ -13,11 +13,13 @@ using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.GetC
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.GetCampaignContributionAvailability;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.ListCampaigns;
 using CrowdFunding.Modules.Campaigns.Contracts.Commands.AddContributionToCampaign;
+using CrowdFunding.Modules.Campaigns.Contracts.Enums;
 using CrowdFunding.Modules.Campaigns.Domain.Aggregates;
 using CrowdFunding.Modules.Campaigns.Domain.Enums;
 using CrowdFunding.Modules.Campaigns.Domain.Events;
 using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPaymentConfirmed;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
+using CrowdFunding.Modules.Moderation.Contracts.Enums;
 using CrowdFunding.Modules.Moderation.Contracts.Queries.GetCampaignReviewStatusByCampaignId;
 
 namespace CrowdFunding.UnitTests;
@@ -301,7 +303,7 @@ public sealed class PublishCampaignCommandHandlerTests
             now.AddDays(-1));
 
         var repository = new FakeCampaignRepository(campaign);
-        var reviewStatusReader = new FakeCampaignReviewStatusReader("Approved");
+        var reviewStatusReader = new FakeCampaignReviewStatusReader(CampaignReviewStatusContract.Approved);
         var transactionExecutor = new FakeCampaignTransactionExecutor();
         var handler = new PublishCampaignCommandHandler(
             repository,
@@ -332,7 +334,7 @@ public sealed class PublishCampaignCommandHandlerTests
             new FakeCampaignRepository(),
             new TestCurrentUser { UserId = Guid.NewGuid() },
             new FakeDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
-            new FakeCampaignReviewStatusReader("Approved"),
+            new FakeCampaignReviewStatusReader(CampaignReviewStatusContract.Approved),
             new FakeCampaignTransactionExecutor());
 
         var action = async () => await handler.Handle(new PublishCampaignCommand(Guid.NewGuid()), CancellationToken.None);
@@ -357,7 +359,7 @@ public sealed class PublishCampaignCommandHandlerTests
             new FakeCampaignRepository(campaign),
             new TestCurrentUser { UserId = Guid.NewGuid() },
             new FakeDateTimeProvider(now),
-            new FakeCampaignReviewStatusReader("Approved"),
+            new FakeCampaignReviewStatusReader(CampaignReviewStatusContract.Approved),
             new FakeCampaignTransactionExecutor());
 
         var action = async () => await handler.Handle(new PublishCampaignCommand(campaign.Id), CancellationToken.None);
@@ -388,7 +390,7 @@ public sealed class PublishCampaignCommandHandlerTests
                 Permissions = [PermissionConstants.CampaignsManageAny]
             },
             new FakeDateTimeProvider(now),
-            new FakeCampaignReviewStatusReader("Approved"),
+            new FakeCampaignReviewStatusReader(CampaignReviewStatusContract.Approved),
             transactionExecutor);
 
         var result = await handler.Handle(new PublishCampaignCommand(campaign.Id), CancellationToken.None);
@@ -422,7 +424,7 @@ public sealed class PublishCampaignCommandHandlerTests
                 Permissions = [PermissionConstants.CampaignsPublish]
             },
             new FakeDateTimeProvider(now),
-            new FakeCampaignReviewStatusReader("Pending"),
+            new FakeCampaignReviewStatusReader(CampaignReviewStatusContract.Pending),
             transactionExecutor);
 
         var action = async () => await handler.Handle(new PublishCampaignCommand(campaign.Id), CancellationToken.None);
@@ -450,7 +452,7 @@ public sealed class PublishCampaignCommandHandlerTests
             new FakeCampaignRepository(campaign),
             new TestCurrentUser { IsAuthenticated = false, UserId = Guid.Empty },
             new FakeDateTimeProvider(now),
-            new FakeCampaignReviewStatusReader("Approved"),
+            new FakeCampaignReviewStatusReader(CampaignReviewStatusContract.Approved),
             new FakeCampaignTransactionExecutor());
 
         var action = async () => await handler.Handle(new PublishCampaignCommand(campaign.Id), CancellationToken.None);
@@ -756,7 +758,7 @@ public sealed class GetCampaignContributionAvailabilityQueryHandlerTests
 
         Assert.True(result.Exists);
         Assert.True(result.CanAcceptContributions);
-        Assert.Equal("Published", result.Status);
+        Assert.Equal(CampaignStatusContract.Published, result.Status);
         Assert.Equal("USD", result.Currency);
     }
 
@@ -772,7 +774,7 @@ public sealed class GetCampaignContributionAvailabilityQueryHandlerTests
 
         Assert.False(result.Exists);
         Assert.False(result.CanAcceptContributions);
-        Assert.Equal("Missing", result.Status);
+        Assert.Null(result.Status);
     }
 }
 
@@ -978,9 +980,9 @@ internal sealed class FakeCampaignReadService : ICampaignReadService
 
 internal sealed class FakeCampaignReviewStatusReader : ICampaignReviewStatusReader
 {
-    private readonly string _status;
+    private readonly CampaignReviewStatusContract _status;
 
-    public FakeCampaignReviewStatusReader(string status)
+    public FakeCampaignReviewStatusReader(CampaignReviewStatusContract status)
     {
         _status = status;
     }

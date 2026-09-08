@@ -166,6 +166,7 @@ public sealed class ContributionsController : ControllerBase
     /// <response code="401">Unauthorized if the request lacks a valid Bearer token.</response>
     /// <response code="403">Forbidden if the caller lacks the 'contributions:payments:manage' permission.</response>
     /// <response code="404">Contribution or campaign not found.</response>
+    /// <response code="409">Contribution was concurrently modified by another request.</response>
     [Authorize(Policy = PermissionConstants.ContributionsPaymentsManage)]
     [HttpPost("{contributionId:guid}/confirm-payment")]
     [ProducesResponseType(typeof(ConfirmContributionPaymentResponse), StatusCodes.Status200OK)]
@@ -173,6 +174,7 @@ public sealed class ContributionsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<ConfirmContributionPaymentResponse>> ConfirmPayment(
         [FromRoute] Guid campaignId,
         [FromRoute] Guid contributionId,
@@ -204,6 +206,7 @@ public sealed class ContributionsController : ControllerBase
     /// <response code="401">Unauthorized if the request lacks a valid Bearer token.</response>
     /// <response code="403">Forbidden if the caller lacks the 'contributions:payments:manage' permission.</response>
     /// <response code="404">Contribution or campaign not found.</response>
+    /// <response code="409">Contribution was concurrently modified by another request.</response>
     [Authorize(Policy = PermissionConstants.ContributionsPaymentsManage)]
     [HttpPost("{contributionId:guid}/fail-payment")]
     [ProducesResponseType(typeof(FailContributionPaymentResponse), StatusCodes.Status200OK)]
@@ -211,6 +214,7 @@ public sealed class ContributionsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<FailContributionPaymentResponse>> FailPayment(
         [FromRoute] Guid campaignId,
         [FromRoute] Guid contributionId,

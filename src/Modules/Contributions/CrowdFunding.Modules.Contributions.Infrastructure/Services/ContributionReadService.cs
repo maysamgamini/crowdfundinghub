@@ -2,6 +2,7 @@
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Queries.GetContributionById;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Queries.ListContributionsByCampaign;
+using CrowdFunding.Modules.Contributions.Domain.Enums;
 using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore;
 
@@ -42,8 +43,14 @@ public sealed class ContributionReadService : IContributionReadService
 
         if (!string.IsNullOrWhiteSpace(filter.Status))
         {
-            var status = filter.Status.Trim();
-            query = query.Where(x => x.Status.ToString() == status);
+            if (Enum.TryParse<ContributionStatus>(filter.Status, true, out var status))
+            {
+                query = query.Where(x => x.Status == status);
+            }
+            else
+            {
+                query = query.Where(_ => false);
+            }
         }
 
         query = query

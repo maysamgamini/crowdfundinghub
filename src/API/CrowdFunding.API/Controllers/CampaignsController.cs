@@ -125,10 +125,11 @@ public sealed class CampaignsController : ControllerBase
     /// <param name="id">The unique identifier of the campaign to publish.</param>
     /// <param name="cancellationToken">Cancellation token for asynchronous operation.</param>
     /// <response code="200">Campaign published successfully.</response>
-    /// <response code="400">Campaign cannot be published (e.g. not approved or invalid state).</response>
+    /// <response code="400">Validation error, campaign is not in Draft status, or its deadline has passed.</response>
     /// <response code="401">Unauthorized if the request lacks a valid Bearer token.</response>
     /// <response code="403">Forbidden if the caller lacks the 'campaigns:publish' permission.</response>
     /// <response code="404">Campaign not found.</response>
+    /// <response code="409">Campaign is not yet approved by moderation, or was concurrently modified.</response>
     [Authorize(Policy = PermissionConstants.CampaignsPublish)]
     [HttpPost("{id:guid}/publish")]
     [ProducesResponseType(typeof(PublishCampaignResponse), StatusCodes.Status200OK)]
@@ -136,6 +137,7 @@ public sealed class CampaignsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<PublishCampaignResponse>> Publish([FromRoute] Guid id, CancellationToken cancellationToken)
     {
         var command = new PublishCampaignCommand(id);
@@ -161,6 +163,7 @@ public sealed class CampaignsController : ControllerBase
     /// <response code="401">Unauthorized if the request lacks a valid Bearer token.</response>
     /// <response code="403">Forbidden if the caller lacks the 'campaigns:cancel' permission.</response>
     /// <response code="404">Campaign not found.</response>
+    /// <response code="409">Campaign was concurrently modified by another request.</response>
     [Authorize(Policy = PermissionConstants.CampaignsCancel)]
     [HttpPost("{id:guid}/cancel")]
     [ProducesResponseType(typeof(CancelCampaignResponse), StatusCodes.Status200OK)]
@@ -168,6 +171,7 @@ public sealed class CampaignsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<CancelCampaignResponse>> Cancel([FromRoute] Guid id, CancellationToken cancellationToken)
     {
         var command = new CancelCampaignCommand(id);

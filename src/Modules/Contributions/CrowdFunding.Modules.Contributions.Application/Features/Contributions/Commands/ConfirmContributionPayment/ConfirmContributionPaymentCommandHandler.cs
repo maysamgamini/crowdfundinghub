@@ -1,5 +1,6 @@
 ﻿using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
+using CrowdFunding.Modules.Campaigns.Contracts.Enums;
 using CrowdFunding.Modules.Campaigns.Contracts.Queries.GetCampaignContributionAvailability;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
@@ -53,7 +54,7 @@ public sealed class ConfirmContributionPaymentCommandHandler : ICommandHandler<C
             throw new KeyNotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
         }
 
-        if (!string.Equals(campaignAvailability.Status, "Published", StringComparison.OrdinalIgnoreCase))
+        if (campaignAvailability.Status != CampaignStatusContract.Published)
         {
             throw new InvalidOperationException("Contribution payments can only be confirmed while the campaign is published.");
         }

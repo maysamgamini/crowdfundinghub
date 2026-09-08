@@ -1,6 +1,7 @@
 using CrowdFunding.BuildingBlocks.Application.Pagination;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
+using CrowdFunding.Modules.Campaigns.Contracts.Enums;
 using CrowdFunding.Modules.Campaigns.Contracts.Queries.GetCampaignContributionAvailability;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
@@ -129,7 +130,7 @@ public sealed class MakeContributionCommandHandlerTests
     [Fact]
     public async Task Handle_ShouldCreatePendingContributionWithoutApplyingCampaignFunding()
     {
-        var campaignReader = new FakeCampaignContributionAvailabilityReader(exists: true, canAcceptContributions: true, status: "Published");
+        var campaignReader = new FakeCampaignContributionAvailabilityReader(exists: true, canAcceptContributions: true, status: CampaignStatusContract.Published);
         var repository = new FakeContributionRepository();
         var currentUser = new TestCurrentUser
         {
@@ -166,7 +167,7 @@ public sealed class MakeContributionCommandHandlerTests
     public async Task Handle_ShouldThrow_WhenUserIsNotAuthenticated()
     {
         var handler = new MakeContributionCommandHandler(
-            new FakeCampaignContributionAvailabilityReader(exists: true, canAcceptContributions: true, status: "Published"),
+            new FakeCampaignContributionAvailabilityReader(exists: true, canAcceptContributions: true, status: CampaignStatusContract.Published),
             new TestCurrentUser { IsAuthenticated = false, UserId = Guid.Empty },
             new FakeContributionDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
             new FakeContributionRepository(),
@@ -185,7 +186,7 @@ public sealed class MakeContributionCommandHandlerTests
     public async Task Handle_ShouldThrow_WhenUserLacksPermission()
     {
         var handler = new MakeContributionCommandHandler(
-            new FakeCampaignContributionAvailabilityReader(exists: true, canAcceptContributions: true, status: "Published"),
+            new FakeCampaignContributionAvailabilityReader(exists: true, canAcceptContributions: true, status: CampaignStatusContract.Published),
             new TestCurrentUser(),
             new FakeContributionDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
             new FakeContributionRepository(),
@@ -206,7 +207,7 @@ public sealed class MakeContributionCommandHandlerTests
         var transactionExecutor = new FakeContributionTransactionExecutor();
         var campaignId = Guid.NewGuid();
         var handler = new MakeContributionCommandHandler(
-            new FakeCampaignContributionAvailabilityReader(exists: false, canAcceptContributions: false, status: "Missing"),
+            new FakeCampaignContributionAvailabilityReader(exists: false, canAcceptContributions: false, status: null),
             new TestCurrentUser
             {
                 UserId = Guid.NewGuid(),
@@ -232,7 +233,7 @@ public sealed class MakeContributionCommandHandlerTests
         var campaignId = Guid.NewGuid();
         var transactionExecutor = new FakeContributionTransactionExecutor();
         var handler = new MakeContributionCommandHandler(
-            new FakeCampaignContributionAvailabilityReader(exists: true, canAcceptContributions: false, status: "Draft"),
+            new FakeCampaignContributionAvailabilityReader(exists: true, canAcceptContributions: false, status: CampaignStatusContract.Draft),
             new TestCurrentUser
             {
                 UserId = Guid.NewGuid(),
@@ -259,7 +260,7 @@ public sealed class MakeContributionCommandHandlerTests
         var transactionExecutor = new FakeContributionTransactionExecutor();
         var repository = new FakeContributionRepository();
         var handler = new MakeContributionCommandHandler(
-            new FakeCampaignContributionAvailabilityReader(exists: true, canAcceptContributions: true, status: "Published", currency: "USD"),
+            new FakeCampaignContributionAvailabilityReader(exists: true, canAcceptContributions: true, status: CampaignStatusContract.Published, currency: "USD"),
             new TestCurrentUser
             {
                 UserId = Guid.NewGuid(),
@@ -302,7 +303,7 @@ public sealed class ConfirmContributionPaymentCommandHandlerTests
         {
             Permissions = [PermissionConstants.ContributionsPaymentsManage]
         };
-        var campaignReader = new FakeCampaignContributionAvailabilityReader(exists: true, canAcceptContributions: true, status: "Published");
+        var campaignReader = new FakeCampaignContributionAvailabilityReader(exists: true, canAcceptContributions: true, status: CampaignStatusContract.Published);
         var repository = new FakeContributionRepository(contribution);
         var transactionExecutor = new FakeContributionTransactionExecutor();
         var handler = new ConfirmContributionPaymentCommandHandler(
@@ -335,7 +336,7 @@ public sealed class ConfirmContributionPaymentCommandHandlerTests
             new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
 
         var handler = new ConfirmContributionPaymentCommandHandler(
-            new FakeCampaignContributionAvailabilityReader(exists: true, canAcceptContributions: true, status: "Published"),
+            new FakeCampaignContributionAvailabilityReader(exists: true, canAcceptContributions: true, status: CampaignStatusContract.Published),
             new TestCurrentUser { IsAuthenticated = false, UserId = Guid.Empty },
             new FakeContributionDateTimeProvider(new DateTime(2026, 4, 6, 12, 5, 0, DateTimeKind.Utc)),
             new FakeContributionRepository(contribution),
@@ -361,7 +362,7 @@ public sealed class ConfirmContributionPaymentCommandHandlerTests
             new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
 
         var handler = new ConfirmContributionPaymentCommandHandler(
-            new FakeCampaignContributionAvailabilityReader(exists: true, canAcceptContributions: true, status: "Published"),
+            new FakeCampaignContributionAvailabilityReader(exists: true, canAcceptContributions: true, status: CampaignStatusContract.Published),
             new TestCurrentUser(),
             new FakeContributionDateTimeProvider(new DateTime(2026, 4, 6, 12, 5, 0, DateTimeKind.Utc)),
             new FakeContributionRepository(contribution),
@@ -383,7 +384,7 @@ public sealed class ConfirmContributionPaymentCommandHandlerTests
         var contributionId = Guid.NewGuid();
         var campaignId = Guid.NewGuid();
         var handler = new ConfirmContributionPaymentCommandHandler(
-            new FakeCampaignContributionAvailabilityReader(exists: true, canAcceptContributions: true, status: "Published"),
+            new FakeCampaignContributionAvailabilityReader(exists: true, canAcceptContributions: true, status: CampaignStatusContract.Published),
             new TestCurrentUser
             {
                 Permissions = [PermissionConstants.ContributionsPaymentsManage]
@@ -413,7 +414,7 @@ public sealed class ConfirmContributionPaymentCommandHandlerTests
             new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
         var transactionExecutor = new FakeContributionTransactionExecutor();
         var handler = new ConfirmContributionPaymentCommandHandler(
-            new FakeCampaignContributionAvailabilityReader(exists: false, canAcceptContributions: false, status: "Missing"),
+            new FakeCampaignContributionAvailabilityReader(exists: false, canAcceptContributions: false, status: null),
             new TestCurrentUser
             {
                 Permissions = [PermissionConstants.ContributionsPaymentsManage]
@@ -443,7 +444,7 @@ public sealed class ConfirmContributionPaymentCommandHandlerTests
             new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
         var transactionExecutor = new FakeContributionTransactionExecutor();
         var handler = new ConfirmContributionPaymentCommandHandler(
-            new FakeCampaignContributionAvailabilityReader(exists: true, canAcceptContributions: false, status: "Draft"),
+            new FakeCampaignContributionAvailabilityReader(exists: true, canAcceptContributions: false, status: CampaignStatusContract.Draft),
             new TestCurrentUser
             {
                 Permissions = [PermissionConstants.ContributionsPaymentsManage]
@@ -744,10 +745,10 @@ internal sealed class FakeCampaignContributionAvailabilityReader : ICampaignCont
 {
     private readonly bool _exists;
     private readonly bool _canAcceptContributions;
-    private readonly string _status;
+    private readonly CampaignStatusContract? _status;
     private readonly string? _currency;
 
-    public FakeCampaignContributionAvailabilityReader(bool exists, bool canAcceptContributions, string status, string? currency = "USD")
+    public FakeCampaignContributionAvailabilityReader(bool exists, bool canAcceptContributions, CampaignStatusContract? status, string? currency = "USD")
     {
         _exists = exists;
         _canAcceptContributions = canAcceptContributions;

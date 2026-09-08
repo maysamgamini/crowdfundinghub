@@ -1,5 +1,6 @@
 ﻿using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
+using CrowdFunding.Modules.Campaigns.Contracts.Enums;
 using CrowdFunding.Modules.Campaigns.Contracts.Queries.GetCampaignContributionAvailability;
 using CrowdFunding.Modules.Campaigns.Domain.Enums;
 
@@ -25,14 +26,14 @@ public sealed class GetCampaignContributionAvailabilityQueryHandler : IQueryHand
 
         if (campaign is null)
         {
-            return new GetCampaignContributionAvailabilityResult(query.CampaignId, false, false, "Missing", null);
+            return new GetCampaignContributionAvailabilityResult(query.CampaignId, false, false, null, null);
         }
 
         return new GetCampaignContributionAvailabilityResult(
             campaign.Id,
             true,
             campaign.Status == CampaignStatus.Published,
-            campaign.Status.ToString(),
+            Enum.Parse<CampaignStatusContract>(campaign.Status.ToString(), ignoreCase: true),
             campaign.GoalAmount.Currency);
     }
 }
