@@ -2,6 +2,7 @@ using CrowdFunding.API.Contracts.Contributions;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.ConfirmContributionPayment;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.FailContributionPayment;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.MakeContribution;
+using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Queries.GetContributionById;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Queries.ListContributionsByCampaign;
 using Mapster;
 
@@ -22,5 +23,6 @@ public static class ContributionsMappingConfig
         config.NewConfig<FailContributionPaymentResult, FailContributionPaymentResponse>();
         config.NewConfig<MakeContributionResult, MakeContributionResponse>();
         config.NewConfig<ListContributionsByCampaignResult, ListContributionsResponse>();
+        config.NewConfig<GetContributionByIdResult, GetContributionByIdResponse>();
     }
 }

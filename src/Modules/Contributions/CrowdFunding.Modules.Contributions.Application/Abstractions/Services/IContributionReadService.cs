@@ -1,4 +1,5 @@
-﻿using CrowdFunding.BuildingBlocks.Application.Pagination;
+using CrowdFunding.BuildingBlocks.Application.Pagination;
+using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Queries.GetContributionById;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Queries.ListContributionsByCampaign;
 
 namespace CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
@@ -13,4 +14,6 @@ public interface IContributionReadService
         PageRequest pageRequest,
         ListContributionsByCampaignFilter filter,
         CancellationToken cancellationToken);
+
+    Task<GetContributionByIdResult?> GetByIdAsync(Guid campaignId, Guid contributionId, CancellationToken cancellationToken);
 }

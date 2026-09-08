@@ -7,6 +7,7 @@ using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.ConfirmContributionPayment;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.FailContributionPayment;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.MakeContribution;
+using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Queries.GetContributionById;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Queries.ListContributionsByCampaign;
 using CrowdFunding.Modules.Contributions.Domain.Aggregates;
 using CrowdFunding.Modules.Contributions.Domain.Enums;
@@ -613,6 +614,51 @@ public sealed class ListContributionsByCampaignQueryHandlerTests
     }
 }
 
+public sealed class GetContributionByIdQueryHandlerTests
+{
+    [Fact]
+    public async Task Handle_ShouldReturnContribution_WhenFound()
+    {
+        var campaignId = Guid.NewGuid();
+        var contributionId = Guid.NewGuid();
+        IReadOnlyCollection<ListContributionsByCampaignResult> contributions =
+        [
+            new(
+                contributionId,
+                campaignId,
+                Guid.NewGuid(),
+                75m,
+                "USD",
+                "Succeeded",
+                "PAY-123",
+                null,
+                new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc),
+                new DateTime(2026, 4, 6, 12, 10, 0, DateTimeKind.Utc))
+        ];
+        var readService = new FakeContributionReadService(new PagedResult<ListContributionsByCampaignResult>(contributions, 1, 10, 1));
+        var handler = new GetContributionByIdQueryHandler(readService);
+
+        var result = await handler.Handle(new GetContributionByIdQuery(campaignId, contributionId), CancellationToken.None);
+
+        Assert.Equal(contributionId, result.Id);
+        Assert.Equal(75m, result.Amount);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldThrow_WhenContributionWasNotFound()
+    {
+        var readService = new FakeContributionReadService(new PagedResult<ListContributionsByCampaignResult>([], 1, 10, 0));
+        var handler = new GetContributionByIdQueryHandler(readService);
+        var campaignId = Guid.NewGuid();
+        var contributionId = Guid.NewGuid();
+
+        var action = async () => await handler.Handle(new GetContributionByIdQuery(campaignId, contributionId), CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<KeyNotFoundException>(action);
+        Assert.Equal($"Contribution '{contributionId}' was not found for campaign '{campaignId}'.", exception.Message);
+    }
+}
+
 public sealed class MakeContributionCommandValidatorTests
 {
     [Fact]
@@ -757,5 +803,24 @@ internal sealed class FakeContributionReadService : IContributionReadService
         ReceivedPageRequest = pageRequest;
         ReceivedFilter = filter;
         return Task.FromResult(_contributionsPage);
+    }
+
+    public Task<GetContributionByIdResult?> GetByIdAsync(Guid campaignId, Guid contributionId, CancellationToken cancellationToken)
+    {
+        var match = _contributionsPage.Items.FirstOrDefault(x => x.Id == contributionId && x.CampaignId == campaignId);
+
+        return Task.FromResult(match is null
+            ? null
+            : new GetContributionByIdResult(
+                match.Id,
+                match.CampaignId,
+                match.ContributorId,
+                match.Amount,
+                match.Currency,
+                match.Status,
+                match.PaymentReference,
+                match.FailureReason,
+                match.CreatedAtUtc,
+                match.ProcessedAtUtc));
     }
 }

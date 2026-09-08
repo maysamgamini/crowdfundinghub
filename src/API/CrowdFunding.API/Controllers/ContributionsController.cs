@@ -7,6 +7,7 @@ using CrowdFunding.BuildingBlocks.Application.Pagination;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.ConfirmContributionPayment;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.FailContributionPayment;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.MakeContribution;
+using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Queries.GetContributionById;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Queries.ListContributionsByCampaign;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
 using FluentValidation;
@@ -123,7 +124,34 @@ public sealed class ContributionsController : ControllerBase
         var result = await _commandDispatcher.SendAsync<MakeContributionResult>(command, cancellationToken);
         var response = _mapper.Map<MakeContributionResponse>(result);
 
-        return CreatedAtAction(nameof(ListByCampaign), new { campaignId }, response);
+        // Location must point at the created resource itself (RFC 9110 §10.3.2), not the
+        // collection it lives in — a client following it previously landed back on the
+        // paginated list instead of the contribution just created (QA TICKET-006).
+        return CreatedAtAction(nameof(GetById), new { campaignId, contributionId = result.ContributionId }, response);
+    }
+
+    /// <summary>
+    /// Retrieves a single contribution by its unique identifier — the resource clients need to
+    /// poll payment status (Pending -&gt; Succeeded/Failed) after creating a pledge.
+    /// </summary>
+    /// <param name="campaignId">The unique identifier of the campaign.</param>
+    /// <param name="contributionId">The unique identifier of the contribution.</param>
+    /// <param name="cancellationToken">Cancellation token for asynchronous operation.</param>
+    /// <response code="200">Returns the contribution details.</response>
+    /// <response code="404">Contribution not found for the given campaign.</response>
+    [HttpGet("{contributionId:guid}")]
+    [ProducesResponseType(typeof(GetContributionByIdResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<GetContributionByIdResponse>> GetById(
+        [FromRoute] Guid campaignId,
+        [FromRoute] Guid contributionId,
+        CancellationToken cancellationToken)
+    {
+        var result = await _queryDispatcher.QueryAsync<GetContributionByIdResult>(
+            new GetContributionByIdQuery(campaignId, contributionId),
+            cancellationToken);
+
+        return Ok(_mapper.Map<GetContributionByIdResponse>(result));
     }
 
     /// <summary>

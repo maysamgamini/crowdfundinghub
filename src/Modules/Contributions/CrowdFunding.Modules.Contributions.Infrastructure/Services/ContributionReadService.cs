@@ -1,5 +1,6 @@
 ﻿using CrowdFunding.BuildingBlocks.Application.Pagination;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
+using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Queries.GetContributionById;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Queries.ListContributionsByCampaign;
 using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore;
@@ -72,5 +73,27 @@ public sealed class ContributionReadService : IContributionReadService
             pageRequest.PageNumber,
             pageRequest.PageSize,
             totalCount);
+    }
+
+    public async Task<GetContributionByIdResult?> GetByIdAsync(
+        Guid campaignId,
+        Guid contributionId,
+        CancellationToken cancellationToken)
+    {
+        return await _dbContext.Contributions
+            .AsNoTracking()
+            .Where(x => x.Id == contributionId && x.CampaignId == campaignId)
+            .Select(x => new GetContributionByIdResult(
+                x.Id,
+                x.CampaignId,
+                x.ContributorId,
+                x.Money.Amount,
+                x.Money.Currency,
+                x.Status.ToString(),
+                x.PaymentReference,
+                x.FailureReason,
+                x.CreatedAtUtc,
+                x.ProcessedAtUtc))
+            .FirstOrDefaultAsync(cancellationToken);
     }
 }
