@@ -134,7 +134,26 @@ public sealed class CampaignDomainTests
 
         var exception = Assert.Throws<InvalidOperationException>(action);
 
-        Assert.Equal("Draft campaigns cannot receive confirmed contributions.", exception.Message);
+        Assert.Equal(
+            "Cannot apply contributions to campaign in status 'Draft'. Only Published campaigns can accept funds.",
+            exception.Message);
+    }
+
+    [Fact]
+    public void ApplyConfirmedContribution_ShouldThrow_WhenCampaignIsCancelled()
+    {
+        var createdAtUtc = new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc);
+        var campaign = CreateDraftCampaign(createdAtUtc, createdAtUtc.AddDays(14));
+        campaign.Publish(createdAtUtc.AddDays(1));
+        campaign.Cancel();
+
+        var action = () => campaign.ApplyConfirmedContribution(new Money(125m, "USD"));
+
+        var exception = Assert.Throws<InvalidOperationException>(action);
+
+        Assert.Equal(
+            "Cannot apply contributions to campaign in status 'Cancelled'. Only Published campaigns can accept funds.",
+            exception.Message);
     }
 
     [Fact]
@@ -443,12 +462,14 @@ public sealed class AddContributionToCampaignCommandHandlerTests
 
         var repository = new FakeCampaignRepository(campaign);
         var transactionExecutor = new FakeCampaignTransactionExecutor();
+        var ledger = new FakeContributionLedger();
         var handler = new CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.AddContributionToCampaign.AddContributionToCampaignCommandHandler(
             repository,
+            ledger,
             transactionExecutor);
 
         var result = await handler.Handle(
-            new AddContributionToCampaignCommand(campaign.Id, 125m, "usd"),
+            new AddContributionToCampaignCommand(campaign.Id, Guid.NewGuid(), 125m, "usd"),
             CancellationToken.None);
 
         Assert.Equal(campaign.Id, result.CampaignId);
@@ -459,15 +480,54 @@ public sealed class AddContributionToCampaignCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_ShouldBeIdempotent_WhenSameContributionIsAppliedTwice()
+    {
+        var campaign = Campaign.Create(
+            Guid.NewGuid(),
+            "Launch a school robotics lab",
+            "This campaign funds tools and equipment for a new school robotics lab.",
+            "Education",
+            new Money(5000m, "USD"),
+            new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
+
+        campaign.Publish(new DateTime(2026, 4, 7, 12, 0, 0, DateTimeKind.Utc));
+
+        var repository = new FakeCampaignRepository(campaign);
+        var transactionExecutor = new FakeCampaignTransactionExecutor();
+        var ledger = new FakeContributionLedger();
+        var handler = new CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.AddContributionToCampaign.AddContributionToCampaignCommandHandler(
+            repository,
+            ledger,
+            transactionExecutor);
+
+        var contributionId = Guid.NewGuid();
+
+        var firstResult = await handler.Handle(
+            new AddContributionToCampaignCommand(campaign.Id, contributionId, 125m, "usd"),
+            CancellationToken.None);
+
+        var secondResult = await handler.Handle(
+            new AddContributionToCampaignCommand(campaign.Id, contributionId, 125m, "usd"),
+            CancellationToken.None);
+
+        Assert.Equal(125m, firstResult.RaisedAmount);
+        Assert.Equal(125m, secondResult.RaisedAmount);
+        Assert.Equal(new Money(125m, "USD"), campaign.RaisedAmount);
+        Assert.Equal(2, ledger.RecordAttemptCount);
+    }
+
+    [Fact]
     public async Task Handle_ShouldThrow_WhenCampaignDoesNotExist()
     {
         var transactionExecutor = new FakeCampaignTransactionExecutor();
         var handler = new CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.AddContributionToCampaign.AddContributionToCampaignCommandHandler(
             new FakeCampaignRepository(),
+            new FakeContributionLedger(),
             transactionExecutor);
 
         var action = async () => await handler.Handle(
-            new AddContributionToCampaignCommand(Guid.NewGuid(), 125m, "usd"),
+            new AddContributionToCampaignCommand(Guid.NewGuid(), Guid.NewGuid(), 125m, "usd"),
             CancellationToken.None);
 
         await Assert.ThrowsAsync<KeyNotFoundException>(action);
@@ -701,13 +761,16 @@ public sealed class ContributionPaymentConfirmedApplicationEventHandlerTests
         var handler = new ContributionPaymentConfirmedApplicationEventHandler(commandDispatcher);
         var campaignId = Guid.NewGuid();
 
+        var contributionId = Guid.NewGuid();
+
         await handler.Handle(
-            new ContributionPaymentConfirmedApplicationEvent(Guid.NewGuid(), campaignId, 100m, "usd"),
+            new ContributionPaymentConfirmedApplicationEvent(contributionId, campaignId, 100m, "usd"),
             CancellationToken.None);
 
         var command = Assert.IsType<AddContributionToCampaignCommand>(commandDispatcher.LastCommand);
         Assert.Equal(1, commandDispatcher.InvocationCount);
         Assert.Equal(campaignId, command.CampaignId);
+        Assert.Equal(contributionId, command.ContributionId);
         Assert.Equal(100m, command.Amount);
         Assert.Equal("usd", command.Currency);
     }
@@ -791,6 +854,24 @@ internal sealed class FakeCampaignRepository : ICampaignRepository
         WasUpdated = true;
         SavedCampaign = campaign;
         return Task.CompletedTask;
+    }
+}
+
+internal sealed class FakeContributionLedger : IContributionLedger
+{
+    private readonly HashSet<Guid> _recordedContributionIds = [];
+
+    public int RecordAttemptCount { get; private set; }
+
+    public Task<bool> TryRecordAsync(
+        Guid campaignId,
+        Guid contributionId,
+        decimal amount,
+        string currency,
+        CancellationToken cancellationToken)
+    {
+        RecordAttemptCount++;
+        return Task.FromResult(_recordedContributionIds.Add(contributionId));
     }
 }
 

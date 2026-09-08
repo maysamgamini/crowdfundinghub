@@ -5,5 +5,6 @@
 /// </summary>
 public sealed record AddContributionToCampaignCommand(
     Guid CampaignId,
+    Guid ContributionId,
     decimal Amount,
     string Currency);

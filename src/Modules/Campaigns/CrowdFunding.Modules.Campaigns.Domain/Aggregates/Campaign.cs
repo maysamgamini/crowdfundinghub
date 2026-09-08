@@ -107,9 +107,10 @@ public sealed class Campaign : BaseEntity
 
     public void ApplyConfirmedContribution(Money contribution)
     {
-        if (Status == CampaignStatus.Draft)
+        if (Status != CampaignStatus.Published)
         {
-            throw new InvalidOperationException("Draft campaigns cannot receive confirmed contributions.");
+            throw new InvalidOperationException(
+                $"Cannot apply contributions to campaign in status '{Status}'. Only Published campaigns can accept funds.");
         }
 
         ArgumentNullException.ThrowIfNull(contribution);

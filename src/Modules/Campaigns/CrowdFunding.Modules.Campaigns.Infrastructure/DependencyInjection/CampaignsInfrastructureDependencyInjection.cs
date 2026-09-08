@@ -29,6 +29,7 @@ public static class CampaignsInfrastructureDependencyInjection
 
         services.AddScoped<ICampaignContributionAvailabilityReader, CampaignContributionAvailabilityReader>();
         services.AddScoped<ICampaignRepository, CampaignRepository>();
+        services.AddScoped<IContributionLedger, ContributionLedger>();
         services.AddScoped<ICampaignReadService, CampaignReadService>();
         services.AddScoped<ICampaignTransactionExecutor, CampaignTransactionExecutor>();
         services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();

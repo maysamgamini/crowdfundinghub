@@ -68,5 +68,15 @@ public sealed class CampaignConfiguration : IEntityTypeConfiguration<Campaign>
                 .HasMaxLength(3)
                 .IsRequired();
         });
+
+        // PostgreSQL system column used as an optimistic concurrency token. Prevents lost
+        // updates when two concurrent confirmed contributions race to update RaisedAmount:
+        // EF issues WHERE id = @p0 AND xmin = @p1, and a stale write throws
+        // DbUpdateConcurrencyException instead of silently overwriting the other update.
+        builder.Property<uint>("xmin")
+            .HasColumnName("xmin")
+            .HasColumnType("xid")
+            .ValueGeneratedOnAddOrUpdate()
+            .IsConcurrencyToken();
     }
 }

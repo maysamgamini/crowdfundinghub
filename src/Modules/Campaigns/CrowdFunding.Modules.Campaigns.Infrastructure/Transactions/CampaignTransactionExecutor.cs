@@ -1,5 +1,7 @@
-﻿using CrowdFunding.BuildingBlocks.Domain.Common;
+﻿using CrowdFunding.BuildingBlocks.Application.Exceptions;
+using CrowdFunding.BuildingBlocks.Domain.Common;
 using CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignCancelled;
 using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignCreated;
@@ -22,7 +24,16 @@ public sealed class CampaignTransactionExecutor : ICampaignTransactionExecutor
         _dbContext = dbContext;
     }
 
-    public async Task<T> ExecuteAsync<T>(Func<CancellationToken, Task<T>> action, CancellationToken cancellationToken)
+    public Task<T> ExecuteAsync<T>(Func<CancellationToken, Task<T>> action, CancellationToken cancellationToken)
+        => ExecuteInternalAsync(null, action, cancellationToken);
+
+    public Task<T> ExecuteAsync<T>(long advisoryLockKey, Func<CancellationToken, Task<T>> action, CancellationToken cancellationToken)
+        => ExecuteInternalAsync(advisoryLockKey, action, cancellationToken);
+
+    private async Task<T> ExecuteInternalAsync<T>(
+        long? advisoryLockKey,
+        Func<CancellationToken, Task<T>> action,
+        CancellationToken cancellationToken)
     {
         var ownsTransaction = _dbContext.Database.CurrentTransaction is null;
         IDbContextTransaction? transaction = null;
@@ -34,6 +45,18 @@ public sealed class CampaignTransactionExecutor : ICampaignTransactionExecutor
 
         try
         {
+            if (advisoryLockKey is not null)
+            {
+                // pg_advisory_xact_lock is transaction-scoped: it blocks other sessions taking
+                // the same key until this transaction commits or rolls back, then auto-releases.
+                // Serializes the read-modify-write below across concurrent instances of this
+                // handler for the same campaign, closing the lost-update / TOCTOU window that
+                // xmin alone only detects after the fact.
+                await _dbContext.Database.ExecuteSqlInterpolatedAsync(
+                    $"SELECT pg_advisory_xact_lock({advisoryLockKey.Value})",
+                    cancellationToken);
+            }
+
             var result = await action(cancellationToken);
             var domainEvents = DomainEventAccessor.GetDomainEvents(_dbContext);
             var outboxMessages = domainEvents.Select(MapApplicationEvent).Where(message => message is not null).Cast<OutboxMessage>().ToArray();
@@ -52,6 +75,18 @@ public sealed class CampaignTransactionExecutor : ICampaignTransactionExecutor
             }
 
             return result;
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+            }
+
+            // Translated to an infrastructure-agnostic exception so application-layer handlers
+            // can catch and retry without taking a dependency on Entity Framework Core.
+            throw new ConcurrencyConflictException(
+                "The aggregate was modified by another transaction. Retry with a fresh read.", ex);
         }
         catch
         {

@@ -16,6 +16,7 @@ public sealed class CampaignsDbContext : DbContext
 
     public DbSet<Campaign> Campaigns => Set<Campaign>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+    public DbSet<ContributionLedgerEntry> ContributionLedgerEntries => Set<ContributionLedgerEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

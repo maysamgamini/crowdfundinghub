@@ -7,10 +7,18 @@ namespace CrowdFunding.UnitTests;
 internal sealed class FakeCampaignTransactionExecutor : ICampaignTransactionExecutor
 {
     public int InvocationCount { get; private set; }
+    public long? LastAdvisoryLockKey { get; private set; }
 
     public Task<T> ExecuteAsync<T>(Func<CancellationToken, Task<T>> action, CancellationToken cancellationToken)
     {
         InvocationCount++;
+        return action(cancellationToken);
+    }
+
+    public Task<T> ExecuteAsync<T>(long advisoryLockKey, Func<CancellationToken, Task<T>> action, CancellationToken cancellationToken)
+    {
+        InvocationCount++;
+        LastAdvisoryLockKey = advisoryLockKey;
         return action(cancellationToken);
     }
 }

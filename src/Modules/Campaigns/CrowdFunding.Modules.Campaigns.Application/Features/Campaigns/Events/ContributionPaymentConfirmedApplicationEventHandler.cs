@@ -22,6 +22,7 @@ public sealed class ContributionPaymentConfirmedApplicationEventHandler : IEvent
         await _commandDispatcher.SendAsync<AddContributionToCampaignResult>(
             new AddContributionToCampaignCommand(
                 notification.CampaignId,
+                notification.ContributionId,
                 notification.Amount,
                 notification.Currency),
             cancellationToken);
