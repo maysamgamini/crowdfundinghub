@@ -30,7 +30,7 @@ public static class AdminSeeder
         logger.LogInformation(
             result.WasNewlyCreated
                 ? "Created new Administrator account '{Email}' ({UserId})."
-                : "Granted Administrator to existing user '{Email}' ({UserId}).",
+                : "Ensured '{Email}' ({UserId}) has Administrator access — either already did, or was just promoted.",
             email, result.UserId);
     }
 }
