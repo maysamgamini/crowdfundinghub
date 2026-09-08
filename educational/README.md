@@ -57,6 +57,8 @@ This directory is organized into four thematic areas serving both as **teaching 
   *Architectural Pragmatism vs. Dogmatism.* Why homogeneous architecture is an anti-pattern. Demonstrates how to balance 4 distinct architectural patterns in the same application (Simple CRUD Minimal APIs, Fast-Path CQRS Read Slices, Rich DDD Financial Aggregates, and Debezium CDC Event Choreography).
 - **[`monolith-to-microservices-blueprint.md`](./01-architecture-paradigms/monolith-to-microservices-blueprint.md)**:  
   The 6 non-negotiable architectural prerequisites for zero-rewrite microservice extraction: Contract Assemblies, Schema Isolation, Zero Cross-Schema Foreign Keys, Transactional Outbox, Asymmetric JWKS Edge Verification, and NetArchTest Guardrails.
+- **[`justifying-the-outbox-and-complex-crud.md`](./01-architecture-paradigms/justifying-the-outbox-and-complex-crud.md)**:  
+  *Justifying the Outbox Pattern & Complex CRUD.* Why in-memory same-database writes don't need outboxes, but external I/O integrations (SendGrid email receipts, AWS Lambda / Cloud Function AI moderation, Stripe payment intents, and reward perk allocation) mathematically require the Outbox and rich aggregate invariants.
 
 ### [02. Gap Analysis & Architectural Trade-offs](./02-gap-analysis-and-tradeoffs/)
 - **[`over-engineering-audit.md`](./02-gap-analysis-and-tradeoffs/over-engineering-audit.md)**:  
