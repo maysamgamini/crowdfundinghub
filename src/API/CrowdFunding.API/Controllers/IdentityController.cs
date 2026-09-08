@@ -1,5 +1,6 @@
 using CrowdFunding.API.Contracts.Identity;
 using CrowdFunding.API.RateLimiting;
+using CrowdFunding.API.Validation;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.AssignRoleToUser;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.GrantPermissionToUser;
@@ -75,7 +76,13 @@ public sealed class IdentityController : ControllerBase
         }
 
         var result = await _commandDispatcher.SendAsync<RegisterUserResult>(command, cancellationToken);
-        return CreatedAtAction(nameof(Me), _mapper.Map<RegisterUserResponse>(result));
+
+        // Not CreatedAtAction(nameof(Me), ...): /me requires a Bearer token the caller doesn't
+        // have yet immediately after registering (registration returns only a UserId, not a
+        // token), so a client that follows the Location header per RFC 9110 §10.3.2 would get an
+        // unconditional 401. There's no anonymous-accessible single-user resource to point at
+        // instead, so this omits Location rather than pointing somewhere guaranteed to fail.
+        return StatusCode(StatusCodes.Status201Created, _mapper.Map<RegisterUserResponse>(result));
     }
 
     /// <summary>
@@ -140,7 +147,7 @@ public sealed class IdentityController : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<AssignRoleToUserResponse>> AssignRole(
-        Guid userId,
+        [FromRoute] Guid userId,
         [FromBody] AssignRoleToUserRequest request,
         CancellationToken cancellationToken)
     {
@@ -174,7 +181,7 @@ public sealed class IdentityController : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<GrantPermissionToUserResponse>> GrantPermission(
-        Guid userId,
+        [FromRoute] Guid userId,
         [FromBody] GrantPermissionToUserRequest request,
         CancellationToken cancellationToken)
     {

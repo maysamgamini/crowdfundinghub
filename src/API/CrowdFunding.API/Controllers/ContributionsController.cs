@@ -1,6 +1,7 @@
 using CrowdFunding.API.Contracts.Common;
 using CrowdFunding.API.Contracts.Contributions;
 using CrowdFunding.API.RateLimiting;
+using CrowdFunding.API.Validation;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Pagination;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.ConfirmContributionPayment;
@@ -61,7 +62,7 @@ public sealed class ContributionsController : ControllerBase
     [HttpGet]
     [ProducesResponseType(typeof(PagedResponse<ListContributionsResponse>), StatusCodes.Status200OK)]
     public async Task<ActionResult<PagedResponse<ListContributionsResponse>>> ListByCampaign(
-        Guid campaignId,
+        [FromRoute] Guid campaignId,
         [FromQuery] int? pageNumber,
         [FromQuery] int? pageSize,
         [FromQuery] Guid? contributorId,
@@ -106,7 +107,7 @@ public sealed class ContributionsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<MakeContributionResponse>> Create(
-        Guid campaignId,
+        [FromRoute] Guid campaignId,
         [FromBody] MakeContributionRequest request,
         CancellationToken cancellationToken)
     {
@@ -145,8 +146,8 @@ public sealed class ContributionsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ConfirmContributionPaymentResponse>> ConfirmPayment(
-        Guid campaignId,
-        Guid contributionId,
+        [FromRoute] Guid campaignId,
+        [FromRoute] Guid contributionId,
         [FromBody] ConfirmContributionPaymentRequest request,
         CancellationToken cancellationToken)
     {
@@ -183,8 +184,8 @@ public sealed class ContributionsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<FailContributionPaymentResponse>> FailPayment(
-        Guid campaignId,
-        Guid contributionId,
+        [FromRoute] Guid campaignId,
+        [FromRoute] Guid contributionId,
         [FromBody] FailContributionPaymentRequest request,
         CancellationToken cancellationToken)
     {

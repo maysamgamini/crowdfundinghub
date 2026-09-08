@@ -1,5 +1,6 @@
 using CrowdFunding.API.Contracts.Common;
 using CrowdFunding.API.Contracts.Campaigns;
+using CrowdFunding.API.Validation;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Pagination;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.CancelCampaign;
@@ -135,7 +136,7 @@ public sealed class CampaignsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<PublishCampaignResponse>> Publish(Guid id, CancellationToken cancellationToken)
+    public async Task<ActionResult<PublishCampaignResponse>> Publish([FromRoute] Guid id, CancellationToken cancellationToken)
     {
         var command = new PublishCampaignCommand(id);
         var validationResult = await _publishCampaignValidator.ValidateAsync(command, cancellationToken);
@@ -167,7 +168,7 @@ public sealed class CampaignsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<CancelCampaignResponse>> Cancel(Guid id, CancellationToken cancellationToken)
+    public async Task<ActionResult<CancelCampaignResponse>> Cancel([FromRoute] Guid id, CancellationToken cancellationToken)
     {
         var command = new CancelCampaignCommand(id);
         var validationResult = await _cancelCampaignValidator.ValidateAsync(command, cancellationToken);
@@ -192,25 +193,9 @@ public sealed class CampaignsController : ControllerBase
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(GetCampaignByIdResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<GetCampaignByIdResponse>> GetById(Guid id, CancellationToken cancellationToken)
+    public async Task<ActionResult<GetCampaignByIdResponse>> GetById([FromRoute] Guid id, CancellationToken cancellationToken)
     {
         var result = await _queryDispatcher.QueryAsync<GetCampaignByIdResult>(new GetCampaignByIdQuery(id), cancellationToken);
         return Ok(_mapper.Map<GetCampaignByIdResponse>(result));
-    }
-}
-
-/// <summary>
-/// Adds FluentValidation errors to ASP.NET Core model state.
-/// </summary>
-internal static class ValidationExtensions
-{
-    public static void AddToModelState(
-        this FluentValidation.Results.ValidationResult validationResult,
-        ModelStateDictionary modelState)
-    {
-        foreach (var error in validationResult.Errors)
-        {
-            modelState.AddModelError(error.PropertyName, error.ErrorMessage);
-        }
     }
 }

@@ -1,9 +1,13 @@
+using CrowdFunding.API.Contracts.Common;
 using CrowdFunding.API.Contracts.Moderation;
+using CrowdFunding.API.Validation;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
+using CrowdFunding.BuildingBlocks.Application.Pagination;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Commands.ApproveCampaignReview;
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Commands.RejectCampaignReview;
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Queries.GetCampaignReviewByCampaignId;
+using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Queries.ListCampaignReviews;
 using FluentValidation;
 using MapsterMapper;
 using Microsoft.AspNetCore.Authorization;
@@ -13,9 +17,12 @@ namespace CrowdFunding.API.Controllers;
 
 /// <summary>
 /// Exposes HTTP endpoints for Moderation: campaign compliance reviews, approvals, and rejection feedback.
+/// Routed under <c>api/moderation/reviews</c> — the review is the module's own resource, distinct
+/// from the campaign resource already owned by <see cref="CampaignsController"/>
+/// (QA TICKET-013 Issue B).
 /// </summary>
 [ApiController]
-[Route("api/moderation/campaigns")]
+[Route("api/moderation/reviews")]
 [Tags("Moderation")]
 public sealed class ModerationController : ControllerBase
 {
@@ -40,16 +47,58 @@ public sealed class ModerationController : ControllerBase
     }
 
     /// <summary>
+    /// Retrieves the moderation review queue, optionally filtered by status.
+    /// </summary>
+    /// <param name="status">Optional status filter (Pending, Approved, Rejected).</param>
+    /// <param name="pageNumber">The page number to retrieve (1-based, default: 1).</param>
+    /// <param name="pageSize">The number of items per page (default: 20).</param>
+    /// <param name="cancellationToken">Cancellation token for asynchronous operation.</param>
+    /// <response code="200">Returns the requested page of moderation reviews.</response>
+    /// <response code="401">Unauthorized if the request lacks a valid Bearer token.</response>
+    /// <response code="403">Forbidden if the caller lacks the 'moderation:review' permission.</response>
+    [Authorize(Policy = PermissionConstants.ModerationReview)]
+    [HttpGet]
+    [ProducesResponseType(typeof(PagedResponse<CampaignReviewResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<PagedResponse<CampaignReviewResponse>>> List(
+        [FromQuery] string? status,
+        [FromQuery] int? pageNumber,
+        [FromQuery] int? pageSize,
+        CancellationToken cancellationToken)
+    {
+        var pageRequest = PageRequest.Create(pageNumber, pageSize);
+        var result = await _queryDispatcher.QueryAsync<PagedResult<GetCampaignReviewByCampaignIdResult>>(
+            new ListCampaignReviewsQuery(pageRequest, status),
+            cancellationToken);
+
+        var items = result.Items.Select(x => _mapper.Map<CampaignReviewResponse>(x)).ToArray();
+        var response = new PagedResponse<CampaignReviewResponse>(
+            items,
+            result.PageNumber,
+            result.PageSize,
+            result.TotalCount,
+            result.TotalPages);
+
+        return Ok(response);
+    }
+
+    /// <summary>
     /// Retrieves moderation review details for a specific campaign.
     /// </summary>
     /// <param name="campaignId">The unique identifier of the campaign.</param>
     /// <param name="cancellationToken">Cancellation token for asynchronous operation.</param>
     /// <response code="200">Returns moderation review details including review status and notes.</response>
+    /// <response code="401">Unauthorized if the request lacks a valid Bearer token.</response>
+    /// <response code="403">Forbidden if the caller lacks the 'moderation:review' permission.</response>
     /// <response code="404">Campaign review not found.</response>
+    [Authorize(Policy = PermissionConstants.ModerationReview)]
     [HttpGet("{campaignId:guid}")]
     [ProducesResponseType(typeof(CampaignReviewResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<CampaignReviewResponse>> GetByCampaignId(Guid campaignId, CancellationToken cancellationToken)
+    public async Task<ActionResult<CampaignReviewResponse>> GetByCampaignId([FromRoute] Guid campaignId, CancellationToken cancellationToken)
     {
         var result = await _queryDispatcher.QueryAsync<GetCampaignReviewByCampaignIdResult>(
             new GetCampaignReviewByCampaignIdQuery(campaignId),
@@ -77,7 +126,7 @@ public sealed class ModerationController : ControllerBase
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<CampaignReviewResponse>> Approve(
-        Guid campaignId,
+        [FromRoute] Guid campaignId,
         [FromBody] ReviewCampaignRequest request,
         CancellationToken cancellationToken)
     {
@@ -118,7 +167,7 @@ public sealed class ModerationController : ControllerBase
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<CampaignReviewResponse>> Reject(
-        Guid campaignId,
+        [FromRoute] Guid campaignId,
         [FromBody] ReviewCampaignRequest request,
         CancellationToken cancellationToken)
     {

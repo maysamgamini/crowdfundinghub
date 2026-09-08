@@ -1,5 +1,7 @@
-﻿using CrowdFunding.Modules.Moderation.Application.Abstractions.Services;
+using CrowdFunding.BuildingBlocks.Application.Pagination;
+using CrowdFunding.Modules.Moderation.Application.Abstractions.Services;
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Queries.GetCampaignReviewByCampaignId;
+using CrowdFunding.Modules.Moderation.Domain.Enums;
 using CrowdFunding.Modules.Moderation.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore;
 
@@ -32,5 +34,47 @@ public sealed class CampaignReviewReadService : ICampaignReviewReadService
                 x.CreatedAtUtc,
                 x.ReviewedAtUtc))
             .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<PagedResult<GetCampaignReviewByCampaignIdResult>> ListAsync(
+        PageRequest pageRequest,
+        string? status,
+        CancellationToken cancellationToken)
+    {
+        var query = _dbContext.CampaignReviews.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            if (Enum.TryParse<CampaignReviewStatus>(status, true, out var parsedStatus))
+            {
+                query = query.Where(x => x.Status == parsedStatus);
+            }
+            else
+            {
+                query = query.Where(_ => false);
+            }
+        }
+
+        query = query.OrderBy(x => x.CreatedAtUtc);
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .Skip(pageRequest.Skip)
+            .Take(pageRequest.PageSize)
+            .Select(x => new GetCampaignReviewByCampaignIdResult(
+                x.CampaignId,
+                x.Status.ToString(),
+                x.ModeratorId,
+                x.Notes,
+                x.CreatedAtUtc,
+                x.ReviewedAtUtc))
+            .ToListAsync(cancellationToken);
+
+        return new PagedResult<GetCampaignReviewByCampaignIdResult>(
+            items,
+            pageRequest.PageNumber,
+            pageRequest.PageSize,
+            totalCount);
     }
 }

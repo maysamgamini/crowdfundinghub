@@ -104,9 +104,10 @@ public sealed class SwaggerDocumentationTests
         Assert.True(paths.ContainsKey("/api/campaigns/{campaignId}/Contributions/{contributionId}/confirm-payment"));
         Assert.True(paths.ContainsKey("/api/campaigns/{campaignId}/Contributions/{contributionId}/fail-payment"));
 
-        Assert.True(paths.ContainsKey("/api/moderation/campaigns/{campaignId}"));
-        Assert.True(paths.ContainsKey("/api/moderation/campaigns/{campaignId}/approve"));
-        Assert.True(paths.ContainsKey("/api/moderation/campaigns/{campaignId}/reject"));
+        Assert.True(paths.ContainsKey("/api/moderation/reviews"));
+        Assert.True(paths.ContainsKey("/api/moderation/reviews/{campaignId}"));
+        Assert.True(paths.ContainsKey("/api/moderation/reviews/{campaignId}/approve"));
+        Assert.True(paths.ContainsKey("/api/moderation/reviews/{campaignId}/reject"));
     }
 
     [Fact]

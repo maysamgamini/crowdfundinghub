@@ -1,4 +1,5 @@
 using CrowdFunding.BuildingBlocks.Application.Messaging;
+using CrowdFunding.BuildingBlocks.Application.Pagination;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignCreated;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Persistence;
@@ -9,6 +10,7 @@ using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Comma
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Events;
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Queries.GetCampaignReviewByCampaignId;
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Queries.GetCampaignReviewStatusByCampaignId;
+using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Queries.ListCampaignReviews;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
 using CrowdFunding.Modules.Moderation.Contracts.Queries.GetCampaignReviewStatusByCampaignId;
 using CrowdFunding.Modules.Moderation.Domain.Aggregates;
@@ -340,6 +342,30 @@ public sealed class GetCampaignReviewByCampaignIdQueryHandlerTests
     }
 }
 
+public sealed class ListCampaignReviewsQueryHandlerTests
+{
+    [Fact]
+    public async Task Handle_ShouldReturnPagedReviewsFromReadService()
+    {
+        var expected = new GetCampaignReviewByCampaignIdResult(
+            Guid.NewGuid(),
+            "Pending",
+            null,
+            null,
+            new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc),
+            null);
+
+        var handler = new ListCampaignReviewsQueryHandler(new FakeCampaignReviewReadService(expected));
+
+        var result = await handler.Handle(
+            new ListCampaignReviewsQuery(new PageRequest(1, 20), "Pending"),
+            CancellationToken.None);
+
+        Assert.Single(result.Items);
+        Assert.Equal(expected, result.Items.Single());
+    }
+}
+
 public sealed class GetCampaignReviewStatusByCampaignIdQueryHandlerTests
 {
     [Fact]
@@ -472,6 +498,19 @@ internal sealed class FakeCampaignReviewReadService : ICampaignReviewReadService
     {
         ReceivedCampaignId = campaignId;
         return Task.FromResult(_result);
+    }
+
+    public Task<PagedResult<GetCampaignReviewByCampaignIdResult>> ListAsync(
+        PageRequest pageRequest,
+        string? status,
+        CancellationToken cancellationToken)
+    {
+        var items = _result is null
+            ? Array.Empty<GetCampaignReviewByCampaignIdResult>()
+            : [_result];
+
+        return Task.FromResult(new PagedResult<GetCampaignReviewByCampaignIdResult>(
+            items, pageRequest.PageNumber, pageRequest.PageSize, items.Length));
     }
 }
 
