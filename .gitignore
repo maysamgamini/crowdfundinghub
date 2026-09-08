@@ -22,6 +22,9 @@ obj/
 TestResults/
 coverage/
 
+# Serilog file sink output
+logs/
+
 # Tooling caches
 _ReSharper*/
 *.[Rr]e[Ss]harper

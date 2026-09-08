@@ -25,7 +25,8 @@ public static class ModerationInfrastructureDependencyInjection
                                ?? throw new InvalidOperationException("Connection string 'DefaultConnection' was not found.");
 
         services.AddDbContext<ModerationDbContext>(options =>
-            options.UseNpgsql(connectionString));
+            options.UseNpgsql(connectionString, npgsql =>
+                npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "moderation")));
 
         services.AddScoped<ICampaignReviewStatusReader, CampaignReviewStatusReader>();
         services.AddScoped<ICampaignReviewRepository, CampaignReviewRepository>();

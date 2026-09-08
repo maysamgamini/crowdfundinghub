@@ -25,7 +25,8 @@ public static class CampaignsInfrastructureDependencyInjection
                                ?? throw new InvalidOperationException("Connection string 'DefaultConnection' was not found.");
 
         services.AddDbContext<CampaignsDbContext>(options =>
-            options.UseNpgsql(connectionString));
+            options.UseNpgsql(connectionString, npgsql =>
+                npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "campaigns")));
 
         services.AddScoped<ICampaignContributionAvailabilityReader, CampaignContributionAvailabilityReader>();
         services.AddScoped<ICampaignRepository, CampaignRepository>();

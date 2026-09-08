@@ -24,7 +24,8 @@ public static class ContributionsInfrastructureDependencyInjection
                                ?? throw new InvalidOperationException("Connection string 'DefaultConnection' was not found.");
 
         services.AddDbContext<ContributionsDbContext>(options =>
-            options.UseNpgsql(connectionString));
+            options.UseNpgsql(connectionString, npgsql =>
+                npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "contributions")));
 
         services.AddScoped<IContributionRepository, ContributionRepository>();
         services.AddScoped<IContributionReadService, ContributionReadService>();

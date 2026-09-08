@@ -22,7 +22,8 @@ public static class IdentityInfrastructureDependencyInjection
                                ?? throw new InvalidOperationException("Connection string 'DefaultConnection' was not found.");
 
         services.AddDbContext<IdentityDbContext>(options =>
-            options.UseNpgsql(connectionString));
+            options.UseNpgsql(connectionString, npgsql =>
+                npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "identity")));
 
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IAccessTokenProvider, JwtAccessTokenProvider>();
