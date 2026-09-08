@@ -8,6 +8,7 @@ using CrowdFunding.BuildingBlocks.Application.Events;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.BuildingBlocks.Infrastructure.Events;
+using CrowdFunding.BuildingBlocks.Infrastructure.Metering;
 using CrowdFunding.Modules.CampaignUpdates.Application.DependencyInjection;
 using CrowdFunding.Modules.Campaigns.Application.DependencyInjection;
 using CrowdFunding.Modules.Campaigns.Infrastructure.DependencyInjection;
@@ -53,6 +54,8 @@ builder.Services.AddHealthChecks()
     .AddCheck<DbContextHealthCheck<ContributionsDbContext>>("contributions-db", tags: ["ready"])
     .AddCheck<DbContextHealthCheck<IdentityDbContext>>("identity-db", tags: ["ready"])
     .AddCheck<DbContextHealthCheck<ModerationDbContext>>("moderation-db", tags: ["ready"]);
+
+builder.Services.AddOpenMeterMetering(builder.Configuration);
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
