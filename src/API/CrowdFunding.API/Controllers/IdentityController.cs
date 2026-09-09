@@ -3,6 +3,7 @@ using CrowdFunding.API.RateLimiting;
 using CrowdFunding.API.Validation;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.AssignRoleToUser;
+using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.DeactivateUser;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.GrantPermissionToUser;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.LoginUser;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.Logout;
@@ -35,6 +36,7 @@ public sealed class IdentityController : ControllerBase
     private readonly IValidator<RegisterUserCommand> _registerValidator;
     private readonly IValidator<RefreshAccessTokenCommand> _refreshValidator;
     private readonly IValidator<LogoutCommand> _logoutValidator;
+    private readonly IValidator<DeactivateUserCommand> _deactivateUserValidator;
 
     public IdentityController(
         ICommandDispatcher commandDispatcher,
@@ -45,7 +47,8 @@ public sealed class IdentityController : ControllerBase
         IValidator<LoginUserCommand> loginValidator,
         IValidator<RegisterUserCommand> registerValidator,
         IValidator<RefreshAccessTokenCommand> refreshValidator,
-        IValidator<LogoutCommand> logoutValidator)
+        IValidator<LogoutCommand> logoutValidator,
+        IValidator<DeactivateUserCommand> deactivateUserValidator)
     {
         _commandDispatcher = commandDispatcher;
         _queryDispatcher = queryDispatcher;
@@ -56,6 +59,7 @@ public sealed class IdentityController : ControllerBase
         _registerValidator = registerValidator;
         _refreshValidator = refreshValidator;
         _logoutValidator = logoutValidator;
+        _deactivateUserValidator = deactivateUserValidator;
     }
 
     /// <summary>
@@ -271,5 +275,40 @@ public sealed class IdentityController : ControllerBase
 
         var result = await _commandDispatcher.SendAsync<GrantPermissionToUserResult>(command, cancellationToken);
         return Ok(_mapper.Map<GrantPermissionToUserResponse>(result));
+    }
+
+    /// <summary>
+    /// Deactivates a user account — an administrative action to suspend a fraudulent creator,
+    /// ban an abusive account, or terminate access for a compromised account. Immediately
+    /// invalidates every access token already issued to the user (via the security stamp
+    /// revocation blacklist) and revokes all of their active refresh tokens.
+    /// </summary>
+    /// <param name="userId">The unique identifier of the user to deactivate.</param>
+    /// <param name="cancellationToken">Cancellation token for asynchronous operation.</param>
+    /// <response code="200">User deactivated and all active sessions revoked.</response>
+    /// <response code="401">Unauthorized if the request lacks a valid Bearer token.</response>
+    /// <response code="403">Forbidden if the caller lacks the 'users:manage' permission.</response>
+    /// <response code="404">User not found.</response>
+    [Authorize(Policy = PermissionConstants.UsersManage)]
+    [HttpPost("users/{userId:guid}/deactivate")]
+    [ProducesResponseType(typeof(DeactivateUserResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<DeactivateUserResponse>> Deactivate(
+        [FromRoute] Guid userId,
+        CancellationToken cancellationToken)
+    {
+        var command = new DeactivateUserCommand(userId);
+        var validationResult = await _deactivateUserValidator.ValidateAsync(command, cancellationToken);
+
+        if (!validationResult.IsValid)
+        {
+            validationResult.AddToModelState(ModelState);
+            return ValidationProblem(ModelState);
+        }
+
+        var result = await _commandDispatcher.SendAsync<DeactivateUserResult>(command, cancellationToken);
+        return Ok(_mapper.Map<DeactivateUserResponse>(result));
     }
 }

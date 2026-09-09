@@ -1,5 +1,6 @@
 using CrowdFunding.API.Contracts.Identity;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.AssignRoleToUser;
+using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.DeactivateUser;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.GrantPermissionToUser;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.LoginUser;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.Logout;
@@ -31,5 +32,6 @@ public static class IdentityMappingConfig
         config.NewConfig<AssignRoleToUserResult, AssignRoleToUserResponse>();
         config.NewConfig<GrantPermissionToUserResult, GrantPermissionToUserResponse>();
         config.NewConfig<GetCurrentUserResult, CurrentUserResponse>();
+        config.NewConfig<DeactivateUserResult, DeactivateUserResponse>();
     }
 }

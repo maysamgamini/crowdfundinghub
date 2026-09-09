@@ -31,8 +31,11 @@ public static class CampaignUpdatesInfrastructureDependencyInjection
         services.AddSingleton<ICampaignUpdatesDateTimeProvider, SystemDateTimeProvider>();
 
         // A named client rather than a typed client: the dispatcher calls whatever URL each
-        // subscription holds, not one fixed base address.
-        services.AddHttpClient(nameof(WebhookDispatcherBackgroundService));
+        // subscription holds, not one fixed base address. The custom primary handler blocks
+        // redirect-based and DNS-rebinding SSRF at dispatch time — see
+        // SsrfSafeHttpMessageHandlerFactory (TICKET-050).
+        services.AddHttpClient(nameof(WebhookDispatcherBackgroundService))
+            .ConfigurePrimaryHttpMessageHandler(SsrfSafeHttpMessageHandlerFactory.Create);
         services.AddSingleton<WebhookDispatcherBackgroundService>();
         services.AddHostedService(sp => sp.GetRequiredService<WebhookDispatcherBackgroundService>());
 

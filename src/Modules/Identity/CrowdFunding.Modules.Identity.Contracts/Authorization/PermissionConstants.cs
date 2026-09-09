@@ -14,6 +14,7 @@ public static class PermissionConstants
     public const string ModerationReview = "moderation.review";
     public const string IdentityRolesAssign = "identity.roles.assign";
     public const string IdentityPermissionsGrant = "identity.permissions.grant";
+    public const string UsersManage = "users.manage";
 
     public static readonly IReadOnlyCollection<string> All =
     [
@@ -25,6 +26,7 @@ public static class PermissionConstants
         CampaignsManageAny,
         ModerationReview,
         IdentityRolesAssign,
-        IdentityPermissionsGrant
+        IdentityPermissionsGrant,
+        UsersManage
     ];
 }

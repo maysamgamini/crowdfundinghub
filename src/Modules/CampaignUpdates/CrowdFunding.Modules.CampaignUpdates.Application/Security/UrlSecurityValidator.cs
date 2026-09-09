@@ -33,7 +33,14 @@ public static class UrlSecurityValidator
         return addresses.Length > 0 && addresses.All(address => !IsPrivateOrLinkLocal(address));
     }
 
-    private static bool IsPrivateOrLinkLocal(IPAddress address)
+    /// <summary>
+    /// Whether <paramref name="address"/> falls in a loopback, RFC 1918 private, or link-local
+    /// (including the cloud metadata range) block. Exposed publicly so the dispatcher's
+    /// connect-time check — <c>WebhookDispatcherHttpHandlerFactory</c> — can re-run the exact
+    /// same test against the IP actually resolved at TCP-connect time, not just the IP resolved
+    /// once at registration time (DNS rebinding — TICKET-050).
+    /// </summary>
+    public static bool IsPrivateOrLinkLocal(IPAddress address)
     {
         if (IPAddress.IsLoopback(address))
         {
