@@ -44,20 +44,24 @@ public sealed class CampaignTerminationRefundHandler :
 
     private async Task RefundAllSucceededContributionsAsync(Guid campaignId, CancellationToken cancellationToken)
     {
-        var succeededContributions = await _contributionRepository.GetSucceededByCampaignIdAsync(campaignId, cancellationToken);
+        const int batchSize = 100;
 
-        if (succeededContributions.Count == 0)
+        while (!cancellationToken.IsCancellationRequested)
         {
-            return;
-        }
-
-        await _transactionExecutor.ExecuteAsync(async ct =>
-        {
-            foreach (var contribution in succeededContributions)
+            var batch = await _contributionRepository.GetSucceededBatchByCampaignIdAsync(campaignId, batchSize, cancellationToken);
+            if (batch.Count == 0)
             {
-                contribution.Refund(_dateTimeProvider.UtcNow);
-                await _contributionRepository.UpdateAsync(contribution, ct);
+                break;
             }
-        }, cancellationToken);
+
+            await _transactionExecutor.ExecuteAsync(async ct =>
+            {
+                foreach (var contribution in batch)
+                {
+                    contribution.Refund(_dateTimeProvider.UtcNow);
+                    await _contributionRepository.UpdateAsync(contribution, ct);
+                }
+            }, cancellationToken);
+        }
     }
 }

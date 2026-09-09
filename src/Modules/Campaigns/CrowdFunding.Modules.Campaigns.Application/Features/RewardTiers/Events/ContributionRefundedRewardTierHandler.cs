@@ -8,28 +8,26 @@ using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionRefunded;
 namespace CrowdFunding.Modules.Campaigns.Application.Features.RewardTiers.Events;
 
 /// <summary>
-/// Handles <see cref="ContributionRefundedApplicationEvent"/> to reverse reward tier claims
-/// when a contribution is refunded during campaign failure or cancellation (TICKET-051).
-/// Completes the compensation saga for campaign cancellations and failures by ensuring
-/// reward tier claimed counts are decremented and capacity is restored.
+/// Reclaims confirmed reward tier claims when a contribution is refunded as part of the campaign
+/// failure or cancellation saga (TICKET-051). Decrements <see cref="RewardTier.ClaimedCount"/> and
+/// transitions the reservation to Released.
 /// </summary>
 public sealed class ContributionRefundedRewardTierHandler : IEventHandler<ContributionRefundedApplicationEvent>
 {
-    private readonly IRewardTierReservationRepository _reservationRepository;
     private readonly IRewardTierRepository _rewardTierRepository;
+    private readonly IRewardTierReservationRepository _reservationRepository;
     private readonly ICampaignTransactionExecutor _transactionExecutor;
 
     public ContributionRefundedRewardTierHandler(
-        IRewardTierReservationRepository reservationRepository,
         IRewardTierRepository rewardTierRepository,
+        IRewardTierReservationRepository reservationRepository,
         ICampaignTransactionExecutor transactionExecutor)
     {
-        _reservationRepository = reservationRepository;
         _rewardTierRepository = rewardTierRepository;
+        _reservationRepository = reservationRepository;
         _transactionExecutor = transactionExecutor;
     }
 
-    /// <inheritdoc/>
     public async Task Handle(ContributionRefundedApplicationEvent notification, CancellationToken cancellationToken)
     {
         if (notification.RewardTierReservationId is null)
@@ -39,8 +37,6 @@ public sealed class ContributionRefundedRewardTierHandler : IEventHandler<Contri
 
         var reservationId = notification.RewardTierReservationId.Value;
         var probe = await _reservationRepository.GetByIdAsync(reservationId, cancellationToken);
-
-        // If probe is null or not in Confirmed status (e.g. already Released/Refunded), return idempotently
         if (probe is null || probe.Status != RewardTierReservationStatus.Confirmed)
         {
             return;
@@ -53,17 +49,17 @@ public sealed class ContributionRefundedRewardTierHandler : IEventHandler<Contri
             var freshReservation = await _reservationRepository.GetByIdAsync(reservationId, ct);
             if (freshReservation is null || freshReservation.Status != RewardTierReservationStatus.Confirmed)
             {
-                // Idempotent: already refunded or released
                 return;
             }
 
-            var rewardTier = await _rewardTierRepository.GetByIdAsync(freshReservation.RewardTierId, ct)
-                ?? throw new KeyNotFoundException($"Reward tier '{freshReservation.RewardTierId}' was not found.");
+            var rewardTier = await _rewardTierRepository.GetByIdAsync(freshReservation.RewardTierId, ct);
+            if (rewardTier is not null)
+            {
+                rewardTier.ReleaseClaim();
+                await _rewardTierRepository.UpdateAsync(rewardTier, ct);
+            }
 
             freshReservation.Refund();
-            rewardTier.ReleaseClaim();
-
-            await _rewardTierRepository.UpdateAsync(rewardTier, ct);
             await _reservationRepository.UpdateAsync(freshReservation, ct);
         }, cancellationToken);
     }

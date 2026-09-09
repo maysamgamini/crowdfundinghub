@@ -3,6 +3,7 @@ using System;
 using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CrowdFunding.Modules.Contributions.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(ContributionsDbContext))]
-    partial class ContributionsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260909180000_AddActiveCampaignCacheOwnerId")]
+    partial class AddActiveCampaignCacheOwnerId
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -55,7 +58,7 @@ namespace CrowdFunding.Modules.Contributions.Infrastructure.Persistence.Migratio
 
                     b.HasIndex("SourceEventId");
 
-                    b.ToTable("contributions_dead_letter_events", (string)null);
+                    b.ToTable("dead_letter_events", (string)null);
                 });
 
             modelBuilder.Entity("CrowdFunding.BuildingBlocks.Infrastructure.Persistence.OutboxMessage", b =>
@@ -64,32 +67,14 @@ namespace CrowdFunding.Modules.Contributions.Infrastructure.Persistence.Migratio
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<int>("Attempts")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
-
                     b.Property<string>("Error")
-                        .HasMaxLength(4000)
-                        .HasColumnType("character varying(4000)");
-
-                    b.Property<string>("EventType")
-                        .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
 
                     b.Property<string>("Headers")
                         .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("{}");
-
-                    b.Property<string>("LockedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<DateTime?>("LockedUntilUtc")
-                        .HasColumnType("timestamp with time zone");
+                        .HasMaxLength(4096)
+                        .HasColumnType("character varying(4096)");
 
                     b.Property<DateTime>("OccurredOnUtc")
                         .HasColumnType("timestamp with time zone");
@@ -101,27 +86,27 @@ namespace CrowdFunding.Modules.Contributions.Infrastructure.Persistence.Migratio
                     b.Property<DateTime?>("ProcessedOnUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTime>("ScheduledAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("Status")
+                    b.Property<int>("RetryCount")
                         .HasColumnType("integer");
 
-                    b.Property<int>("Version")
-                        .HasColumnType("integer");
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ScheduledAtUtc", "Id")
-                        .HasDatabaseName("ix_contributions_outbox_messages_pending")
-                        .HasFilter("\"Status\" = 0");
+                    b.HasIndex("OccurredOnUtc");
 
-                    b.ToTable("contributions_outbox_messages", (string)null);
+                    b.HasIndex("ProcessedOnUtc");
+
+                    b.ToTable("outbox_messages", (string)null);
                 });
 
             modelBuilder.Entity("CrowdFunding.Modules.Contributions.Domain.Aggregates.Contribution", b =>
                 {
                     b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("CampaignId")
@@ -141,10 +126,6 @@ namespace CrowdFunding.Modules.Contributions.Infrastructure.Persistence.Migratio
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
-                    b.Property<string>("PaymentGateway")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
                     b.Property<string>("PaymentReference")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
@@ -155,12 +136,10 @@ namespace CrowdFunding.Modules.Contributions.Infrastructure.Persistence.Migratio
                     b.Property<Guid?>("RewardTierReservationId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
 
-                    b.Property<uint>("xmin")
+                    b.Property<uint>("Version")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("xid")

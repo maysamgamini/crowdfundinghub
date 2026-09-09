@@ -89,6 +89,46 @@ public sealed class ContributionDomainTests
         Assert.Equal("Card declined.", contribution.FailureReason);
         Assert.Null(contribution.PaymentReference);
         Assert.NotNull(contribution.ProcessedAtUtc);
+        Assert.Contains(contribution.DomainEvents, e => e is ContributionPaymentFailedDomainEvent);
+    }
+
+    [Fact]
+    public void FailPayment_WithRewardTierReservation_ShouldEmitDomainEventWithReservationId()
+    {
+        var reservationId = Guid.NewGuid();
+        var contribution = Contribution.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            50m,
+            "USD",
+            new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc),
+            rewardTierReservationId: reservationId);
+
+        contribution.FailPayment("Card declined.", new DateTime(2026, 4, 6, 12, 15, 0, DateTimeKind.Utc));
+
+        Assert.Equal(ContributionStatus.Failed, contribution.Status);
+        var evt = Assert.Single(contribution.DomainEvents.OfType<ContributionPaymentFailedDomainEvent>());
+        Assert.Equal(reservationId, evt.RewardTierReservationId);
+    }
+
+    [Fact]
+    public void Refund_WithRewardTierReservation_ShouldEmitDomainEventWithReservationId()
+    {
+        var reservationId = Guid.NewGuid();
+        var contribution = Contribution.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            50m,
+            "USD",
+            new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc),
+            rewardTierReservationId: reservationId);
+        contribution.ConfirmPayment("REF-1", DateTime.UtcNow);
+
+        contribution.Refund(DateTime.UtcNow);
+
+        Assert.Equal(ContributionStatus.Refunded, contribution.Status);
+        var evt = Assert.Single(contribution.DomainEvents.OfType<ContributionRefundedDomainEvent>());
+        Assert.Equal(reservationId, evt.RewardTierReservationId);
     }
 
     [Fact]
@@ -423,6 +463,34 @@ public sealed class MakeContributionCommandHandlerTests
         // which would permanently dead-letter the outbox message with no way to credit the
         // campaign without manual intervention.
         Assert.Equal("Contribution currency 'EUR' does not match campaign currency 'USD'.", exception.Message);
+        Assert.Equal(0, transactionExecutor.InvocationCount);
+        Assert.Null(repository.SavedContribution);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldThrow_WhenCreatorPledgesToOwnCampaign()
+    {
+        var campaignId = Guid.NewGuid();
+        var creatorUserId = Guid.NewGuid();
+        var transactionExecutor = new FakeContributionTransactionExecutor();
+        var repository = new FakeContributionRepository();
+        var handler = new MakeContributionCommandHandler(
+            new FakeActiveCampaignCacheRepository(exists: true, isActive: true, currency: "USD", ownerId: creatorUserId),
+            new TestCurrentUser
+            {
+                UserId = creatorUserId,
+                Permissions = [PermissionConstants.CampaignsContribute]
+            },
+            new FakeContributionDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
+            repository,
+            transactionExecutor);
+
+        var action = async () => await handler.Handle(
+            new MakeContributionCommand(campaignId, 100m, "USD"),
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(action);
+        Assert.Equal("Campaign creators cannot back or contribute to their own campaigns.", exception.Message);
         Assert.Equal(0, transactionExecutor.InvocationCount);
         Assert.Null(repository.SavedContribution);
     }
@@ -782,6 +850,34 @@ public sealed class CampaignTerminationRefundHandlerTests
         Assert.Equal(ContributionStatus.Refunded, contribution.Status);
         Assert.Equal(1, transactionExecutor.InvocationCount);
     }
+
+    [Fact]
+    public async Task Handle_WithLargeNumberOfContributions_ShouldRefundInBatches()
+    {
+        var campaignId = Guid.NewGuid();
+        var contributions = new List<Contribution>();
+        for (int i = 0; i < 250; i++)
+        {
+            var c = Contribution.Create(campaignId, Guid.NewGuid(), 10m, "USD", DateTime.UtcNow);
+            c.ConfirmPayment($"PAY-{i}", DateTime.UtcNow);
+            contributions.Add(c);
+        }
+
+        var repository = new FakeRefundableContributionRepository(contributions);
+        var transactionExecutor = new FakeContributionTransactionExecutor();
+        var handler = new CampaignTerminationRefundHandler(
+            repository,
+            transactionExecutor,
+            new FakeContributionDateTimeProvider(new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc)));
+
+        await handler.Handle(
+            new CampaignFailedApplicationEvent(campaignId, Guid.NewGuid(), 2500m, 5000m, "USD", DateTime.UtcNow),
+            CancellationToken.None);
+
+        Assert.All(contributions, c => Assert.Equal(ContributionStatus.Refunded, c.Status));
+        // 250 contributions at batch size 100 = 3 separate transactions
+        Assert.Equal(3, transactionExecutor.InvocationCount);
+    }
 }
 
 internal sealed class FakeRefundableContributionRepository : IContributionRepository
@@ -808,6 +904,12 @@ internal sealed class FakeRefundableContributionRepository : IContributionReposi
     public Task<IReadOnlyList<Contribution>> GetSucceededByCampaignIdAsync(Guid campaignId, CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<Contribution>>(_contributions
             .Where(x => x.CampaignId == campaignId && x.Status == ContributionStatus.Succeeded)
+            .ToList());
+
+    public Task<IReadOnlyList<Contribution>> GetSucceededBatchByCampaignIdAsync(Guid campaignId, int batchSize, CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<Contribution>>(_contributions
+            .Where(x => x.CampaignId == campaignId && x.Status == ContributionStatus.Succeeded)
+            .Take(batchSize)
             .ToList());
 }
 
@@ -988,6 +1090,9 @@ internal sealed class FakeContributionRepository : IContributionRepository
 
     public Task<IReadOnlyList<Contribution>> GetSucceededByCampaignIdAsync(Guid campaignId, CancellationToken cancellationToken)
         => throw new NotSupportedException("Not used by these tests.");
+
+    public Task<IReadOnlyList<Contribution>> GetSucceededBatchByCampaignIdAsync(Guid campaignId, int batchSize, CancellationToken cancellationToken)
+        => throw new NotSupportedException("Not used by these tests.");
 }
 
 internal sealed class FakeActiveCampaignCacheRepository : IActiveCampaignCacheRepository
@@ -996,13 +1101,15 @@ internal sealed class FakeActiveCampaignCacheRepository : IActiveCampaignCacheRe
     private readonly bool _isActive;
     private readonly string _currency;
     private readonly DateTime _deadlineUtc;
+    private readonly Guid _ownerId;
 
-    public FakeActiveCampaignCacheRepository(bool exists, bool isActive, string currency = "USD", DateTime? deadlineUtc = null)
+    public FakeActiveCampaignCacheRepository(bool exists, bool isActive, string currency = "USD", DateTime? deadlineUtc = null, Guid? ownerId = null)
     {
         _exists = exists;
         _isActive = isActive;
         _currency = currency;
         _deadlineUtc = deadlineUtc ?? DateTime.MaxValue.AddDays(-1);
+        _ownerId = ownerId ?? Guid.NewGuid();
     }
 
     public Guid? CheckedCampaignId { get; private set; }
@@ -1011,11 +1118,11 @@ internal sealed class FakeActiveCampaignCacheRepository : IActiveCampaignCacheRe
     {
         CheckedCampaignId = campaignId;
         return Task.FromResult(_exists
-            ? new ActiveCampaignSnapshot(campaignId, _currency, _isActive, _deadlineUtc)
+            ? new ActiveCampaignSnapshot(campaignId, _ownerId, _currency, _isActive, _deadlineUtc)
             : null);
     }
 
-    public Task UpsertAsync(Guid campaignId, string title, string currency, bool isActive, DateTime deadlineUtc, DateTime updatedAtUtc, CancellationToken cancellationToken)
+    public Task UpsertAsync(Guid campaignId, Guid ownerId, string title, string currency, bool isActive, DateTime deadlineUtc, DateTime updatedAtUtc, CancellationToken cancellationToken)
         => throw new NotSupportedException("Not used by these tests.");
 
     public Task SetActiveStatusAsync(Guid campaignId, bool isActive, DateTime updatedAtUtc, CancellationToken cancellationToken)

@@ -8,26 +8,25 @@ using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPaymentFai
 namespace CrowdFunding.Modules.Campaigns.Application.Features.RewardTiers.Events;
 
 /// <summary>
-/// Handles <see cref="ContributionPaymentFailedApplicationEvent"/> to immediately release
-/// reserved reward tier inventory when payment fails, eliminating the 15-minute lockout (TICKET-052).
+/// Immediately releases a held reward tier reservation when payment fails (card declined, fraud check failure)
+/// rather than waiting for the 15-minute scavenger sweep, closing the denial-of-inventory window (TICKET-052).
 /// </summary>
 public sealed class ContributionPaymentFailedRewardTierHandler : IEventHandler<ContributionPaymentFailedApplicationEvent>
 {
-    private readonly IRewardTierReservationRepository _reservationRepository;
     private readonly IRewardTierRepository _rewardTierRepository;
+    private readonly IRewardTierReservationRepository _reservationRepository;
     private readonly ICampaignTransactionExecutor _transactionExecutor;
 
     public ContributionPaymentFailedRewardTierHandler(
-        IRewardTierReservationRepository reservationRepository,
         IRewardTierRepository rewardTierRepository,
+        IRewardTierReservationRepository reservationRepository,
         ICampaignTransactionExecutor transactionExecutor)
     {
-        _reservationRepository = reservationRepository;
         _rewardTierRepository = rewardTierRepository;
+        _reservationRepository = reservationRepository;
         _transactionExecutor = transactionExecutor;
     }
 
-    /// <inheritdoc/>
     public async Task Handle(ContributionPaymentFailedApplicationEvent notification, CancellationToken cancellationToken)
     {
         if (notification.RewardTierReservationId is null)
@@ -37,10 +36,8 @@ public sealed class ContributionPaymentFailedRewardTierHandler : IEventHandler<C
 
         var reservationId = notification.RewardTierReservationId.Value;
         var probe = await _reservationRepository.GetByIdAsync(reservationId, cancellationToken);
-
         if (probe is null || probe.Status != RewardTierReservationStatus.Reserved)
         {
-            // Already released (e.g. by scavenger) or confirmed: nothing to release
             return;
         }
 
@@ -54,13 +51,14 @@ public sealed class ContributionPaymentFailedRewardTierHandler : IEventHandler<C
                 return;
             }
 
-            var rewardTier = await _rewardTierRepository.GetByIdAsync(freshReservation.RewardTierId, ct)
-                ?? throw new KeyNotFoundException($"Reward tier '{freshReservation.RewardTierId}' was not found.");
+            var rewardTier = await _rewardTierRepository.GetByIdAsync(freshReservation.RewardTierId, ct);
+            if (rewardTier is not null)
+            {
+                rewardTier.ReleaseReservation();
+                await _rewardTierRepository.UpdateAsync(rewardTier, ct);
+            }
 
             freshReservation.Release();
-            rewardTier.ReleaseReservation();
-
-            await _rewardTierRepository.UpdateAsync(rewardTier, ct);
             await _reservationRepository.UpdateAsync(freshReservation, ct);
         }, cancellationToken);
     }

@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CrowdFunding.Modules.Notifications.Application.DependencyInjection;
 
@@ -14,6 +14,10 @@ public static class NotificationsApplicationDependencyInjection
     /// <returns>The configured service collection.</returns>
     public static IServiceCollection AddNotificationsApplication(this IServiceCollection services)
     {
+        services.AddScoped<Features.Preferences.Queries.GetNotificationPreferences.GetNotificationPreferencesQueryHandler>();
+        services.AddScoped<Features.Preferences.Commands.UpdateNotificationPreferences.UpdateNotificationPreferencesCommandHandler>();
+        services.AddScoped<Features.Preferences.Commands.Unsubscribe.UnsubscribeCommandHandler>();
+
         return services;
     }
 }

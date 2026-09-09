@@ -164,15 +164,8 @@ public sealed class Contribution : BaseEntity
         PaymentReference = null;
         FailureReason = failureReason.Trim();
         ProcessedAtUtc = processedAtUtc;
-
         AddDomainEvent(new ContributionPaymentFailedDomainEvent(
-            Id,
-            CampaignId,
-            ContributorId,
-            Money.Amount,
-            Money.Currency,
-            FailureReason,
-            RewardTierReservationId));
+            Id, CampaignId, ContributorId, Money.Amount, Money.Currency, FailureReason, RewardTierReservationId));
     }
 
     /// <summary>
@@ -192,6 +185,7 @@ public sealed class Contribution : BaseEntity
 
         Status = ContributionStatus.Refunded;
         ProcessedAtUtc = processedAtUtc;
-        AddDomainEvent(new ContributionRefundedDomainEvent(Id, CampaignId, ContributorId, Money.Amount, Money.Currency, RewardTierReservationId));
+        AddDomainEvent(new ContributionRefundedDomainEvent(
+            Id, CampaignId, ContributorId, Money.Amount, Money.Currency, RewardTierReservationId));
     }
 }

@@ -46,4 +46,15 @@ public interface IEmailNotificationService
         decimal refundedAmount,
         string currency,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Alerts a backer that an update was posted for a campaign they backed (Commercial / Informational notification).
+    /// Respects the backer's notification preferences and includes compliant RFC 8058 List-Unsubscribe headers (TICKET-056).
+    /// </summary>
+    Task SendCampaignUpdateAlertAsync(
+        Guid recipientUserId,
+        Guid campaignId,
+        Guid updateId,
+        string updateTitle,
+        CancellationToken cancellationToken = default);
 }

@@ -24,6 +24,10 @@ public sealed class NotificationsTests
         public Task SendCampaignCancellationAlertAsync(
             Guid recipientUserId, Guid campaignId, Guid contributionId, decimal refundedAmount, string currency, CancellationToken cancellationToken = default)
             => throw new HttpRequestException("Simulated 503 from the email provider.");
+
+        public Task SendCampaignUpdateAlertAsync(
+            Guid recipientUserId, Guid campaignId, Guid updateId, string updateTitle, CancellationToken cancellationToken = default)
+            => throw new HttpRequestException("Simulated 503 from the email provider.");
     }
 
     [Fact]
@@ -49,6 +53,28 @@ public sealed class NotificationsTests
             => Task.FromResult<CampaignTitleSnapshot?>(null);
     }
 
+    private sealed class NullNotificationPreferenceRepository : INotificationPreferenceRepository
+    {
+        private readonly Dictionary<Guid, CrowdFunding.Modules.Notifications.Domain.Aggregates.NotificationPreference> _store = new();
+
+        public Task<CrowdFunding.Modules.Notifications.Domain.Aggregates.NotificationPreference?> GetByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            _store.TryGetValue(userId, out var pref);
+            return Task.FromResult(pref);
+        }
+
+        public Task UpsertAsync(CrowdFunding.Modules.Notifications.Domain.Aggregates.NotificationPreference preference, CancellationToken cancellationToken = default)
+        {
+            _store[preference.UserId] = preference;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class FixedDateTimeProvider : INotificationsDateTimeProvider
+    {
+        public DateTime UtcNow { get; } = new(2026, 9, 9, 12, 0, 0, DateTimeKind.Utc);
+    }
+
     private sealed class RecordingHttpMessageHandler : HttpMessageHandler
     {
         public HttpRequestMessage? LastRequest { get; private set; }
@@ -65,7 +91,7 @@ public sealed class NotificationsTests
     {
         var recordingHandler = new RecordingHttpMessageHandler();
         using var httpClient = new HttpClient(recordingHandler) { BaseAddress = new Uri("https://email-provider.test") };
-        var service = new HttpEmailNotificationService(httpClient, new NullCampaignTitleCacheRepository());
+        var service = new HttpEmailNotificationService(httpClient, new NullCampaignTitleCacheRepository(), new NullNotificationPreferenceRepository());
 
         var contributionId = Guid.NewGuid();
         await service.SendContributionReceiptAsync(Guid.NewGuid(), Guid.NewGuid(), contributionId, 100m, "USD");
@@ -79,10 +105,74 @@ public sealed class NotificationsTests
     public async Task HttpEmailNotificationService_ShouldThrow_WhenTheProviderReturnsAnErrorStatus()
     {
         var failingHandlerHttpClient = new HttpClient(new FailingHttpMessageHandler()) { BaseAddress = new Uri("https://email-provider.test") };
-        var service = new HttpEmailNotificationService(failingHandlerHttpClient, new NullCampaignTitleCacheRepository());
+        var service = new HttpEmailNotificationService(failingHandlerHttpClient, new NullCampaignTitleCacheRepository(), new NullNotificationPreferenceRepository());
 
         await Assert.ThrowsAsync<HttpRequestException>(
             () => service.SendContributionReceiptAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 100m, "USD"));
+    }
+
+    [Fact]
+    public async Task HttpEmailNotificationService_ShouldIncludeListUnsubscribeHeaders_OnCampaignUpdates()
+    {
+        var recordingHandler = new RecordingHttpMessageHandler();
+        using var httpClient = new HttpClient(recordingHandler) { BaseAddress = new Uri("https://email-provider.test") };
+        var service = new HttpEmailNotificationService(httpClient, new NullCampaignTitleCacheRepository(), new NullNotificationPreferenceRepository());
+
+        var userId = Guid.NewGuid();
+        await service.SendCampaignUpdateAlertAsync(userId, Guid.NewGuid(), Guid.NewGuid(), "Major milestone achieved!");
+
+        Assert.NotNull(recordingHandler.LastRequest);
+        Assert.True(recordingHandler.LastRequest!.Headers.Contains("List-Unsubscribe"));
+        Assert.True(recordingHandler.LastRequest!.Headers.Contains("List-Unsubscribe-Post"));
+    }
+
+    [Fact]
+    public async Task HttpEmailNotificationService_ShouldSuppressCampaignUpdate_WhenUserOptedOut()
+    {
+        var recordingHandler = new RecordingHttpMessageHandler();
+        using var httpClient = new HttpClient(recordingHandler) { BaseAddress = new Uri("https://email-provider.test") };
+        var repo = new NullNotificationPreferenceRepository();
+        var userId = Guid.NewGuid();
+        var pref = CrowdFunding.Modules.Notifications.Domain.Aggregates.NotificationPreference.CreateDefault(userId, DateTime.UtcNow);
+        pref.Update(campaignUpdatesEnabled: false, marketingAnnouncementsEnabled: false, DateTime.UtcNow);
+        await repo.UpsertAsync(pref);
+
+        var service = new HttpEmailNotificationService(httpClient, new NullCampaignTitleCacheRepository(), repo);
+
+        await service.SendCampaignUpdateAlertAsync(userId, Guid.NewGuid(), Guid.NewGuid(), "Major milestone achieved!");
+
+        // Suppressed! No HTTP call made
+        Assert.Null(recordingHandler.LastRequest);
+    }
+
+    [Fact]
+    public async Task NotificationPreferences_QueryAndCommandHandlers_ShouldManagePreferencesCorrectly()
+    {
+        var repo = new NullNotificationPreferenceRepository();
+        var clock = new FixedDateTimeProvider();
+        var getHandler = new CrowdFunding.Modules.Notifications.Application.Features.Preferences.Queries.GetNotificationPreferences.GetNotificationPreferencesQueryHandler(repo, clock);
+        var updateHandler = new CrowdFunding.Modules.Notifications.Application.Features.Preferences.Commands.UpdateNotificationPreferences.UpdateNotificationPreferencesCommandHandler(repo, clock);
+        var unsubHandler = new CrowdFunding.Modules.Notifications.Application.Features.Preferences.Commands.Unsubscribe.UnsubscribeCommandHandler(repo, clock);
+
+        var userId = Guid.NewGuid();
+
+        // 1. Defaults when not yet saved (campaign updates default true, marketing announcements default false per GDPR)
+        var initial = await getHandler.Handle(new CrowdFunding.Modules.Notifications.Application.Features.Preferences.Queries.GetNotificationPreferences.GetNotificationPreferencesQuery(userId), CancellationToken.None);
+        Assert.True(initial.CampaignUpdatesEnabled);
+        Assert.False(initial.MarketingAnnouncementsEnabled);
+
+        // 2. Explicit update
+        var updated = await updateHandler.Handle(new CrowdFunding.Modules.Notifications.Application.Features.Preferences.Commands.UpdateNotificationPreferences.UpdateNotificationPreferencesCommand(userId, false, true), CancellationToken.None);
+        Assert.False(updated.CampaignUpdatesEnabled);
+        Assert.True(updated.MarketingAnnouncementsEnabled);
+
+        // 3. One-click unsubscribe
+        var unsub = await unsubHandler.Handle(new CrowdFunding.Modules.Notifications.Application.Features.Preferences.Commands.Unsubscribe.UnsubscribeCommand(userId), CancellationToken.None);
+        Assert.True(unsub.Unsubscribed);
+
+        var finalState = await getHandler.Handle(new CrowdFunding.Modules.Notifications.Application.Features.Preferences.Queries.GetNotificationPreferences.GetNotificationPreferencesQuery(userId), CancellationToken.None);
+        Assert.False(finalState.CampaignUpdatesEnabled);
+        Assert.False(finalState.MarketingAnnouncementsEnabled);
     }
 
     private sealed class FailingHttpMessageHandler : HttpMessageHandler

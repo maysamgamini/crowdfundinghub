@@ -1,4 +1,4 @@
-﻿using CrowdFunding.Modules.Contributions.Domain.Aggregates;
+using CrowdFunding.Modules.Contributions.Domain.Aggregates;
 
 namespace CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
 
@@ -22,4 +22,9 @@ public interface IContributionRepository
     /// contributions never appear here again — that is what makes re-delivering the triggering
     /// event idempotent.</summary>
     Task<IReadOnlyList<Contribution>> GetSucceededByCampaignIdAsync(Guid campaignId, CancellationToken cancellationToken);
+
+    /// <summary>Loads a bounded batch of currently-Succeeded contributions for a campaign,
+    /// enabling the refund compensation saga to process large campaigns in small, memory-bounded chunks
+    /// without OOM or lock saturation (TICKET-055).</summary>
+    Task<IReadOnlyList<Contribution>> GetSucceededBatchByCampaignIdAsync(Guid campaignId, int batchSize, CancellationToken cancellationToken);
 }

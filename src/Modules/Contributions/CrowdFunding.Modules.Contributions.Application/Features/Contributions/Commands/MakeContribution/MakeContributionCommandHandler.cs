@@ -1,4 +1,4 @@
-﻿using CrowdFunding.BuildingBlocks.Application.Messaging;
+using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
@@ -62,6 +62,13 @@ public sealed class MakeContributionCommandHandler : ICommandHandler<MakeContrib
         {
             throw new InvalidOperationException(
                 $"Contribution currency '{command.Currency}' does not match campaign currency '{campaign.Currency}'.");
+        }
+
+        // Reject creator self-pledging to prevent circular fund-washing, artificial trending manipulation,
+        // and perk tier inventory hoarding (TICKET-054).
+        if (campaign.OwnerId != Guid.Empty && campaign.OwnerId == _currentUser.UserId)
+        {
+            throw new InvalidOperationException("Campaign creators cannot back or contribute to their own campaigns.");
         }
 
         var contribution = Contribution.Create(

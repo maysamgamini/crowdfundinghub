@@ -1,4 +1,4 @@
-﻿using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
+using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Contributions.Domain.Aggregates;
 using CrowdFunding.Modules.Contributions.Domain.Enums;
 using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.DbContexts;
@@ -53,6 +53,16 @@ public sealed class ContributionRepository : IContributionRepository
     {
         return await _dbContext.Contributions
             .Where(x => x.CampaignId == campaignId && x.Status == ContributionStatus.Succeeded)
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<Contribution>> GetSucceededBatchByCampaignIdAsync(Guid campaignId, int batchSize, CancellationToken cancellationToken)
+    {
+        return await _dbContext.Contributions
+            .Where(x => x.CampaignId == campaignId && x.Status == ContributionStatus.Succeeded)
+            .OrderBy(x => x.CreatedAtUtc)
+            .Take(batchSize)
             .ToListAsync(cancellationToken);
     }
 }

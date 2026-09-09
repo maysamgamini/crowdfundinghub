@@ -21,6 +21,7 @@ public sealed class ActiveCampaignCacheRepository : IActiveCampaignCacheReposito
     /// <inheritdoc/>
     public async Task UpsertAsync(
         Guid campaignId,
+        Guid ownerId,
         string title,
         string currency,
         bool isActive,
@@ -35,6 +36,7 @@ public sealed class ActiveCampaignCacheRepository : IActiveCampaignCacheReposito
             _dbContext.ActiveCampaignsCache.Add(new ActiveCampaignCache
             {
                 CampaignId = campaignId,
+                OwnerId = ownerId,
                 Title = title,
                 Currency = currency,
                 IsActive = isActive,
@@ -44,6 +46,7 @@ public sealed class ActiveCampaignCacheRepository : IActiveCampaignCacheReposito
         }
         else
         {
+            existing.OwnerId = ownerId;
             existing.Title = title;
             existing.Currency = currency;
             existing.IsActive = isActive;
@@ -72,7 +75,7 @@ public sealed class ActiveCampaignCacheRepository : IActiveCampaignCacheReposito
         return await _dbContext.ActiveCampaignsCache
             .AsNoTracking()
             .Where(x => x.CampaignId == campaignId)
-            .Select(x => new ActiveCampaignSnapshot(x.CampaignId, x.Currency, x.IsActive, x.DeadlineUtc))
+            .Select(x => new ActiveCampaignSnapshot(x.CampaignId, x.OwnerId, x.Currency, x.IsActive, x.DeadlineUtc))
             .FirstOrDefaultAsync(cancellationToken);
     }
 }

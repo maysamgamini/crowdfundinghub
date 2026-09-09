@@ -113,6 +113,9 @@ public sealed class CoverageGapE2ETests
 
         await _factory.ProcessOutboxMessagesAsync();
 
+        var (_, backerToken) = await client.RegisterAndLoginAsync(ApiTestExtensions.UniqueEmail("list-contributions-backer"));
+        client.SetBearerToken(backerToken);
+
         var makeResponse = await client.PostAsJsonAsync(
             $"/api/campaigns/{campaignId}/contributions", new MakeContributionRequest(100m, "USD"));
         makeResponse.EnsureSuccessStatusCode();

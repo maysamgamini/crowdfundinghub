@@ -26,11 +26,16 @@ public sealed class HttpEmailNotificationService : IEmailNotificationService
     private const string SendPath = "/v3/mail/send";
     private readonly HttpClient _httpClient;
     private readonly ICampaignTitleCacheRepository _campaignTitleCache;
+    private readonly INotificationPreferenceRepository _preferenceRepository;
 
-    public HttpEmailNotificationService(HttpClient httpClient, ICampaignTitleCacheRepository campaignTitleCache)
+    public HttpEmailNotificationService(
+        HttpClient httpClient,
+        ICampaignTitleCacheRepository campaignTitleCache,
+        INotificationPreferenceRepository preferenceRepository)
     {
         _httpClient = httpClient;
         _campaignTitleCache = campaignTitleCache;
+        _preferenceRepository = preferenceRepository;
     }
 
     public Task SendContributionReceiptAsync(
@@ -40,7 +45,7 @@ public sealed class HttpEmailNotificationService : IEmailNotificationService
         decimal amount,
         string currency,
         CancellationToken cancellationToken = default)
-        => SendAsync("ContributionReceipt", $"contribution-{contributionId}", recipientUserId, campaignId, amount, currency, cancellationToken);
+        => SendAsync("ContributionReceipt", $"contribution-{contributionId}", recipientUserId, campaignId, amount, currency, isCommercial: false, cancellationToken);
 
     public Task SendCampaignCancellationAlertAsync(
         Guid recipientUserId,
@@ -49,7 +54,23 @@ public sealed class HttpEmailNotificationService : IEmailNotificationService
         decimal refundedAmount,
         string currency,
         CancellationToken cancellationToken = default)
-        => SendAsync("CampaignCancellationAlert", $"cancellation-{contributionId}", recipientUserId, campaignId, refundedAmount, currency, cancellationToken);
+        => SendAsync("CampaignCancellationAlert", $"cancellation-{contributionId}", recipientUserId, campaignId, refundedAmount, currency, isCommercial: false, cancellationToken);
+
+    public async Task SendCampaignUpdateAlertAsync(
+        Guid recipientUserId,
+        Guid campaignId,
+        Guid updateId,
+        string updateTitle,
+        CancellationToken cancellationToken = default)
+    {
+        var prefs = await _preferenceRepository.GetByUserIdAsync(recipientUserId, cancellationToken);
+        if (prefs is not null && !prefs.CampaignUpdatesEnabled)
+        {
+            return;
+        }
+
+        await SendAsync("CampaignUpdateAlert", $"update-{updateId}-{recipientUserId}", recipientUserId, campaignId, 0m, "N/A", isCommercial: true, cancellationToken);
+    }
 
     private async Task SendAsync(
         string kind,
@@ -58,6 +79,7 @@ public sealed class HttpEmailNotificationService : IEmailNotificationService
         Guid campaignId,
         decimal amount,
         string currency,
+        bool isCommercial,
         CancellationToken cancellationToken)
     {
         var campaign = await _campaignTitleCache.GetAsync(campaignId, cancellationToken);
@@ -76,6 +98,13 @@ public sealed class HttpEmailNotificationService : IEmailNotificationService
             }),
         };
         request.Headers.Add("X-Message-Id", idempotencyKey);
+
+        if (isCommercial)
+        {
+            // RFC 2369 / RFC 8058 standard unsubscribe headers
+            request.Headers.Add("List-Unsubscribe", $"<mailto:unsubscribe@crowdfundinghub.local?subject=unsubscribe>, </api/notifications/unsubscribe?userId={recipientUserId}>");
+            request.Headers.Add("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
+        }
 
         using var response = await _httpClient.SendAsync(request, cancellationToken);
         response.EnsureSuccessStatusCode();

@@ -14,15 +14,18 @@ namespace CrowdFunding.Modules.Notifications.Infrastructure.Services;
 public sealed class LoggingEmailNotificationService : IEmailNotificationService
 {
     private readonly ICampaignTitleCacheRepository _campaignTitleCache;
+    private readonly INotificationPreferenceRepository _preferenceRepository;
     private readonly IEmailNotificationSink _sink;
     private readonly ILogger<LoggingEmailNotificationService> _logger;
 
     public LoggingEmailNotificationService(
         ICampaignTitleCacheRepository campaignTitleCache,
+        INotificationPreferenceRepository preferenceRepository,
         IEmailNotificationSink sink,
         ILogger<LoggingEmailNotificationService> logger)
     {
         _campaignTitleCache = campaignTitleCache;
+        _preferenceRepository = preferenceRepository;
         _sink = sink;
         _logger = logger;
     }
@@ -44,6 +47,25 @@ public sealed class LoggingEmailNotificationService : IEmailNotificationService
         string currency,
         CancellationToken cancellationToken = default)
         => SendAsync("CampaignCancellationAlert", $"cancellation-{contributionId}", recipientUserId, campaignId, refundedAmount, currency, cancellationToken);
+
+    public async Task SendCampaignUpdateAlertAsync(
+        Guid recipientUserId,
+        Guid campaignId,
+        Guid updateId,
+        string updateTitle,
+        CancellationToken cancellationToken = default)
+    {
+        var prefs = await _preferenceRepository.GetByUserIdAsync(recipientUserId, cancellationToken);
+        if (prefs is not null && !prefs.CampaignUpdatesEnabled)
+        {
+            _logger.LogInformation(
+                "Skipping campaign update email to user {RecipientUserId} for campaign {CampaignId} due to user preferences (TICKET-056).",
+                recipientUserId, campaignId);
+            return;
+        }
+
+        await SendAsync("CampaignUpdateAlert", $"update-{updateId}-{recipientUserId}", recipientUserId, campaignId, 0m, "N/A", cancellationToken);
+    }
 
     private async Task SendAsync(
         string kind,

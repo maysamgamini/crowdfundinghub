@@ -13,6 +13,7 @@ public interface IActiveCampaignCacheRepository
     /// <summary>Inserts or refreshes the replicated row for a campaign.</summary>
     Task UpsertAsync(
         Guid campaignId,
+        Guid ownerId,
         string title,
         string currency,
         bool isActive,

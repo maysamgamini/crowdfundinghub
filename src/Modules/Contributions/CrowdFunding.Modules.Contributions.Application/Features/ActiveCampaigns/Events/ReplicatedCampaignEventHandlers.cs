@@ -43,6 +43,7 @@ public sealed class ReplicatedCampaignEventHandlers :
         => _transactionExecutor.ExecuteAsync(
             ct => _repository.UpsertAsync(
                 notification.CampaignId,
+                notification.OwnerId,
                 notification.Title,
                 notification.Currency,
                 isActive: false,

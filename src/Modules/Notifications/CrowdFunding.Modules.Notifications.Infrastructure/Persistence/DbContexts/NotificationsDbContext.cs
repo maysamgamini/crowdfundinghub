@@ -14,6 +14,7 @@ public sealed class NotificationsDbContext : DbContext
     public NotificationsDbContext(DbContextOptions<NotificationsDbContext> options) : base(options) { }
 
     public DbSet<CampaignTitleCache> CampaignTitleCache => Set<CampaignTitleCache>();
+    public DbSet<CrowdFunding.Modules.Notifications.Domain.Aggregates.NotificationPreference> NotificationPreferences => Set<CrowdFunding.Modules.Notifications.Domain.Aggregates.NotificationPreference>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

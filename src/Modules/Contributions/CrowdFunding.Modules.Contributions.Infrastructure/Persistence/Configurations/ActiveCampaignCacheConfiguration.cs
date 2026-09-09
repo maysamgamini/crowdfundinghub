@@ -15,6 +15,7 @@ public sealed class ActiveCampaignCacheConfiguration : IEntityTypeConfiguration<
 
         builder.HasKey(x => x.CampaignId);
         builder.Property(x => x.CampaignId).ValueGeneratedNever();
+        builder.Property(x => x.OwnerId).IsRequired();
 
         builder.Property(x => x.Title).HasMaxLength(200).IsRequired();
         builder.Property(x => x.Currency).HasMaxLength(3).IsRequired();

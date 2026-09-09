@@ -4,7 +4,7 @@
 **Severity:** 🟡 P2 (Medium - Legal Compliance, GDPR / CAN-SPAM & User Privacy)  
 **QA Focus Area:** Notifications Architecture, Compliance & Preference Enforcement  
 **Found By:** `qa-api-contract-compliance` & `qa-functional-domain`  
-**Status:** Open  
+**Status:** Fixed  
 **Project Mode:** Greenfield (Benchmark Educational Standard)  
 
 ---

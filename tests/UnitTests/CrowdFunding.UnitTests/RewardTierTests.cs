@@ -121,7 +121,6 @@ public sealed class RewardTierTests
         var tier = CreateTier(totalCapacity: 5);
         tier.ReserveSlot();
         tier.ConfirmClaim();
-
         Assert.Equal(1, tier.ClaimedCount);
         Assert.Equal(4, tier.AvailableCount);
 
@@ -135,7 +134,6 @@ public sealed class RewardTierTests
     public void ReleaseClaim_ShouldThrow_WhenClaimedCountIsZero()
     {
         var tier = CreateTier();
-
         Assert.Throws<InvalidOperationException>(() => tier.ReleaseClaim());
     }
 
@@ -145,12 +143,10 @@ public sealed class RewardTierTests
         var reservation = RewardTierReservation.Create(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), DateTime.UtcNow);
         var contributionId = Guid.NewGuid();
         reservation.Confirm(contributionId);
-
         Assert.Equal(RewardTierReservationStatus.Confirmed, reservation.Status);
         Assert.Equal(contributionId, reservation.ContributionId);
 
         reservation.Refund();
-
         Assert.Equal(RewardTierReservationStatus.Released, reservation.Status);
     }
 
@@ -158,7 +154,6 @@ public sealed class RewardTierTests
     public void Reservation_Refund_ShouldThrow_WhenStatusIsNotConfirmed()
     {
         var reservation = RewardTierReservation.Create(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), DateTime.UtcNow);
-
         Assert.Throws<InvalidOperationException>(() => reservation.Refund());
     }
 

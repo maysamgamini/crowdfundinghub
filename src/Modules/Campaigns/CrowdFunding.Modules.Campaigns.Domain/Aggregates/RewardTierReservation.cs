@@ -111,9 +111,9 @@ public sealed class RewardTierReservation
     }
 
     /// <summary>
-    /// Reverses a confirmed reservation when the corresponding contribution is refunded (TICKET-051).
-    /// Transitions status from <see cref="RewardTierReservationStatus.Confirmed"/> to
-    /// <see cref="RewardTierReservationStatus.Released"/>.
+    /// Reclaims a confirmed reservation when the backing contribution is refunded (TICKET-051).
+    /// Callers are expected to call <see cref="RewardTier.ReleaseClaim"/> on the matching tier in the same transaction.
+    /// Transitions status from Confirmed to Released.
     /// </summary>
     public void Refund()
     {

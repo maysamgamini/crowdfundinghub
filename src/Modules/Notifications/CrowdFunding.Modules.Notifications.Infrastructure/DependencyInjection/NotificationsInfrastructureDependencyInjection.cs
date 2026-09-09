@@ -26,6 +26,8 @@ public static class NotificationsInfrastructureDependencyInjection
                 npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "notifications")));
 
         services.AddScoped<ICampaignTitleCacheRepository, CampaignTitleCacheRepository>();
+        services.AddScoped<INotificationPreferenceRepository, NotificationPreferenceRepository>();
+        services.AddSingleton<INotificationsDateTimeProvider, NotificationsDateTimeProvider>();
         services.AddSingleton<IEmailNotificationSink, InMemoryEmailNotificationSink>();
 
         var emailOptions = configuration.GetSection(EmailProviderOptions.SectionName).Get<EmailProviderOptions>()
