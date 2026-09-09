@@ -13,7 +13,7 @@ These tickets define the **production-grade external integrations and complex do
 | [TICKET-031](./TICKET-031-EXTERNAL-EMAIL-NOTIFICATION-OUTBOX-DELIVERY.md) | External Email Delivery via Transactional Outbox (SendGrid / AWS SES Dual-Write Defense) | 🔴 P1 | External Notification APIs & Outbox Reliability | Fixed |
 | [TICKET-032](./TICKET-032-SERVERLESS-CLOUD-FUNCTION-AI-ANALYSIS.md) | Serverless Cloud Function Integration: Asynchronous AI Media Safety Analysis & Webhooks | 🟠 P1 | Serverless Compute & Cryptographic Webhooks | Fixed |
 | [TICKET-033](./TICKET-033-PAYMENT-GATEWAY-WEBHOOK-RECONCILIATION-SAGA.md) | External Payment Gateway Intent Capture & Webhook Reconciliation Saga (Stripe / PSP Defense) | 🔴 P1 | Financial State Machine & Webhook Idempotency | Fixed |
-| [TICKET-034](./TICKET-034-REWARD-TIER-ALLOCATION-INVENTORY-RESERVATION.md) | Reward Perk Tier Allocation & Inventory Reservation State Machine (Rich DDD & Optimistic Locking) | 🟠 P1 | Domain Invariants, `xmin` Concurrency & Sagas | Open |
+| [TICKET-034](./TICKET-034-REWARD-TIER-ALLOCATION-INVENTORY-RESERVATION.md) | Reward Perk Tier Allocation & Inventory Reservation State Machine (Rich DDD & Optimistic Locking) | 🟠 P1 | Domain Invariants, `xmin` Concurrency & Sagas | Fixed |
 | [TICKET-035](./TICKET-035-OUTBOUND-CREATOR-WEBHOOK-DISPATCHING-ENGINE.md) | Outbound Creator Webhook Dispatching Engine with Cryptographic HMAC & Retry Backoff | 🟡 P2 | Outbound Webhooks, SSRF Defense & DLQ | Fixed |
 
 ---

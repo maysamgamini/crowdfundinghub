@@ -1,4 +1,7 @@
 using CrowdFunding.API.Contracts.Campaigns;
+using CrowdFunding.API.Contracts.RewardTiers;
+using CrowdFunding.Modules.Campaigns.Application.Features.RewardTiers.Commands.CreateRewardTier;
+using CrowdFunding.Modules.Campaigns.Application.Features.RewardTiers.Commands.ReserveRewardTierSlot;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.CancelCampaign;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.CreateCampaign;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.PublishCampaign;
@@ -25,5 +28,7 @@ public static class CampaignsMappingConfig
         config.NewConfig<PublishCampaignResult, PublishCampaignResponse>();
         config.NewConfig<GetCampaignByIdResult, GetCampaignByIdResponse>();
         config.NewConfig<ListCampaignsResult, ListCampaignsResponse>();
+        config.NewConfig<CreateRewardTierResult, CreateRewardTierResponse>();
+        config.NewConfig<ReserveRewardTierSlotResult, ReserveRewardTierSlotResponse>();
     }
 }

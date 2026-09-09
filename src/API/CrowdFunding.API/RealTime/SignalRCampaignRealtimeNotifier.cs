@@ -43,4 +43,23 @@ public sealed class SignalRCampaignRealtimeNotifier : ICampaignRealtimeNotifier
             _logger.LogWarning(exception, "Failed to broadcast pledge update for campaign {CampaignId}.", campaignId);
         }
     }
+
+    /// <inheritdoc/>
+    public async Task NotifyRewardTierSoldOutAsync(
+        Guid campaignId,
+        Guid rewardTierId,
+        string title,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _hubContext.Clients
+                .Group(CampaignHub.GroupName(campaignId))
+                .SendAsync("RewardTierSoldOut", new { campaignId, rewardTierId, title }, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Failed to broadcast reward tier sold-out for campaign {CampaignId}.", campaignId);
+        }
+    }
 }

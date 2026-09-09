@@ -1081,6 +1081,13 @@ internal sealed class FakeCampaignRealtimeNotifier : ICampaignRealtimeNotifier
         NotificationCount++;
         return Task.CompletedTask;
     }
+
+    public Task NotifyRewardTierSoldOutAsync(
+        Guid campaignId,
+        Guid rewardTierId,
+        string title,
+        CancellationToken cancellationToken = default)
+        => Task.CompletedTask;
 }
 
 internal sealed class FakeCampaignReadService : ICampaignReadService

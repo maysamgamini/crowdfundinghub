@@ -120,4 +120,11 @@ internal sealed class NoOpCampaignRealtimeNotifier : ICampaignRealtimeNotifier
         string currency,
         CancellationToken cancellationToken = default)
         => Task.CompletedTask;
+
+    public Task NotifyRewardTierSoldOutAsync(
+        Guid campaignId,
+        Guid rewardTierId,
+        string title,
+        CancellationToken cancellationToken = default)
+        => Task.CompletedTask;
 }

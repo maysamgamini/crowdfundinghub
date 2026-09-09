@@ -6,6 +6,8 @@ using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.Fai
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.PublishCampaign;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.GetCampaignById;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.ListCampaigns;
+using CrowdFunding.Modules.Campaigns.Application.Features.RewardTiers.Commands.CreateRewardTier;
+using CrowdFunding.Modules.Campaigns.Application.Features.RewardTiers.Commands.ReserveRewardTierSlot;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -29,11 +31,15 @@ public static class CampaignsApplicationDependencyInjection
         services.AddScoped<PublishCampaignCommandHandler>();
         services.AddScoped<CompleteCampaignCommandHandler>();
         services.AddScoped<FailCampaignCommandHandler>();
+        services.AddScoped<CreateRewardTierCommandHandler>();
+        services.AddScoped<ReserveRewardTierSlotCommandHandler>();
         services.AddScoped<GetCampaignByIdQueryHandler>();
         services.AddScoped<ListCampaignsQueryHandler>();
         services.AddScoped<IValidator<CancelCampaignCommand>, CancelCampaignCommandValidator>();
         services.AddScoped<IValidator<CreateCampaignCommand>, CreateCampaignCommandValidator>();
         services.AddScoped<IValidator<PublishCampaignCommand>, PublishCampaignCommandValidator>();
+        services.AddScoped<IValidator<CreateRewardTierCommand>, CreateRewardTierCommandValidator>();
+        services.AddScoped<IValidator<ReserveRewardTierSlotCommand>, ReserveRewardTierSlotCommandValidator>();
 
         return services;
     }

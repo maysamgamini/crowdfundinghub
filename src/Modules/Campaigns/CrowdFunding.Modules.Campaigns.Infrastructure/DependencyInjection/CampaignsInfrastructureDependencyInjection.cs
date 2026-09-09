@@ -41,6 +41,7 @@ public static class CampaignsInfrastructureDependencyInjection
         });
 
         services.AddScoped<ICampaignRepository, CampaignRepository>();
+        services.AddScoped<IRewardTierRepository, RewardTierRepository>();
         services.AddScoped<IContributionLedger, ContributionLedger>();
         services.AddScoped<CampaignReadService>();
         services.AddScoped<ICampaignReadService, CachedCampaignReadService>(sp =>
