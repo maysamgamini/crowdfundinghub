@@ -1,4 +1,5 @@
-﻿using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
+﻿using CrowdFunding.BuildingBlocks.Infrastructure.Configuration;
+using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.DbContexts;
@@ -20,8 +21,7 @@ public static class ContributionsInfrastructureDependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString("DefaultConnection")
-                               ?? throw new InvalidOperationException("Connection string 'DefaultConnection' was not found.");
+        var connectionString = configuration.GetRequiredModuleConnectionString("ContributionsDb");
 
         services.AddDbContext<ContributionsDbContext>(options =>
             options.UseNpgsql(connectionString, npgsql =>

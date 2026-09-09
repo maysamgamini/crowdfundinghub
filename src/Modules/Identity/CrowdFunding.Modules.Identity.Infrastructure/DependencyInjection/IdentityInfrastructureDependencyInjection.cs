@@ -1,4 +1,5 @@
-﻿using CrowdFunding.Modules.Identity.Application.Abstractions.Persistence;
+﻿using CrowdFunding.BuildingBlocks.Infrastructure.Configuration;
+using CrowdFunding.Modules.Identity.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Services;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Identity.Infrastructure.Persistence.DbContexts;
@@ -20,8 +21,7 @@ public static class IdentityInfrastructureDependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString("DefaultConnection")
-                               ?? throw new InvalidOperationException("Connection string 'DefaultConnection' was not found.");
+        var connectionString = configuration.GetRequiredModuleConnectionString("IdentityDb");
 
         services.AddDbContext<IdentityDbContext>(options =>
             options.UseNpgsql(connectionString, npgsql =>

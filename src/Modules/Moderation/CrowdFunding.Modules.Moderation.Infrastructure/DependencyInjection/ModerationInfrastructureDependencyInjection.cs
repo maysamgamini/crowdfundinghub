@@ -1,4 +1,5 @@
-﻿using CrowdFunding.Modules.Moderation.Application.Abstractions.Persistence;
+﻿using CrowdFunding.BuildingBlocks.Infrastructure.Configuration;
+using CrowdFunding.Modules.Moderation.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Services;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Moderation.Contracts.Queries.GetCampaignReviewStatusByCampaignId;
@@ -21,8 +22,7 @@ public static class ModerationInfrastructureDependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString("DefaultConnection")
-                               ?? throw new InvalidOperationException("Connection string 'DefaultConnection' was not found.");
+        var connectionString = configuration.GetRequiredModuleConnectionString("ModerationDb");
 
         services.AddDbContext<ModerationDbContext>(options =>
             options.UseNpgsql(connectionString, npgsql =>

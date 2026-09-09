@@ -1,4 +1,5 @@
-﻿using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
+﻿using CrowdFunding.BuildingBlocks.Infrastructure.Configuration;
+using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Campaigns.Contracts.Queries.GetCampaignContributionAvailability;
@@ -24,8 +25,7 @@ public static class CampaignsInfrastructureDependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString("DefaultConnection")
-                               ?? throw new InvalidOperationException("Connection string 'DefaultConnection' was not found.");
+        var connectionString = configuration.GetRequiredModuleConnectionString("CampaignsDb");
         var redisConnectionString = configuration.GetConnectionString("Redis")
                                     ?? throw new InvalidOperationException("Connection string 'Redis' was not found.");
 
