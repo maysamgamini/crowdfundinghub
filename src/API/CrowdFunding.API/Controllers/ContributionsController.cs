@@ -112,7 +112,7 @@ public sealed class ContributionsController : ControllerBase
         [FromBody] MakeContributionRequest request,
         CancellationToken cancellationToken)
     {
-        var command = new MakeContributionCommand(campaignId, request.Amount, request.Currency);
+        var command = new MakeContributionCommand(campaignId, request.Amount, request.Currency, request.RewardTierReservationId);
         var validationResult = await _validator.ValidateAsync(command, cancellationToken);
 
         if (!validationResult.IsValid)

@@ -6,6 +6,7 @@ using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Campaigns.Contracts.Commands.AddContributionToCampaign;
+using CrowdFunding.Modules.Campaigns.Domain.Aggregates;
 
 namespace CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.AddContributionToCampaign;
 
@@ -24,17 +25,23 @@ public sealed class AddContributionToCampaignCommandHandler : ICommandHandler<Ad
 
     private readonly ICampaignRepository _campaignRepository;
     private readonly IContributionLedger _contributionLedger;
+    private readonly IRewardTierRepository _rewardTierRepository;
+    private readonly IRewardTierReservationRepository _rewardTierReservationRepository;
     private readonly ICampaignTransactionExecutor _transactionExecutor;
     private readonly ICampaignRealtimeNotifier _realtimeNotifier;
 
     public AddContributionToCampaignCommandHandler(
         ICampaignRepository campaignRepository,
         IContributionLedger contributionLedger,
+        IRewardTierRepository rewardTierRepository,
+        IRewardTierReservationRepository rewardTierReservationRepository,
         ICampaignTransactionExecutor transactionExecutor,
         ICampaignRealtimeNotifier realtimeNotifier)
     {
         _campaignRepository = campaignRepository;
         _contributionLedger = contributionLedger;
+        _rewardTierRepository = rewardTierRepository;
+        _rewardTierReservationRepository = rewardTierReservationRepository;
         _transactionExecutor = transactionExecutor;
         _realtimeNotifier = realtimeNotifier;
     }
@@ -88,6 +95,11 @@ public sealed class AddContributionToCampaignCommandHandler : ICommandHandler<Ad
                     {
                         campaign.ApplyConfirmedContribution(new Money(command.Amount, command.Currency));
                         await _campaignRepository.UpdateAsync(campaign, ct);
+
+                        if (command.RewardTierReservationId.HasValue)
+                        {
+                            await ConfirmRewardTierReservationAsync(command.RewardTierReservationId.Value, command.ContributionId, ct);
+                        }
                     }
 
                     campaignId = campaign.Id;
@@ -119,5 +131,49 @@ public sealed class AddContributionToCampaignCommandHandler : ICommandHandler<Ad
                 await Task.Delay(delay + jitter, cancellationToken);
             }
         }
+    }
+
+    /// <summary>
+    /// Converts the reward tier hold this pledge was checked out against into a permanent claim
+    /// — the confirmation half of the Reserve -&gt; Confirm/Expire saga (TICKET-043). Runs
+    /// nested inside the campaign's already-open transaction/advisory lock above; taking a
+    /// second <c>pg_advisory_xact_lock</c> keyed by the tier id here is safe (PostgreSQL
+    /// transaction-scoped advisory locks stack within the same transaction) and serializes this
+    /// confirmation against a concurrent reservation, release, or another confirmation on the
+    /// same tier.
+    /// </summary>
+    private async Task ConfirmRewardTierReservationAsync(Guid reservationId, Guid contributionId, CancellationToken cancellationToken)
+    {
+        var reservation = await _rewardTierReservationRepository.GetByIdAsync(reservationId, cancellationToken);
+
+        if (reservation is null || reservation.Status != RewardTierReservationStatus.Reserved)
+        {
+            // Already confirmed (duplicate event redelivery — guarded by TryRecordAsync above in
+            // the normal case, but defense-in-depth here too) or already expired and released by
+            // the scavenger. Either way there is no reservation left to confirm; the pledge
+            // itself was still recorded and credited to the campaign above.
+            return;
+        }
+
+        var tierLockKey = AdvisoryLockKey.FromGuid(reservation.RewardTierId);
+
+        await _transactionExecutor.ExecuteAsync(tierLockKey, async ct =>
+        {
+            var freshReservation = await _rewardTierReservationRepository.GetByIdAsync(reservationId, ct);
+
+            if (freshReservation is null || freshReservation.Status != RewardTierReservationStatus.Reserved)
+            {
+                return;
+            }
+
+            var rewardTier = await _rewardTierRepository.GetByIdAsync(freshReservation.RewardTierId, ct)
+                ?? throw new KeyNotFoundException($"Reward tier '{freshReservation.RewardTierId}' was not found.");
+
+            rewardTier.ConfirmClaim();
+            freshReservation.Confirm(contributionId);
+
+            await _rewardTierRepository.UpdateAsync(rewardTier, ct);
+            await _rewardTierReservationRepository.UpdateAsync(freshReservation, ct);
+        }, cancellationToken);
     }
 }

@@ -71,6 +71,8 @@ public sealed class ContributionConfiguration : IEntityTypeConfiguration<Contrib
 
         builder.Property(x => x.ProcessedAtUtc);
 
+        builder.Property(x => x.RewardTierReservationId);
+
         // The hot read path (GET /api/campaigns/{campaignId}/contributions, and any per-backer
         // lookup) filters on these columns; without an index Postgres does a sequential scan of
         // the whole table on every request as pledge volume grows.

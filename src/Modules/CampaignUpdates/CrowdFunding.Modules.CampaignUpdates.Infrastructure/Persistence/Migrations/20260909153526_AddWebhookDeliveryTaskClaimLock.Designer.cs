@@ -3,6 +3,7 @@ using System;
 using CrowdFunding.Modules.CampaignUpdates.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CrowdFunding.Modules.CampaignUpdates.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(CampaignUpdatesDbContext))]
-    partial class CampaignUpdatesDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260909153526_AddWebhookDeliveryTaskClaimLock")]
+    partial class AddWebhookDeliveryTaskClaimLock
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

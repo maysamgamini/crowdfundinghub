@@ -101,7 +101,10 @@ public sealed class CampaignContributionConcurrencyTests
         var transactionExecutor = new CampaignTransactionExecutor(dbContext, NoOpDistributedCache, NullLogger<CampaignTransactionExecutor>.Instance);
         var repository = new CampaignRepository(dbContext, transactionExecutor);
         var ledger = new ContributionLedger(dbContext);
-        var handler = new AddContributionToCampaignCommandHandler(repository, ledger, transactionExecutor, new NoOpCampaignRealtimeNotifier());
+        var rewardTierRepository = new RewardTierRepository(dbContext);
+        var rewardTierReservationRepository = new RewardTierReservationRepository(dbContext);
+        var handler = new AddContributionToCampaignCommandHandler(
+            repository, ledger, rewardTierRepository, rewardTierReservationRepository, transactionExecutor, new NoOpCampaignRealtimeNotifier());
 
         await handler.Handle(
             new AddContributionToCampaignCommand(campaignId, contributionId, amount, currency),

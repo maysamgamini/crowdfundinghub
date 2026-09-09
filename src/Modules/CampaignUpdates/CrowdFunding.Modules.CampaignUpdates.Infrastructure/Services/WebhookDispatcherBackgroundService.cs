@@ -16,8 +16,13 @@ namespace CrowdFunding.Modules.CampaignUpdates.Infrastructure.Services;
 public sealed class WebhookDispatcherBackgroundService : BackgroundService
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan LockDuration = TimeSpan.FromSeconds(30);
     private const int BatchSize = 20;
 
+    // Unique per process instance: identifies which dispatcher replica currently holds the
+    // claim lease on a row, so a crashed worker's rows can be told apart from a live one's once
+    // LockedUntilUtc expires.
+    private readonly string _workerId = $"{Environment.MachineName}:{Guid.NewGuid():N}";
     private readonly IServiceProvider _serviceProvider;
 
     public WebhookDispatcherBackgroundService(IServiceProvider serviceProvider)
@@ -50,7 +55,7 @@ public sealed class WebhookDispatcherBackgroundService : BackgroundService
         var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger(GetType());
 
         var nowUtc = DateTime.UtcNow;
-        var tasks = await taskRepository.ClaimDueBatchAsync(BatchSize, nowUtc, cancellationToken);
+        var tasks = await taskRepository.ClaimDueBatchAsync(BatchSize, nowUtc, _workerId, LockDuration, cancellationToken);
 
         foreach (var task in tasks)
         {

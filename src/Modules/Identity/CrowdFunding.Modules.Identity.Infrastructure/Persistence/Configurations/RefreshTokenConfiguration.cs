@@ -53,5 +53,16 @@ public sealed class RefreshTokenConfiguration : IEntityTypeConfiguration<Refresh
         builder.Property(x => x.ReplacedByTokenHash)
             .HasColumnName("replaced_by_token_hash")
             .HasMaxLength(128);
+
+        // PostgreSQL system column used as an optimistic concurrency token. Prevents two
+        // parallel requests presenting the same refresh token from both winning the rotation:
+        // EF issues WHERE id = @p0 AND xmin = @p1, so the losing writer throws
+        // DbUpdateConcurrencyException instead of silently clobbering ReplacedByTokenHash and
+        // triggering a false reuse-detection breach panic on the legitimate device.
+        builder.Property<uint>("xmin")
+            .HasColumnName("xmin")
+            .HasColumnType("xid")
+            .ValueGeneratedOnAddOrUpdate()
+            .IsConcurrencyToken();
     }
 }

@@ -136,6 +136,12 @@ public sealed class Campaign : BaseEntity
             throw new InvalidOperationException("Cannot complete a campaign successfully — its funding goal was not reached.");
         }
 
+        if (nowUtc < DeadlineUtc)
+        {
+            throw new InvalidOperationException(
+                $"Cannot complete campaign '{Id}' before its deadline '{DeadlineUtc:O}'. Current time: '{nowUtc:O}'.");
+        }
+
         Status = CampaignStatus.Successful;
         AddDomainEvent(new CampaignSucceededDomainEvent(Id, OwnerId, RaisedAmount.Amount, RaisedAmount.Currency, nowUtc));
     }
@@ -157,6 +163,12 @@ public sealed class Campaign : BaseEntity
         if (RaisedAmount.Amount >= GoalAmount.Amount)
         {
             throw new InvalidOperationException("Cannot mark a campaign failed — its funding goal was reached.");
+        }
+
+        if (nowUtc < DeadlineUtc)
+        {
+            throw new InvalidOperationException(
+                $"Cannot mark campaign '{Id}' failed before its deadline '{DeadlineUtc:O}'. Current time: '{nowUtc:O}'.");
         }
 
         Status = CampaignStatus.Failed;

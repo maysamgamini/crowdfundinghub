@@ -1,5 +1,7 @@
+using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Identity.Infrastructure.Persistence.DbContexts;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
 namespace CrowdFunding.Modules.Identity.Infrastructure.Transactions;
@@ -42,6 +44,19 @@ public sealed class IdentityTransactionExecutor : IIdentityTransactionExecutor
             }
 
             return result;
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+            }
+
+            // Translated to an infrastructure-agnostic exception so application-layer handlers
+            // can catch and retry without taking a dependency on Entity Framework Core. Mirrors
+            // CampaignTransactionExecutor/ContributionTransactionExecutor.
+            throw new ConcurrencyConflictException(
+                "The entity was modified by another transaction. Retry with a fresh read.", ex);
         }
         catch
         {

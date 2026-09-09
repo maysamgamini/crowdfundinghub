@@ -7,13 +7,15 @@ namespace CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPaymen
 /// </summary>
 public sealed class ContributionPaymentConfirmedApplicationEvent : BaseApplicationEvent
 {
-    public ContributionPaymentConfirmedApplicationEvent(Guid contributionId, Guid campaignId, Guid contributorId, decimal amount, string currency)
+    public ContributionPaymentConfirmedApplicationEvent(
+        Guid contributionId, Guid campaignId, Guid contributorId, decimal amount, string currency, Guid? rewardTierReservationId = null)
     {
         ContributionId = contributionId;
         CampaignId = campaignId;
         ContributorId = contributorId;
         Amount = amount;
         Currency = currency;
+        RewardTierReservationId = rewardTierReservationId;
     }
 
     public Guid ContributionId { get; }
@@ -24,4 +26,9 @@ public sealed class ContributionPaymentConfirmedApplicationEvent : BaseApplicati
     public Guid ContributorId { get; }
     public decimal Amount { get; }
     public string Currency { get; }
+
+    /// <summary>Set when the backer selected a reward perk at checkout — Campaigns uses this to
+    /// convert the reservation into a claim on its own <c>RewardTier</c> aggregate (not visible
+    /// here) once payment is confirmed. See TICKET-043.</summary>
+    public Guid? RewardTierReservationId { get; }
 }

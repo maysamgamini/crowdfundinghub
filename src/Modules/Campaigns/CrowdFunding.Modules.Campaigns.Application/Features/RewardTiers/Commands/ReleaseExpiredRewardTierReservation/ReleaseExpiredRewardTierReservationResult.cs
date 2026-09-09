@@ -1,0 +1,3 @@
+namespace CrowdFunding.Modules.Campaigns.Application.Features.RewardTiers.Commands.ReleaseExpiredRewardTierReservation;
+
+public sealed record ReleaseExpiredRewardTierReservationResult(Guid ReservationId, bool Released);

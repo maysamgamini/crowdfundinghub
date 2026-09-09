@@ -25,7 +25,15 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Migrations
                     ClaimedCount = table.Column<int>(type: "integer", nullable: false),
                     ReservedCount = table.Column<int>(type: "integer", nullable: false),
                     CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false)
+                    // NOTE: `xmin` is a reserved PostgreSQL system column that already exists on
+                    // every table — it cannot be added via CREATE TABLE (Postgres rejects the
+                    // reserved name: "column name \"xmin\" conflicts with a system column name",
+                    // reproduced against a real instance). RewardTierConfiguration.cs maps EF's
+                    // concurrency token directly onto that existing system column, so the
+                    // auto-generated xmin column definition has been removed here — this table
+                    // could not previously be created by `dotnet ef database update` against real
+                    // PostgreSQL (only exercised via unit tests with fakes, never a live
+                    // migration run) until this fix.
                 },
                 constraints: table =>
                 {

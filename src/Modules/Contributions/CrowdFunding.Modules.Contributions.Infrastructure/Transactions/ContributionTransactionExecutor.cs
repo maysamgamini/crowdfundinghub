@@ -98,7 +98,8 @@ public sealed class ContributionTransactionExecutor : IContributionTransactionEx
                     @event.CampaignId,
                     @event.ContributorId,
                     @event.Amount,
-                    @event.Currency),
+                    @event.Currency,
+                    @event.RewardTierReservationId),
                 DateTime.UtcNow),
             ContributionRefundedDomainEvent @event => OutboxMessage.Create(
                 new ContributionRefundedApplicationEvent(

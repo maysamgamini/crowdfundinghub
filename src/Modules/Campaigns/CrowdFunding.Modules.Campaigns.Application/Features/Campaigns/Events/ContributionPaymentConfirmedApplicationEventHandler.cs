@@ -25,7 +25,8 @@ public sealed class ContributionPaymentConfirmedApplicationEventHandler : IEvent
                 notification.CampaignId,
                 notification.ContributionId,
                 notification.Amount,
-                notification.Currency),
+                notification.Currency,
+                notification.RewardTierReservationId),
             cancellationToken);
     }
 }

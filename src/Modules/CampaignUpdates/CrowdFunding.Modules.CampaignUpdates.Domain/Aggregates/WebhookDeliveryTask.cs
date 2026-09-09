@@ -5,6 +5,16 @@ public enum WebhookDeliveryStatus
     Pending = 1,
     Delivered = 2,
     Dead = 3,
+
+    /// <summary>
+    /// Claimed by a dispatcher instance and in flight. Set atomically alongside the
+    /// Pending -&gt; Processing transition by the <c>FOR UPDATE SKIP LOCKED</c> claim query — see
+    /// TICKET-046 — so two dispatcher replicas polling concurrently never both claim the same
+    /// row. <c>WebhookDeliveryTask.LockedUntilUtc</c> bounds how long a row can sit here before
+    /// another instance is allowed to reclaim it (e.g. the worker that claimed it crashed
+    /// mid-delivery).
+    /// </summary>
+    Processing = 4,
 }
 
 /// <summary>
@@ -31,6 +41,8 @@ public sealed class WebhookDeliveryTask
     public DateTime ScheduledAtUtc { get; private set; }
     public WebhookDeliveryStatus Status { get; private set; }
     public string? LastError { get; private set; }
+    public string? WorkerId { get; private set; }
+    public DateTime? LockedUntilUtc { get; private set; }
 
     private WebhookDeliveryTask()
     {
@@ -54,6 +66,8 @@ public sealed class WebhookDeliveryTask
     {
         Status = WebhookDeliveryStatus.Delivered;
         LastError = null;
+        WorkerId = null;
+        LockedUntilUtc = null;
     }
 
     /// <summary>
@@ -69,6 +83,8 @@ public sealed class WebhookDeliveryTask
     {
         Attempts++;
         LastError = string.IsNullOrWhiteSpace(error) ? "Unknown delivery error." : error.Trim();
+        WorkerId = null;
+        LockedUntilUtc = null;
 
         if (Attempts > BackoffSchedule.Length)
         {

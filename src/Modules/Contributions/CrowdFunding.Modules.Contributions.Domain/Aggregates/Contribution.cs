@@ -31,6 +31,14 @@ public sealed class Contribution : BaseEntity
     /// platform-wide constant.</summary>
     public string? PaymentGateway { get; private set; }
 
+    /// <summary>The reward tier slot reservation (Campaigns module) this pledge is checking out
+    /// against, if the backer selected a perk — an opaque correlation id from Contributions'
+    /// point of view (see TICKET-043). Carried on <see cref="Events.ContributionPaymentConfirmedDomainEvent"/>
+    /// so Campaigns can convert the reservation into a claim once payment is confirmed, and left
+    /// untouched on failure/refund so the reservation scavenger remains the sole path back to
+    /// available inventory for an abandoned or declined checkout.</summary>
+    public Guid? RewardTierReservationId { get; private set; }
+
     private Contribution()
     {
     }
@@ -41,7 +49,8 @@ public sealed class Contribution : BaseEntity
         Guid contributorId,
         Money money,
         ContributionStatus status,
-        DateTime createdAtUtc)
+        DateTime createdAtUtc,
+        Guid? rewardTierReservationId)
     {
         Id = id;
         CampaignId = campaignId;
@@ -49,6 +58,7 @@ public sealed class Contribution : BaseEntity
         Money = money;
         Status = status;
         CreatedAtUtc = createdAtUtc;
+        RewardTierReservationId = rewardTierReservationId;
     }
 
     public static Contribution Create(
@@ -56,7 +66,8 @@ public sealed class Contribution : BaseEntity
         Guid contributorId,
         decimal amount,
         string currency,
-        DateTime createdAtUtc)
+        DateTime createdAtUtc,
+        Guid? rewardTierReservationId = null)
     {
         if (campaignId == Guid.Empty)
         {
@@ -81,7 +92,8 @@ public sealed class Contribution : BaseEntity
             contributorId,
             money,
             ContributionStatus.Pending,
-            createdAtUtc);
+            createdAtUtc,
+            rewardTierReservationId);
     }
 
     /// <summary>
@@ -127,7 +139,8 @@ public sealed class Contribution : BaseEntity
         PaymentReference = paymentReference.Trim();
         FailureReason = null;
         ProcessedAtUtc = processedAtUtc;
-        AddDomainEvent(new ContributionPaymentConfirmedDomainEvent(Id, CampaignId, ContributorId, Money.Amount, Money.Currency));
+        AddDomainEvent(new ContributionPaymentConfirmedDomainEvent(
+            Id, CampaignId, ContributorId, Money.Amount, Money.Currency, RewardTierReservationId));
     }
 
     /// <summary>

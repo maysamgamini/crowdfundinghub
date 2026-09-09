@@ -19,6 +19,8 @@ public sealed class WebhookDeliveryTaskConfiguration : IEntityTypeConfiguration<
         builder.Property(x => x.ScheduledAtUtc).IsRequired();
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(20).IsRequired();
         builder.Property(x => x.LastError).HasMaxLength(1000);
+        builder.Property(x => x.WorkerId).HasMaxLength(100);
+        builder.Property(x => x.LockedUntilUtc);
 
         builder.HasIndex(x => new { x.Status, x.ScheduledAtUtc });
     }

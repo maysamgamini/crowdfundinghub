@@ -16,6 +16,7 @@ public sealed class CampaignsDbContext : DbContext
 
     public DbSet<Campaign> Campaigns => Set<Campaign>();
     public DbSet<RewardTier> RewardTiers => Set<RewardTier>();
+    public DbSet<RewardTierReservation> RewardTierReservations => Set<RewardTierReservation>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<ContributionLedgerEntry> ContributionLedgerEntries => Set<ContributionLedgerEntry>();
     public DbSet<DeadLetterEvent> DeadLetterEvents => Set<DeadLetterEvent>();

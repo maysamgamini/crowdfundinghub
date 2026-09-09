@@ -619,7 +619,10 @@ public sealed class PublishCampaignCommandHandlerTests
         var exception = await Assert.ThrowsAsync<ResourceConflictException>(action);
 
         Assert.Equal("Campaign must be approved by moderation before it can be published.", exception.Message);
-        Assert.Equal(0, transactionExecutor.InvocationCount);
+        // TICKET-041: the moderation status is now re-verified inside the advisory-locked
+        // transaction (closing the TOCTOU window against a concurrent CancelCampaign), so the
+        // executor IS invoked — it just rolls back without updating the campaign.
+        Assert.Equal(1, transactionExecutor.InvocationCount);
     }
 
     [Fact]
@@ -672,6 +675,8 @@ public sealed class AddContributionToCampaignCommandHandlerTests
         var handler = new CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.AddContributionToCampaign.AddContributionToCampaignCommandHandler(
             repository,
             ledger,
+            new FakeRewardTierRepository(),
+            new FakeRewardTierReservationRepository(),
             transactionExecutor,
             new FakeCampaignRealtimeNotifier());
 
@@ -706,6 +711,8 @@ public sealed class AddContributionToCampaignCommandHandlerTests
         var handler = new CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.AddContributionToCampaign.AddContributionToCampaignCommandHandler(
             repository,
             ledger,
+            new FakeRewardTierRepository(),
+            new FakeRewardTierReservationRepository(),
             transactionExecutor,
             new FakeCampaignRealtimeNotifier());
 
@@ -732,6 +739,8 @@ public sealed class AddContributionToCampaignCommandHandlerTests
         var handler = new CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.AddContributionToCampaign.AddContributionToCampaignCommandHandler(
             new FakeCampaignRepository(),
             new FakeContributionLedger(),
+            new FakeRewardTierRepository(),
+            new FakeRewardTierReservationRepository(),
             transactionExecutor,
             new FakeCampaignRealtimeNotifier());
 
@@ -1048,6 +1057,66 @@ internal sealed class FakeCampaignRepository : ICampaignRepository
 
     public Task<IReadOnlyList<Guid>> GetExpiredPublishedCampaignIdsAsync(DateTime asOfUtc, CancellationToken cancellationToken)
         => throw new NotSupportedException("Not used by these tests.");
+}
+
+internal sealed class FakeRewardTierRepository : IRewardTierRepository
+{
+    private readonly Dictionary<Guid, RewardTier> _rewardTiers = [];
+
+    public FakeRewardTierRepository(params RewardTier[] rewardTiers)
+    {
+        foreach (var rewardTier in rewardTiers)
+        {
+            _rewardTiers[rewardTier.Id] = rewardTier;
+        }
+    }
+
+    public Task AddAsync(RewardTier rewardTier, CancellationToken cancellationToken)
+    {
+        _rewardTiers[rewardTier.Id] = rewardTier;
+        return Task.CompletedTask;
+    }
+
+    public Task<RewardTier?> GetByIdAsync(Guid rewardTierId, CancellationToken cancellationToken)
+        => Task.FromResult(_rewardTiers.GetValueOrDefault(rewardTierId));
+
+    public Task UpdateAsync(RewardTier rewardTier, CancellationToken cancellationToken)
+    {
+        _rewardTiers[rewardTier.Id] = rewardTier;
+        return Task.CompletedTask;
+    }
+}
+
+internal sealed class FakeRewardTierReservationRepository : IRewardTierReservationRepository
+{
+    private readonly Dictionary<Guid, RewardTierReservation> _reservations = [];
+
+    public FakeRewardTierReservationRepository(params RewardTierReservation[] reservations)
+    {
+        foreach (var reservation in reservations)
+        {
+            _reservations[reservation.Id] = reservation;
+        }
+    }
+
+    public Task AddAsync(RewardTierReservation reservation, CancellationToken cancellationToken)
+    {
+        _reservations[reservation.Id] = reservation;
+        return Task.CompletedTask;
+    }
+
+    public Task<RewardTierReservation?> GetByIdAsync(Guid reservationId, CancellationToken cancellationToken)
+        => Task.FromResult(_reservations.GetValueOrDefault(reservationId));
+
+    public Task<IReadOnlyList<RewardTierReservation>> GetExpiredBatchAsync(DateTime nowUtc, int batchSize, CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<RewardTierReservation>>(
+            _reservations.Values.Where(x => x.IsExpired(nowUtc)).Take(batchSize).ToList());
+
+    public Task UpdateAsync(RewardTierReservation reservation, CancellationToken cancellationToken)
+    {
+        _reservations[reservation.Id] = reservation;
+        return Task.CompletedTask;
+    }
 }
 
 internal sealed class FakeContributionLedger : IContributionLedger

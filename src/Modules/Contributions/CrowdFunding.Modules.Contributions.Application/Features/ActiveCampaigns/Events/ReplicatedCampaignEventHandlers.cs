@@ -1,7 +1,9 @@
 using CrowdFunding.BuildingBlocks.Application.Events;
 using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignCancelled;
 using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignCreated;
+using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignFailed;
 using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignPublished;
+using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignSucceeded;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Transactions;
@@ -19,7 +21,9 @@ namespace CrowdFunding.Modules.Contributions.Application.Features.ActiveCampaign
 public sealed class ReplicatedCampaignEventHandlers :
     IEventHandler<CampaignCreatedApplicationEvent>,
     IEventHandler<CampaignPublishedApplicationEvent>,
-    IEventHandler<CampaignCancelledApplicationEvent>
+    IEventHandler<CampaignCancelledApplicationEvent>,
+    IEventHandler<CampaignSucceededApplicationEvent>,
+    IEventHandler<CampaignFailedApplicationEvent>
 {
     private readonly IActiveCampaignCacheRepository _repository;
     private readonly IContributionDateTimeProvider _dateTimeProvider;
@@ -53,6 +57,16 @@ public sealed class ReplicatedCampaignEventHandlers :
             cancellationToken);
 
     public Task Handle(CampaignCancelledApplicationEvent notification, CancellationToken cancellationToken)
+        => _transactionExecutor.ExecuteAsync(
+            ct => _repository.SetActiveStatusAsync(notification.CampaignId, isActive: false, _dateTimeProvider.UtcNow, ct),
+            cancellationToken);
+
+    public Task Handle(CampaignSucceededApplicationEvent notification, CancellationToken cancellationToken)
+        => _transactionExecutor.ExecuteAsync(
+            ct => _repository.SetActiveStatusAsync(notification.CampaignId, isActive: false, _dateTimeProvider.UtcNow, ct),
+            cancellationToken);
+
+    public Task Handle(CampaignFailedApplicationEvent notification, CancellationToken cancellationToken)
         => _transactionExecutor.ExecuteAsync(
             ct => _repository.SetActiveStatusAsync(notification.CampaignId, isActive: false, _dateTimeProvider.UtcNow, ct),
             cancellationToken);

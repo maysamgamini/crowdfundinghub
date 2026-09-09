@@ -69,7 +69,8 @@ public sealed class MakeContributionCommandHandler : ICommandHandler<MakeContrib
             _currentUser.UserId,
             command.Amount,
             command.Currency,
-            _dateTimeProvider.UtcNow);
+            _dateTimeProvider.UtcNow,
+            command.RewardTierReservationId);
 
         // In a real integration this id/reference comes back from creating a PaymentIntent (or
         // equivalent) with the external gateway before the client is redirected to complete

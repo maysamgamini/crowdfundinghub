@@ -4,6 +4,7 @@ using CrowdFunding.BuildingBlocks.Domain.Common;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Transactions;
+using CrowdFunding.Modules.Campaigns.Domain.Aggregates;
 
 namespace CrowdFunding.Modules.Campaigns.Application.Features.RewardTiers.Commands.ReserveRewardTierSlot;
 
@@ -12,22 +13,35 @@ namespace CrowdFunding.Modules.Campaigns.Application.Features.RewardTiers.Comman
 /// for: many backers can attempt this on the same tier at once, and the invariant
 /// (<c>ClaimedCount + ReservedCount &lt;= TotalCapacity</c>) must hold exactly, not
 /// approximately. See TICKET-034.
+/// <para>
+/// Also creates the <see cref="RewardTierReservation"/> row that correlates this specific hold
+/// to the backer and gives it an expiry — TICKET-043's fix for the reservation counter having no
+/// way to identify or reclaim an individual abandoned hold. The reservation id returned here is
+/// what the client threads through <c>MakeContributionCommand.RewardTierReservationId</c> at
+/// checkout.
+/// </para>
 /// </summary>
 public sealed class ReserveRewardTierSlotCommandHandler : ICommandHandler<ReserveRewardTierSlotCommand, ReserveRewardTierSlotResult>
 {
     private readonly IRewardTierRepository _rewardTierRepository;
+    private readonly IRewardTierReservationRepository _reservationRepository;
     private readonly ICurrentUser _currentUser;
+    private readonly IDateTimeProvider _dateTimeProvider;
     private readonly ICampaignRealtimeNotifier _realtimeNotifier;
     private readonly ICampaignTransactionExecutor _transactionExecutor;
 
     public ReserveRewardTierSlotCommandHandler(
         IRewardTierRepository rewardTierRepository,
+        IRewardTierReservationRepository reservationRepository,
         ICurrentUser currentUser,
+        IDateTimeProvider dateTimeProvider,
         ICampaignRealtimeNotifier realtimeNotifier,
         ICampaignTransactionExecutor transactionExecutor)
     {
         _rewardTierRepository = rewardTierRepository;
+        _reservationRepository = reservationRepository;
         _currentUser = currentUser;
+        _dateTimeProvider = dateTimeProvider;
         _realtimeNotifier = realtimeNotifier;
         _transactionExecutor = transactionExecutor;
     }
@@ -50,6 +64,7 @@ public sealed class ReserveRewardTierSlotCommandHandler : ICommandHandler<Reserv
         var justSoldOut = false;
         var rewardTierId = command.RewardTierId;
         var availableCount = 0;
+        var reservationId = Guid.Empty;
         string title = string.Empty;
 
         await _transactionExecutor.ExecuteAsync(advisoryLockKey, async ct =>
@@ -63,6 +78,11 @@ public sealed class ReserveRewardTierSlotCommandHandler : ICommandHandler<Reserv
             justSoldOut = rewardTier.ReserveSlot();
             await _rewardTierRepository.UpdateAsync(rewardTier, ct);
 
+            var reservation = RewardTierReservation.Create(
+                rewardTier.Id, command.CampaignId, _currentUser.UserId, _dateTimeProvider.UtcNow);
+            await _reservationRepository.AddAsync(reservation, ct);
+            reservationId = reservation.Id;
+
             availableCount = rewardTier.AvailableCount;
             title = rewardTier.Title;
 
@@ -74,6 +94,6 @@ public sealed class ReserveRewardTierSlotCommandHandler : ICommandHandler<Reserv
             await _realtimeNotifier.NotifyRewardTierSoldOutAsync(command.CampaignId, rewardTierId, title, cancellationToken);
         }
 
-        return new ReserveRewardTierSlotResult(rewardTierId, availableCount);
+        return new ReserveRewardTierSlotResult(rewardTierId, availableCount, reservationId);
     }
 }

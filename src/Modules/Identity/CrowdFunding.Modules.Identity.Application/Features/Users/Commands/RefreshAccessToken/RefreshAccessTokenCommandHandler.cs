@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Services;
@@ -78,14 +79,27 @@ public sealed class RefreshAccessTokenCommandHandler : ICommandHandler<RefreshAc
         var newTokenHash = _refreshTokenService.Hash(newRawToken);
         var newRefreshToken = RefreshToken.Issue(user.Id, newTokenHash, now, _refreshTokenService.Lifetime);
 
-        await _transactionExecutor.ExecuteAsync(
-            async ct =>
-            {
-                storedToken.Revoke(now, newTokenHash);
-                await _refreshTokenRepository.UpdateAsync(storedToken, ct);
-                await _refreshTokenRepository.AddAsync(newRefreshToken, ct);
-            },
-            cancellationToken);
+        try
+        {
+            await _transactionExecutor.ExecuteAsync(
+                async ct =>
+                {
+                    storedToken.Revoke(now, newTokenHash);
+                    await _refreshTokenRepository.UpdateAsync(storedToken, ct);
+                    await _refreshTokenRepository.AddAsync(newRefreshToken, ct);
+                },
+                cancellationToken);
+        }
+        catch (ConcurrencyConflictException)
+        {
+            // Another request rotated this same refresh token first (its xmin already moved).
+            // This is the losing side of a legitimate race — e.g. two requests fired by the same
+            // client at once — not evidence of token theft, so it must NOT trigger
+            // HandleReuseAsync and revoke every session on the account. The presented token is
+            // simply no longer valid; the caller should retry with the token pair the winning
+            // request returned.
+            throw new UnauthorizedAccessException("Refresh token was already rotated by a concurrent request.");
+        }
 
         var accessToken = _accessTokenProvider.Create(user, UserAuthorizationProjection.GetEffectivePermissions(user));
 
