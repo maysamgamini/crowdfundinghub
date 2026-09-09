@@ -1,4 +1,4 @@
-﻿using CrowdFunding.BuildingBlocks.Domain.Common;
+using CrowdFunding.BuildingBlocks.Domain.Common;
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Contributions.Domain.Enums;
 using CrowdFunding.Modules.Contributions.Domain.Events;
@@ -183,6 +183,6 @@ public sealed class Contribution : BaseEntity
 
         Status = ContributionStatus.Refunded;
         ProcessedAtUtc = processedAtUtc;
-        AddDomainEvent(new ContributionRefundedDomainEvent(Id, CampaignId, ContributorId, Money.Amount, Money.Currency));
+        AddDomainEvent(new ContributionRefundedDomainEvent(Id, CampaignId, ContributorId, Money.Amount, Money.Currency, RewardTierReservationId));
     }
 }

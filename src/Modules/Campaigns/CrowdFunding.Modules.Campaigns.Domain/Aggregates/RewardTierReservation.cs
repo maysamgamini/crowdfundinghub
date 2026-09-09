@@ -110,5 +110,20 @@ public sealed class RewardTierReservation
         Status = RewardTierReservationStatus.Released;
     }
 
+    /// <summary>
+    /// Reverses a confirmed reservation when the corresponding contribution is refunded (TICKET-051).
+    /// Transitions status from <see cref="RewardTierReservationStatus.Confirmed"/> to
+    /// <see cref="RewardTierReservationStatus.Released"/>.
+    /// </summary>
+    public void Refund()
+    {
+        if (Status != RewardTierReservationStatus.Confirmed)
+        {
+            throw new InvalidOperationException($"Cannot refund reservation '{Id}' in status '{Status}'.");
+        }
+
+        Status = RewardTierReservationStatus.Released;
+    }
+
     public bool IsExpired(DateTime nowUtc) => Status == RewardTierReservationStatus.Reserved && ExpiresAtUtc <= nowUtc;
 }

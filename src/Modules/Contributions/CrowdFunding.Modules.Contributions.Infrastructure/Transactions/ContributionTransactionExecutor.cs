@@ -1,4 +1,4 @@
-﻿using CrowdFunding.BuildingBlocks.Application.Exceptions;
+using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Domain.Common;
 using CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Transactions;
@@ -107,7 +107,8 @@ public sealed class ContributionTransactionExecutor : IContributionTransactionEx
                     @event.CampaignId,
                     @event.ContributorId,
                     @event.Amount,
-                    @event.Currency),
+                    @event.Currency,
+                    @event.RewardTierReservationId),
                 DateTime.UtcNow),
             // Fail loud instead of silently discarding (improvement.md §2.3): an unmapped domain
             // event throws immediately rather than vanishing with no log and no side effect.

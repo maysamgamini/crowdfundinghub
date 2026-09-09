@@ -114,4 +114,17 @@ public sealed class RewardTier
         ReservedCount--;
         ClaimedCount++;
     }
+
+    /// <summary>
+    /// Reverses a confirmed claim when a contribution is refunded during campaign failure or cancellation (TICKET-051).
+    /// </summary>
+    public void ReleaseClaim()
+    {
+        if (ClaimedCount <= 0)
+        {
+            throw new InvalidOperationException("No claimed slot to release for this tier.");
+        }
+
+        ClaimedCount--;
+    }
 }
