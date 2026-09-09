@@ -36,11 +36,15 @@ public sealed class IdentityTransactionExecutor : IIdentityTransactionExecutor
         try
         {
             var result = await action(cancellationToken);
-            await _dbContext.SaveChangesAsync(cancellationToken);
 
-            if (transaction is not null)
+            if (ownsTransaction)
             {
-                await transaction.CommitAsync(cancellationToken);
+                await _dbContext.SaveChangesAsync(cancellationToken);
+
+                if (transaction is not null)
+                {
+                    await transaction.CommitAsync(cancellationToken);
+                }
             }
 
             return result;

@@ -1,4 +1,4 @@
-﻿using CrowdFunding.BuildingBlocks.Domain.Common;
+using CrowdFunding.BuildingBlocks.Domain.Common;
 using CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Moderation.Contracts.Events.CampaignReviewApproved;
@@ -37,20 +37,24 @@ public sealed class ModerationTransactionExecutor : IModerationTransactionExecut
         try
         {
             var result = await action(cancellationToken);
-            var domainEvents = DomainEventAccessor.GetDomainEvents(_dbContext);
-            var outboxMessages = domainEvents.Select(MapApplicationEvent).ToArray();
 
-            if (outboxMessages.Length > 0)
+            if (ownsTransaction)
             {
-                await _dbContext.OutboxMessages.AddRangeAsync(outboxMessages, cancellationToken);
-            }
+                var domainEvents = DomainEventAccessor.GetDomainEvents(_dbContext);
+                var outboxMessages = domainEvents.Select(MapApplicationEvent).ToArray();
 
-            await _dbContext.SaveChangesAsync(cancellationToken);
-            DomainEventAccessor.ClearDomainEvents(_dbContext);
+                if (outboxMessages.Length > 0)
+                {
+                    await _dbContext.OutboxMessages.AddRangeAsync(outboxMessages, cancellationToken);
+                }
 
-            if (transaction is not null)
-            {
-                await transaction.CommitAsync(cancellationToken);
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                DomainEventAccessor.ClearDomainEvents(_dbContext);
+
+                if (transaction is not null)
+                {
+                    await transaction.CommitAsync(cancellationToken);
+                }
             }
 
             return result;
