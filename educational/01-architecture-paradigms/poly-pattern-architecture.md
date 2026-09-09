@@ -195,3 +195,17 @@ By writing to the outbox table in the **same database transaction**:
 2. **Do not route queries through write repositories.** Queries should project directly from EF Core `AsNoTracking()` or Dapper to the response DTO.
 3. **Only write events to the Outbox table if another bounded context or external microservice genuinely needs to react to them.**
 4. **Enforce boundaries through namespaces and project references, not through layers of empty classes.**
+
+---
+
+## 6. This Isn't Hypothetical — Run It
+
+The Tier 1 vs. Tier 3 contrast in Section 3 above is illustrative pseudocode. The real thing runs
+in this repository: [`src/Samples/RosettaStone/`](../../src/Samples/RosettaStone/) implements
+**the same business requirement — create a campaign with a title, story, and target amount —
+three times**, as Tier 1 (Minimal API), Tier 2 (Pragmatic CQRS), and a pointer to the real Tier 3
+(`POST /api/campaigns`), all mapped side by side under the `RosettaStone` Swagger tag when you
+`dotnet run --project src/API/CrowdFunding.API`. Its `README.md` carries the honest,
+`wc -l`-measured scorecard — files, lines, assemblies, and the two questions ("does another
+module need to react reliably?", "can concurrent writes corrupt this row?") that decide which
+tier a real feature belongs in, instead of dogma deciding it.

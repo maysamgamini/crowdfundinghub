@@ -28,6 +28,7 @@ using CrowdFunding.Modules.Moderation.Application.DependencyInjection;
 using CrowdFunding.Modules.Moderation.Infrastructure.DependencyInjection;
 using CrowdFunding.Modules.Moderation.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.Notifications.Application.DependencyInjection;
+using CrowdFunding.Samples.RosettaStone;
 using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignCreated;
 using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPaymentConfirmed;
 using CrowdFunding.Modules.Moderation.Contracts.Events.CampaignReviewApproved;
@@ -150,6 +151,8 @@ builder.Services.AddModerationInfrastructure(builder.Configuration);
 builder.Services.AddNotificationsApplication();
 builder.Services.AddCampaignUpdatesApplication();
 
+builder.Services.AddRosettaStoneSample(builder.Configuration);
+
 var typeAdapterConfig = new TypeAdapterConfig();
 CampaignsMappingConfig.Register(typeAdapterConfig);
 ContributionsMappingConfig.Register(typeAdapterConfig);
@@ -218,6 +221,8 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 app.MapGet("/.well-known/jwks.json", JwksEndpoint.Get)
     .AllowAnonymous()
     .WithTags("System");
+
+app.MapRosettaStoneSample();
 
 app.UseRateLimiter();
 

@@ -38,6 +38,7 @@
     <ProjectReference Include="..\..\Modules\Moderation\CrowdFunding.Modules.Moderation.Infrastructure\CrowdFunding.Modules.Moderation.Infrastructure.csproj" />
     <ProjectReference Include="..\..\Modules\Moderation\CrowdFunding.Modules.Moderation.Contracts\CrowdFunding.Modules.Moderation.Contracts.csproj" />
     <ProjectReference Include="..\..\Modules\Campaigns\CrowdFunding.Modules.Campaigns.Application\CrowdFunding.Modules.Campaigns.Application.csproj" />
+    <ProjectReference Include="..\..\Samples\RosettaStone\CrowdFunding.Samples.RosettaStone.csproj" />
   </ItemGroup>
 
 </Project>

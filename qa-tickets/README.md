@@ -29,7 +29,7 @@ These tickets specifically target the architectural transformation required to m
 | [TICKET-025](./TICKET-025-MODULAR-OUTBOX-PARTITIONING-AUTONOMOUS-WORKERS.md) | Modular Outbox Partitioning: Replace Monolithic Centralized Worker with Per-Module Processors | 🟠 P1 | Concurrency, Monolith Autonomy & Outbox Resilience | Fixed |
 | [TICKET-026](./TICKET-026-MULTI-DATABASE-CONNECTION-DECOUPLING.md) | Multi-Database Connection Decoupling: Enable Database-Per-Service via Fallback Strings | 🟡 P2 | Database Isolation & Deployment Topologies | Fixed |
 | [TICKET-027](./TICKET-027-DISTRIBUTED-CROWDFUNDING-LIFECYCLE-REFUND-SAGA.md) | Distributed Crowdfunding Lifecycle: Deadline Expiration Worker & Event-Driven Refund Saga | 🔴 P1 | Domain Completeness & Compensation Sagas | Fixed |
-| [TICKET-028](./TICKET-028-PEDAGOGICAL-ROSETTA-STONE-POLY-PATTERNS.md) | The Pedagogical Rosetta Stone: Multi-Paradigm Slices (Minimal CRUD vs. CQRS vs. Rich DDD) | 🟡 P2 | Poly-Pattern Architecture & Educational Clarity | Open |
+| [TICKET-028](./TICKET-028-PEDAGOGICAL-ROSETTA-STONE-POLY-PATTERNS.md) | The Pedagogical Rosetta Stone: Multi-Paradigm Slices (Minimal CRUD vs. CQRS vs. Rich DDD) | 🟡 P2 | Poly-Pattern Architecture & Educational Clarity | Fixed |
 | [TICKET-029](./TICKET-029-MICROSERVICE-EXTRACTION-POC-STANDALONE-SERVICE.md) | Microservice Extraction Proof-of-Concept: Standalone Host (`CrowdFunding.Moderation.Service`) | 🟠 P1 | Strangler Fig Pattern & Microservice Extraction | Fixed |
 | [TICKET-030](./TICKET-030-DISTRIBUTED-TRACING-OPENTELEMETRY-OUTBOX-PROPAGATION.md) | Distributed Tracing: OpenTelemetry W3C `traceparent` Propagation Across Outbox Boundaries | 🟡 P2 | Distributed Tracing & Cross-Boundary Observability | Fixed |
 

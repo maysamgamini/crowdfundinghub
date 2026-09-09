@@ -43,6 +43,9 @@
     <Project Path="src/Modules/Notifications/CrowdFunding.Modules.Notifications.Domain/CrowdFunding.Modules.Notifications.Domain.csproj" />
     <Project Path="src/Modules/Notifications/CrowdFunding.Modules.Notifications.Infrastructure/CrowdFunding.Modules.Notifications.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/src/Samples/">
+    <Project Path="src/Samples/RosettaStone/CrowdFunding.Samples.RosettaStone.csproj" />
+  </Folder>
   <Folder Name="/tests/" />
   <Folder Name="/tests/ArchitectureTests/">
     <Project Path="tests/ArchitectureTests/CrowdFunding.ArchitectureTests/CrowdFunding.ArchitectureTests.csproj" />
