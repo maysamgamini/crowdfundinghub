@@ -19,8 +19,8 @@ Following the repository's architectural principles in `DEV_GUIDELINES.md`:
 
 ## Subdirectories
 - `Background`: Hosts background workers such as `OutboxProcessorBackgroundService` for transactional outbox polling and event publishing.
-- `Contracts`: Contains strongly typed request and response DTOs exposed over HTTP, organized by module (`Campaigns`, `Contributions`, `Identity`, `Moderation`, `Common`).
-- `Controllers`: Houses REST controllers for `Campaigns`, `Contributions`, `Identity`, and `Moderation`.
+- `Contracts`: Contains strongly typed request and response DTOs exposed over HTTP, organized by module (`Campaigns`, `Contributions`, `Identity`, `Moderation`, `Notifications`, `Common`).
+- `Controllers`: Houses REST controllers for `Campaigns`, `Contributions`, `Identity`, `Moderation`, and `Notifications`.
 - `Mapping`: Mapster configuration profiles mapping HTTP contracts to application commands and DTOs.
 - `Middleware`: Pipeline middleware definitions and extension points.
 - `Migrations`: Database migration execution (`MigrationRunner`) and out-of-band operator admin account seeding (`AdminSeeder`).

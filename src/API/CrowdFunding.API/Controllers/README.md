@@ -25,6 +25,10 @@ Hosts ASP.NET Core REST API controllers providing HTTP route endpoints for the s
   - `GET /api/moderation/reviews/campaigns/{campaignId}/status`: Check moderation review status for a campaign.
   - `POST /api/moderation/reviews/{campaignId}/approve`: Approve a pending campaign review (requires `Reviews.Approve` permission).
   - `POST /api/moderation/reviews/{campaignId}/reject`: Reject a campaign submission with review notes (requires `Reviews.Reject` permission).
+- `NotificationsController.cs`: Exposes backer notification preference and compliance endpoints (TICKET-056):
+  - `GET /api/notifications/preferences`: Retrieve notification settings for the authenticated user.
+  - `PUT /api/notifications/preferences`: Update granular notification preferences (campaign updates, marketing).
+  - `POST /api/notifications/unsubscribe`: One-click RFC 8058 unsubscribe endpoint for opt-out of commercial notifications.
 
 ## Design Conventions
 - **Thin Controller Pattern**: Business logic, aggregate mutation, and transactional boundaries are encapsulated in application command handlers.

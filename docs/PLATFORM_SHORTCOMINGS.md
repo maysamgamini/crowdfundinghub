@@ -297,6 +297,10 @@ public sealed class NotificationPreferences
 ```
 3. **Dispatch Integration:** Replace stub event handlers with real email dispatchers (SendGrid / AWS SES) verifying user preferences before delivery.
 
+> [!NOTE]
+> **Resolution Status (TICKET-031 & TICKET-056):**
+> Notification preferences and RFC 8058 one-click unsubscribe compliance were implemented in [`NotificationPreference.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Notifications/CrowdFunding.Modules.Notifications.Domain/Aggregates/NotificationPreference.cs), [`NotificationsController.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Controllers/NotificationsController.cs), and [`HttpEmailNotificationService.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Notifications/CrowdFunding.Modules.Notifications.Infrastructure/Services/HttpEmailNotificationService.cs). Transactional emails (pledge receipts, refund notices) bypass preferences, while commercial campaign updates strictly respect opt-out preferences and include RFC 8058 headers.
+
 ---
 
 ## 4. Section II: High-Load, Concurrency & Performance Shortcomings

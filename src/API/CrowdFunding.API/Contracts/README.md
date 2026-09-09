@@ -1,4 +1,4 @@
-﻿# Contracts
+# Contracts
 
 ## Purpose
 Contains request and response contracts returned by the HTTP API.
@@ -12,3 +12,4 @@ Contains request and response contracts returned by the HTTP API.
 - `Contributions`: Defines API contracts for contribution endpoints.
 - `Identity`: Defines API contracts for authentication and user-management endpoints.
 - `Moderation`: Defines API contracts for moderation endpoints.
+- `Notifications`: Defines API contracts for backer notification preferences and unsubscribe endpoints.
