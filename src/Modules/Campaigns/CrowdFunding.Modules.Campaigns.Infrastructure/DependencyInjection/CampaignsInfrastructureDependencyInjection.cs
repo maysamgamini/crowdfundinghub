@@ -2,6 +2,7 @@
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Transactions;
+using CrowdFunding.Modules.Campaigns.Infrastructure.BackgroundServices;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Caching;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Outbox;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.DbContexts;
@@ -50,6 +51,7 @@ public static class CampaignsInfrastructureDependencyInjection
         services.AddScoped<ICampaignTransactionExecutor, CampaignTransactionExecutor>();
         services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();
         services.AddHostedService<CampaignsOutboxBackgroundService>();
+        services.AddHostedService<CampaignExpirationBackgroundService>();
 
         return services;
     }

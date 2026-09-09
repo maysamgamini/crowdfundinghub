@@ -2,11 +2,14 @@ using CrowdFunding.BuildingBlocks.Application.Pagination;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Campaigns.Contracts.Enums;
+using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignCancelled;
+using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignFailed;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.ConfirmContributionPayment;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.FailContributionPayment;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.MakeContribution;
+using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Events;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Queries.GetContributionById;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Queries.ListContributionsByCampaign;
 using CrowdFunding.Modules.Contributions.Domain.Aggregates;
@@ -186,6 +189,56 @@ public sealed class ContributionDomainTests
         var exception = Assert.Throws<InvalidOperationException>(action);
 
         Assert.Equal("Only pending contributions can be failed.", exception.Message);
+    }
+
+    [Fact]
+    public void Refund_ShouldMoveContributionToRefunded_AndRaiseDomainEvent_WhenSucceeded()
+    {
+        var contribution = Contribution.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            50m,
+            "USD",
+            new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
+        contribution.ConfirmPayment("PAY-123", new DateTime(2026, 4, 6, 12, 15, 0, DateTimeKind.Utc));
+
+        contribution.Refund(new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc));
+
+        Assert.Equal(ContributionStatus.Refunded, contribution.Status);
+        Assert.Contains(contribution.DomainEvents, domainEvent => domainEvent is ContributionRefundedDomainEvent);
+    }
+
+    [Fact]
+    public void Refund_ShouldThrow_WhenContributionIsNotSucceeded()
+    {
+        var contribution = Contribution.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            50m,
+            "USD",
+            new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
+
+        var action = () => contribution.Refund(new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc));
+
+        var exception = Assert.Throws<InvalidOperationException>(action);
+        Assert.Equal("Cannot refund contribution with status 'Pending'.", exception.Message);
+    }
+
+    [Fact]
+    public void Refund_ShouldThrow_WhenAlreadyRefunded()
+    {
+        var contribution = Contribution.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            50m,
+            "USD",
+            new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
+        contribution.ConfirmPayment("PAY-123", new DateTime(2026, 4, 6, 12, 15, 0, DateTimeKind.Utc));
+        contribution.Refund(new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc));
+
+        var action = () => contribution.Refund(new DateTime(2026, 5, 2, 0, 0, 0, DateTimeKind.Utc));
+
+        Assert.Throws<InvalidOperationException>(action);
     }
 }
 
@@ -641,6 +694,98 @@ public sealed class FailContributionPaymentCommandHandlerTests
     }
 }
 
+public sealed class CampaignTerminationRefundHandlerTests
+{
+    [Fact]
+    public async Task Handle_CampaignFailed_ShouldRefundEverySucceededContribution()
+    {
+        var campaignId = Guid.NewGuid();
+        var contributionOne = Contribution.Create(campaignId, Guid.NewGuid(), 100m, "USD", DateTime.UtcNow);
+        contributionOne.ConfirmPayment("PAY-1", DateTime.UtcNow);
+        var contributionTwo = Contribution.Create(campaignId, Guid.NewGuid(), 200m, "USD", DateTime.UtcNow);
+        contributionTwo.ConfirmPayment("PAY-2", DateTime.UtcNow);
+        var repository = new FakeRefundableContributionRepository([contributionOne, contributionTwo]);
+        var transactionExecutor = new FakeContributionTransactionExecutor();
+        var handler = new CampaignTerminationRefundHandler(
+            repository,
+            transactionExecutor,
+            new FakeContributionDateTimeProvider(new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc)));
+
+        await handler.Handle(
+            new CampaignFailedApplicationEvent(campaignId, Guid.NewGuid(), 300m, 1000m, "USD", DateTime.UtcNow),
+            CancellationToken.None);
+
+        Assert.Equal(ContributionStatus.Refunded, contributionOne.Status);
+        Assert.Equal(ContributionStatus.Refunded, contributionTwo.Status);
+        Assert.Equal(1, transactionExecutor.InvocationCount);
+    }
+
+    [Fact]
+    public async Task Handle_CampaignCancelled_ShouldRefundEverySucceededContribution()
+    {
+        var campaignId = Guid.NewGuid();
+        var contribution = Contribution.Create(campaignId, Guid.NewGuid(), 150m, "USD", DateTime.UtcNow);
+        contribution.ConfirmPayment("PAY-1", DateTime.UtcNow);
+        var repository = new FakeRefundableContributionRepository([contribution]);
+        var transactionExecutor = new FakeContributionTransactionExecutor();
+        var handler = new CampaignTerminationRefundHandler(
+            repository,
+            transactionExecutor,
+            new FakeContributionDateTimeProvider(new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc)));
+
+        await handler.Handle(new CampaignCancelledApplicationEvent(campaignId, Guid.NewGuid()), CancellationToken.None);
+
+        Assert.Equal(ContributionStatus.Refunded, contribution.Status);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldBeIdempotent_WhenTheTriggeringEventIsRedelivered()
+    {
+        var campaignId = Guid.NewGuid();
+        var contribution = Contribution.Create(campaignId, Guid.NewGuid(), 150m, "USD", DateTime.UtcNow);
+        contribution.ConfirmPayment("PAY-1", DateTime.UtcNow);
+        var repository = new FakeRefundableContributionRepository([contribution]);
+        var transactionExecutor = new FakeContributionTransactionExecutor();
+        var handler = new CampaignTerminationRefundHandler(
+            repository,
+            transactionExecutor,
+            new FakeContributionDateTimeProvider(new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc)));
+        var @event = new CampaignFailedApplicationEvent(campaignId, Guid.NewGuid(), 150m, 1000m, "USD", DateTime.UtcNow);
+
+        await handler.Handle(@event, CancellationToken.None);
+        await handler.Handle(@event, CancellationToken.None);
+
+        // GetSucceededByCampaignIdAsync only ever returns Succeeded rows, so the second delivery
+        // finds nothing left to refund — no exception, no double-refund, no second transaction.
+        Assert.Equal(ContributionStatus.Refunded, contribution.Status);
+        Assert.Equal(1, transactionExecutor.InvocationCount);
+    }
+}
+
+internal sealed class FakeRefundableContributionRepository : IContributionRepository
+{
+    private readonly List<Contribution> _contributions;
+
+    public FakeRefundableContributionRepository(List<Contribution> contributions)
+    {
+        _contributions = contributions;
+    }
+
+    public Task AddAsync(Contribution contribution, CancellationToken cancellationToken)
+        => throw new NotSupportedException("Not used by these tests.");
+
+    public Task<Contribution?> GetByIdAsync(Guid contributionId, CancellationToken cancellationToken)
+        => Task.FromResult(_contributions.FirstOrDefault(x => x.Id == contributionId));
+
+    public Task UpdateAsync(Contribution contribution, CancellationToken cancellationToken)
+        => Task.CompletedTask;
+
+    public Task<IReadOnlyList<Contribution>> GetSucceededByCampaignIdAsync(Guid campaignId, CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<Contribution>>(_contributions
+            .Where(x => x.CampaignId == campaignId && x.Status == ContributionStatus.Succeeded)
+            .ToList());
+}
+
 public sealed class ListContributionsByCampaignQueryHandlerTests
 {
     [Fact]
@@ -805,6 +950,9 @@ internal sealed class FakeContributionRepository : IContributionRepository
         SavedContribution = contribution;
         return Task.CompletedTask;
     }
+
+    public Task<IReadOnlyList<Contribution>> GetSucceededByCampaignIdAsync(Guid campaignId, CancellationToken cancellationToken)
+        => throw new NotSupportedException("Not used by these tests.");
 }
 
 internal sealed class FakeActiveCampaignCacheRepository : IActiveCampaignCacheRepository

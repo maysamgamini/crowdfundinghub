@@ -119,4 +119,24 @@ public sealed class Contribution : BaseEntity
         FailureReason = failureReason.Trim();
         ProcessedAtUtc = processedAtUtc;
     }
+
+    /// <summary>
+    /// Refunds a succeeded contribution as a compensating action when its campaign fails or is
+    /// cancelled after payment was already confirmed. Only ever transitions FROM Succeeded — this
+    /// makes the refund saga naturally idempotent: re-delivering the triggering
+    /// CampaignFailedApplicationEvent/CampaignCancelledApplicationEvent finds the contribution
+    /// already Refunded and is filtered out by <c>IContributionRepository.GetSucceededByCampaignIdAsync</c>
+    /// rather than throwing or double-refunding.
+    /// </summary>
+    public void Refund(DateTime processedAtUtc)
+    {
+        if (Status != ContributionStatus.Succeeded)
+        {
+            throw new InvalidOperationException($"Cannot refund contribution with status '{Status}'.");
+        }
+
+        Status = ContributionStatus.Refunded;
+        ProcessedAtUtc = processedAtUtc;
+        AddDomainEvent(new ContributionRefundedDomainEvent(Id, CampaignId, ContributorId, Money.Amount, Money.Currency));
+    }
 }

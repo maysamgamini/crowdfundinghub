@@ -1,5 +1,6 @@
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Campaigns.Domain.Aggregates;
+using CrowdFunding.Modules.Campaigns.Domain.Enums;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Caching;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore;
@@ -61,5 +62,14 @@ public sealed class CampaignRepository : ICampaignRepository
         {
             _logger.LogWarning(exception, "Failed to invalidate cache for campaign {CampaignId}.", campaign.Id);
         }
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<Guid>> GetExpiredPublishedCampaignIdsAsync(DateTime asOfUtc, CancellationToken cancellationToken)
+    {
+        return await _dbContext.Campaigns
+            .Where(x => x.Status == CampaignStatus.Published && x.DeadlineUtc <= asOfUtc)
+            .Select(x => x.Id)
+            .ToListAsync(cancellationToken);
     }
 }

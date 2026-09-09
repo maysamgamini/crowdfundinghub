@@ -3,6 +3,7 @@ using CrowdFunding.BuildingBlocks.Domain.Common;
 using CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPaymentConfirmed;
+using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionRefunded;
 using CrowdFunding.Modules.Contributions.Domain.Events;
 using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore;
@@ -95,6 +96,14 @@ public sealed class ContributionTransactionExecutor : IContributionTransactionEx
                 new ContributionPaymentConfirmedApplicationEvent(
                     @event.ContributionId,
                     @event.CampaignId,
+                    @event.Amount,
+                    @event.Currency),
+                DateTime.UtcNow),
+            ContributionRefundedDomainEvent @event => OutboxMessage.Create(
+                new ContributionRefundedApplicationEvent(
+                    @event.ContributionId,
+                    @event.CampaignId,
+                    @event.ContributorId,
                     @event.Amount,
                     @event.Currency),
                 DateTime.UtcNow),

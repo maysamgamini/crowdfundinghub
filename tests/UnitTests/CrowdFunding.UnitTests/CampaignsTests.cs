@@ -309,6 +309,73 @@ public sealed class CampaignDomainTests
         Assert.Equal("Contribution amount must be greater than zero.", exception.Message);
     }
 
+    [Fact]
+    public void CompleteSuccessfully_ShouldMoveCampaignToSuccessful_WhenGoalWasReached()
+    {
+        var createdAtUtc = new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc);
+        var campaign = CreateDraftCampaign(createdAtUtc, createdAtUtc.AddDays(14));
+        campaign.Publish(createdAtUtc.AddDays(1));
+        campaign.ApplyConfirmedContribution(new Money(10000m, "USD"));
+
+        campaign.CompleteSuccessfully(createdAtUtc.AddDays(15));
+
+        Assert.Equal(CampaignStatus.Successful, campaign.Status);
+        Assert.Contains(campaign.DomainEvents, domainEvent => domainEvent is CampaignSucceededDomainEvent);
+    }
+
+    [Fact]
+    public void CompleteSuccessfully_ShouldThrow_WhenGoalWasNotReached()
+    {
+        var createdAtUtc = new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc);
+        var campaign = CreateDraftCampaign(createdAtUtc, createdAtUtc.AddDays(14));
+        campaign.Publish(createdAtUtc.AddDays(1));
+        campaign.ApplyConfirmedContribution(new Money(500m, "USD"));
+
+        var action = () => campaign.CompleteSuccessfully(createdAtUtc.AddDays(15));
+
+        var exception = Assert.Throws<InvalidOperationException>(action);
+        Assert.Equal("Cannot complete a campaign successfully — its funding goal was not reached.", exception.Message);
+    }
+
+    [Fact]
+    public void CompleteSuccessfully_ShouldThrow_WhenCampaignIsNotPublished()
+    {
+        var createdAtUtc = new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc);
+        var campaign = CreateDraftCampaign(createdAtUtc, createdAtUtc.AddDays(14));
+
+        var action = () => campaign.CompleteSuccessfully(createdAtUtc.AddDays(15));
+
+        Assert.Throws<InvalidOperationException>(action);
+    }
+
+    [Fact]
+    public void MarkFailed_ShouldMoveCampaignToFailed_WhenGoalWasNotReached()
+    {
+        var createdAtUtc = new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc);
+        var campaign = CreateDraftCampaign(createdAtUtc, createdAtUtc.AddDays(14));
+        campaign.Publish(createdAtUtc.AddDays(1));
+        campaign.ApplyConfirmedContribution(new Money(500m, "USD"));
+
+        campaign.MarkFailed(createdAtUtc.AddDays(15));
+
+        Assert.Equal(CampaignStatus.Failed, campaign.Status);
+        Assert.Contains(campaign.DomainEvents, domainEvent => domainEvent is CampaignFailedDomainEvent);
+    }
+
+    [Fact]
+    public void MarkFailed_ShouldThrow_WhenGoalWasReached()
+    {
+        var createdAtUtc = new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc);
+        var campaign = CreateDraftCampaign(createdAtUtc, createdAtUtc.AddDays(14));
+        campaign.Publish(createdAtUtc.AddDays(1));
+        campaign.ApplyConfirmedContribution(new Money(10000m, "USD"));
+
+        var action = () => campaign.MarkFailed(createdAtUtc.AddDays(15));
+
+        var exception = Assert.Throws<InvalidOperationException>(action);
+        Assert.Equal("Cannot mark a campaign failed — its funding goal was reached.", exception.Message);
+    }
+
     private static Campaign CreateDraftCampaign(DateTime createdAtUtc, DateTime deadlineUtc)
     {
         return Campaign.Create(
@@ -978,6 +1045,9 @@ internal sealed class FakeCampaignRepository : ICampaignRepository
         SavedCampaign = campaign;
         return Task.CompletedTask;
     }
+
+    public Task<IReadOnlyList<Guid>> GetExpiredPublishedCampaignIdsAsync(DateTime asOfUtc, CancellationToken cancellationToken)
+        => throw new NotSupportedException("Not used by these tests.");
 }
 
 internal sealed class FakeContributionLedger : IContributionLedger

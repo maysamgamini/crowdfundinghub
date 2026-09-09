@@ -1,5 +1,6 @@
 ﻿using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Contributions.Domain.Aggregates;
+using CrowdFunding.Modules.Contributions.Domain.Enums;
 using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore;
 
@@ -38,5 +39,13 @@ public sealed class ContributionRepository : IContributionRepository
     {
         _dbContext.Contributions.Update(contribution);
         return Task.CompletedTask;
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<Contribution>> GetSucceededByCampaignIdAsync(Guid campaignId, CancellationToken cancellationToken)
+    {
+        return await _dbContext.Contributions
+            .Where(x => x.CampaignId == campaignId && x.Status == ContributionStatus.Succeeded)
+            .ToListAsync(cancellationToken);
     }
 }

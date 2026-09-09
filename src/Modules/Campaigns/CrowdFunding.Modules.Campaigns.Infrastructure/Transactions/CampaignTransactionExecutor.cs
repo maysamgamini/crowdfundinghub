@@ -5,7 +5,9 @@ using Microsoft.EntityFrameworkCore;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignCancelled;
 using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignCreated;
+using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignFailed;
 using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignPublished;
+using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignSucceeded;
 using CrowdFunding.Modules.Campaigns.Domain.Events;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -124,6 +126,12 @@ public sealed class CampaignTransactionExecutor : ICampaignTransactionExecutor
                 DateTime.UtcNow),
             CampaignCancelledDomainEvent @event => OutboxMessage.Create(
                 new CampaignCancelledApplicationEvent(@event.CampaignId, @event.OwnerId),
+                DateTime.UtcNow),
+            CampaignSucceededDomainEvent @event => OutboxMessage.Create(
+                new CampaignSucceededApplicationEvent(@event.CampaignId, @event.OwnerId, @event.RaisedAmount, @event.Currency, @event.OccurredOnUtc),
+                DateTime.UtcNow),
+            CampaignFailedDomainEvent @event => OutboxMessage.Create(
+                new CampaignFailedApplicationEvent(@event.CampaignId, @event.OwnerId, @event.RaisedAmount, @event.GoalAmount, @event.Currency, @event.OccurredOnUtc),
                 DateTime.UtcNow),
             // Fail loud instead of silently discarding: a domain event raised without a mapping
             // here previously vanished with no log, no error, and no downstream side effect

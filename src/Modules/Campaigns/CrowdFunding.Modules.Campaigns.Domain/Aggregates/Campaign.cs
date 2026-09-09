@@ -119,6 +119,51 @@ public sealed class Campaign : BaseEntity
     }
 
     /// <summary>
+    /// Transitions a published campaign whose deadline has passed and whose goal was reached to
+    /// <see cref="CampaignStatus.Successful"/>. Called by <c>CampaignExpirationBackgroundService</c>;
+    /// never opens a transaction against Contributions' database — the campaign only emits
+    /// <see cref="CampaignSucceededDomainEvent"/> via its own outbox.
+    /// </summary>
+    public void CompleteSuccessfully(DateTime nowUtc)
+    {
+        if (Status != CampaignStatus.Published)
+        {
+            throw new InvalidOperationException($"Only published campaigns can be completed. Current status: '{Status}'.");
+        }
+
+        if (RaisedAmount.Amount < GoalAmount.Amount)
+        {
+            throw new InvalidOperationException("Cannot complete a campaign successfully — its funding goal was not reached.");
+        }
+
+        Status = CampaignStatus.Successful;
+        AddDomainEvent(new CampaignSucceededDomainEvent(Id, OwnerId, RaisedAmount.Amount, RaisedAmount.Currency, nowUtc));
+    }
+
+    /// <summary>
+    /// Transitions a published campaign whose deadline has passed without reaching its goal to
+    /// <see cref="CampaignStatus.Failed"/>. Emits <see cref="CampaignFailedDomainEvent"/> so
+    /// Contributions can asynchronously refund every backer — see
+    /// <c>CampaignTerminationRefundHandler</c> — rather than this aggregate reaching into
+    /// Contributions' database directly.
+    /// </summary>
+    public void MarkFailed(DateTime nowUtc)
+    {
+        if (Status != CampaignStatus.Published)
+        {
+            throw new InvalidOperationException($"Only published campaigns can be marked failed. Current status: '{Status}'.");
+        }
+
+        if (RaisedAmount.Amount >= GoalAmount.Amount)
+        {
+            throw new InvalidOperationException("Cannot mark a campaign failed — its funding goal was reached.");
+        }
+
+        Status = CampaignStatus.Failed;
+        AddDomainEvent(new CampaignFailedDomainEvent(Id, OwnerId, RaisedAmount.Amount, GoalAmount.Amount, RaisedAmount.Currency, nowUtc));
+    }
+
+    /// <summary>
     /// Applies a confirmed monetary contribution to the raised balance.
     /// </summary>
     /// <param name="contribution">The monetary contribution to apply.</param>
