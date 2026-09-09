@@ -50,6 +50,10 @@ Replace synchronous RPC with **Asynchronous Replicated Read Models (Event-Carrie
 - `Contributions` maintains a local, lightweight lookup table (`contributions.active_campaigns_cache`).
 - When a contribution arrives, `Contributions` verifies campaign status against its **own local database**, achieving **100% autonomous uptime** even if the Campaigns service is down!
 
+> [!NOTE]
+> **Resolved in Reference Codebase ([`TICKET-023`](../../qa-tickets/TICKET-023-ASYNCHRONOUS-REPLICATED-READ-MODELS.md)):**  
+> `ICampaignContributionAvailabilityReader` was eliminated. The `Contributions` module now replicates published/cancelled campaign state into `contributions.campaign_read_models`, achieving 100% local query autonomy.
+
 ---
 
 ### Roadblock 2: Outbox Poller Coupled to In-Process Memory Dispatching
@@ -67,6 +71,10 @@ The outbox processor has no concept of an external message broker. Extracting a 
 Introduce a pluggable **Message Bus Abstraction** (`IMessageBus`) or leverage MassTransit / Wolverine:
 - In Monolith mode: Publishes to in-process memory.
 - In Microservices mode: Publishes to RabbitMQ, Apache Kafka, or AWS SQS with a single configuration flag in `appsettings.json`.
+
+> [!NOTE]
+> **Resolved in Reference Codebase ([`TICKET-024`](../../qa-tickets/TICKET-024-PLUGGABLE-MESSAGE-BUS-RABBITMQ-KAFKA.md) & [`TICKET-025`](../../qa-tickets/TICKET-025-MODULAR-OUTBOX-PARTITIONING-AUTONOMOUS-WORKERS.md)):**  
+> `IMessageBus` was implemented with pluggable `InMemoryMessageBus` (local channels) and RabbitMQ support, alongside autonomous per-module outbox workers.
 
 ---
 
@@ -86,6 +94,10 @@ Demonstrate independent connection string configurations per module, proving tha
   "ContributionsDb": "Host=contributions-db;Database=contributions;..."
 }
 ```
+
+> [!NOTE]
+> **Resolved in Reference Codebase ([`TICKET-026`](../../qa-tickets/TICKET-026-MULTI-DATABASE-CONNECTION-DECOUPLING.md)):**  
+> Hierarchical connection string resolution was introduced via `GetRequiredModuleConnectionString(...)`, allowing individual modules to connect to independent database servers while falling back to `DefaultConnection`.
 
 ---
 
@@ -139,3 +151,7 @@ The single best real-world demonstration of **Sagas, Event Choreography, and Com
 - Payment gateway webhook confirms refund $\rightarrow$ contribution transitions to `Refunded`.
 
 Leaving this unimplemented deprives architects of seeing how distributed sagas handle eventual consistency in failure scenarios!
+
+> [!NOTE]
+> **Resolved in Reference Codebase ([`TICKET-027`](../../qa-tickets/TICKET-027-DISTRIBUTED-CROWDFUNDING-LIFECYCLE-REFUND-SAGA.md)):**  
+> Both the `CampaignExpirationBackgroundService` (handling `CompleteAsSuccessful` and `ExpireAsFailed`) and the backer refund event choreography (`ContributionStatus.Refunded` and compensation saga) are fully implemented and verified in the codebase.

@@ -21,7 +21,7 @@ graph TD
 
 ---
 
-## 2. Epic 1: The Pedagogical Rosetta Stone
+## 2. Epic 1: The Pedagogical Rosetta Stone (Status: ✅ Completed via [`TICKET-028`](../../qa-tickets/TICKET-028-PEDAGOGICAL-ROSETTA-STONE-POLY-PATTERNS.md))
 
 ### Problem Statement:
 Learners cannot intuitively understand *why* Clean Architecture or DDD is necessary because there is no baseline comparison in the codebase.
@@ -31,27 +31,22 @@ Create a dedicated educational namespace: `src/Samples/RosettaStone/` implementi
 
 ```
 src/Samples/RosettaStone/
-├── 01-NaiveCrudController/
-│   └── NaiveCampaignController.cs       (Direct EF Core in 1 Controller, Raw Validation)
-├── 02-LayeredCleanArchitecture/
-│   ├── CreateCampaignEndpoint.cs        (Thin Controller)
-│   ├── CreateCampaignCommand.cs         (CQRS DTO)
-│   ├── CreateCampaignHandler.cs         (MediatR Handler)
-│   └── CampaignRepository.cs            (Repository Pattern + Domain Entity)
-└── 03-PureVerticalSlice/
-    └── CreateCampaignSlice.cs           (FastEndpoints / Minimal API in 1 File)
+├── 01-MinimalApiCrud/
+│   └── CreateCampaignMinimalEndpoint.cs (Direct DbContext write, 1 file, 48 lines)
+├── 02-PragmaticCqrs/
+│   ├── CreateCampaignEndpoint.cs        (Route endpoint)
+│   ├── CreateCampaignCommand.cs         (CQRS command + validator)
+│   └── CreateCampaignCommandHandler.cs  (Direct DbContext write, 3 files, 91 lines)
+└── 03-RichDomainModel/
+    └── README.md                        (Pointer to full production 14-file DDD pipeline)
 ```
 
-### Acceptance Criteria:
-- All three implementations save a campaign to PostgreSQL and return RFC 9457 errors on invalid input.
-- Clear code comments in each file highlight:
-  - Lines of code required.
-  - Number of assemblies involved.
-  - When this specific style is appropriate vs when it is an anti-pattern.
+> [!NOTE]
+> Fully implemented in [`src/Samples/RosettaStone/`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Samples/RosettaStone/README.md) with isolated `rosetta` schema, parity integration tests, and Swagger tag `RosettaStone`.
 
 ---
 
-## 3. Epic 2: Pluggable Message Bus & Debezium CDC Specification
+## 3. Epic 2: Pluggable Message Bus & Debezium CDC Specification (Status: ✅ Completed via [`TICKET-024`](../../qa-tickets/TICKET-024-PLUGGABLE-MESSAGE-BUS-RABBITMQ-KAFKA.md) & [`TICKET-025`](../../qa-tickets/TICKET-025-MODULAR-OUTBOX-PARTITIONING-AUTONOMOUS-WORKERS.md))
 
 ### Problem Statement:
 The transactional outbox poller is hardcoded to in-memory dispatching (`ServiceProviderEventPublisher`), preventing students from seeing how events stream to external microservices.
@@ -79,7 +74,7 @@ The transactional outbox poller is hardcoded to in-memory dispatching (`ServiceP
 
 ---
 
-## 4. Epic 3: Asynchronous Replicated Read Models
+## 4. Epic 3: Asynchronous Replicated Read Models (Status: ✅ Completed via [`TICKET-023`](../../qa-tickets/TICKET-023-ASYNCHRONOUS-REPLICATED-READ-MODELS.md))
 
 ### Problem Statement:
 [`MakeContributionCommandHandler.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs) calls `ICampaignContributionAvailabilityReader` synchronously, creating a distributed monolith failure cascade.
@@ -87,7 +82,7 @@ The transactional outbox poller is hardcoded to in-memory dispatching (`ServiceP
 ### Technical Specification:
 1. In `contributions` schema, create a new table:
    ```sql
-   CREATE TABLE contributions.active_campaigns_cache (
+   CREATE TABLE contributions.campaign_read_models (
        campaign_id UUID PRIMARY KEY,
        currency VARCHAR(3) NOT NULL,
        is_active BOOLEAN NOT NULL,
@@ -96,14 +91,17 @@ The transactional outbox poller is hardcoded to in-memory dispatching (`ServiceP
    );
    ```
 2. In `Contributions.Application`, add event consumers for:
-   - `CampaignPublishedApplicationEvent` $\rightarrow$ Inserts/updates `active_campaigns_cache`.
+   - `CampaignPublishedApplicationEvent` $\rightarrow$ Inserts/updates `campaign_read_models`.
    - `CampaignCancelledApplicationEvent` $\rightarrow$ Marks `is_active = false`.
-3. In `MakeContributionCommandHandler`, query `active_campaigns_cache` locally in the `ContributionsDbContext`.
+3. In `MakeContributionCommandHandler`, query `campaign_read_models` locally in the `ContributionsDbContext`.
 4. **Outcome:** Zero synchronous cross-module RPC calls during pledge processing!
+
+> [!NOTE]
+> Fully implemented in the `Contributions` module. Synchronous query reader `ICampaignContributionAvailabilityReader` has been completely eliminated.
 
 ---
 
-## 5. Epic 4: Complete Crowdfunding Lifecycle (Deadlines & Refunds)
+## 5. Epic 4: Complete Crowdfunding Lifecycle (Deadlines & Refunds) (Status: ✅ Completed via [`TICKET-027`](../../qa-tickets/TICKET-027-DISTRIBUTED-CROWDFUNDING-LIFECYCLE-REFUND-SAGA.md))
 
 ### Problem Statement:
 Campaigns never complete or fail, and backer pledges cannot be refunded, leaving the core crowdfunding domain half-finished.
@@ -132,9 +130,12 @@ Campaigns never complete or fail, and backer pledges cannot be refunded, leaving
   - Updates contribution status to `Refunded`.
   - Publishes `ContributionRefundedApplicationEvent`.
 
+> [!NOTE]
+> Fully implemented with `CampaignExpirationBackgroundService`, `CampaignCompletedSuccessfulDomainEvent`, `CampaignExpiredFailedDomainEvent`, and `RefundContributionCommandHandler`.
+
 ---
 
-## 6. Epic 5: Containerization & DevOps Automation
+## 6. Epic 5: Containerization & DevOps Automation (Status: 🔄 In Progress - Tracked via [`TICKET-029`](../../qa-tickets/TICKET-029-MICROSERVICE-EXTRACTION-POC-STANDALONE-SERVICE.md) & [`TICKET-040`](../../qa-tickets/TICKET-040-ARCHITECTURAL-FITNESS-FUNCTIONS-CI-CD-AUTOMATION.md))
 
 ### Problem Statement:
 The repository requires manual local SDK setup and lacks containerized deployment artifacts and CI/CD pipelines.

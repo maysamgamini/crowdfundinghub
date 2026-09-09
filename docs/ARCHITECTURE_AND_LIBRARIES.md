@@ -17,6 +17,9 @@
    - [2.3 CQRS & Dispatcher Pattern](#23-cqrs--dispatcher-pattern)
    - [2.4 Transactional Outbox Pattern & Event-Driven Choreography](#24-transactional-outbox-pattern--event-driven-choreography)
    - [2.5 PostgreSQL Concurrency Primitives & Financial Integrity](#25-postgresql-concurrency-primitives--financial-integrity)
+   - [2.6 Poly-Pattern Architecture & The Pedagogical Rosetta Stone](#26-poly-pattern-architecture--the-pedagogical-rosetta-stone)
+   - [2.7 Autonomous Microservice Extraction & The Strangler Fig Pattern](#27-autonomous-microservice-extraction--the-strangler-fig-pattern)
+   - [2.8 Asynchronous Replicated Read Models & Pluggable Message Bus](#28-asynchronous-replicated-read-models--pluggable-message-bus)
 3. [Component & Library Catalog](#3-component--library-catalog)
    - [3.1 .NET 10 & ASP.NET Core](#31-net-10--aspnet-core)
    - [3.2 Entity Framework Core 10 + Npgsql](#32-entity-framework-core-10--npgsql)
@@ -29,6 +32,7 @@
    - [3.9 NetArchTest](#39-netarchtest)
    - [3.10 Coverlet](#310-coverlet)
    - [3.11 ASP.NET Core SignalR](#311-aspnet-core-signalr)
+   - [3.12 OpenTelemetry Distributed Tracing & W3C Traceparent Propagation](#312-opentelemetry-distributed-tracing--w3c-traceparent-propagation)
 4. [End-to-End Architectural Workflows & Data Flows](#4-end-to-end-architectural-workflows--data-flows)
    - [4.1 Concurrent Pledge Ingestion & Financial Settlement Flow](#41-concurrent-pledge-ingestion--financial-settlement-flow)
    - [4.2 Asymmetric ES256 Token Issuance & Edge Verification Flow](#42-asymmetric-es256-token-issuance--edge-verification-flow)
@@ -374,6 +378,65 @@ graph TD
 
 ---
 
+### 2.6 Poly-Pattern Architecture & The Pedagogical Rosetta Stone
+
+To prove that enterprise software should not enforce a single dogmatic architecture across all use cases, `CrowdFundingHub` includes a living reference implementation: **The Pedagogical Rosetta Stone** ([`src/Samples/RosettaStone/`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Samples/RosettaStone/README.md)).
+
+Mapped under the `/rosetta/v1/campaigns` route group, the Rosetta Stone demonstrates three distinct architectural paradigms solving the exact same business requirement ("Create a Campaign"):
+
+```mermaid
+graph TD
+    Client["Client / Swagger"] --> RouteGroup["/rosetta/v1/campaigns"]
+
+    RouteGroup --> T1["Tier 1: Minimal API CRUD<br/>(1 file, 48 lines)"]
+    RouteGroup --> T2["Tier 2: Pragmatic CQRS<br/>(3 files, 91 lines)"]
+    RouteGroup --> T3["Tier 3: Rich DDD + Outbox<br/>(14 files, 960 lines)"]
+
+    T1 --> RosettaDB[("Rosetta Schema<br/>(RosettaStoneDbContext)")]
+    T2 --> RosettaDB
+    T3 --> CampDB[("Campaigns Schema<br/>(CampaignsDbContext)")]
+```
+
+1. **Tier 1 (Minimal API CRUD):** 1 file, 48 lines. Direct `DbContext` write, manual validation, zero indirection. Ideal for 70% of low-risk, internal data maintenance.
+2. **Tier 2 (Pragmatic CQRS):** 3 files, 91 lines. Uses the identical `ICommandDispatcher` / `ICommandHandler` abstractions as production modules, with FluentValidation, but writes directly to `DbContext` without aggregate roots or outboxes.
+3. **Tier 3 (Rich DDD + Transactional Outbox):** 14 files, 960 lines. The production pipeline (`POST /api/campaigns`) employing full aggregates, domain events, outbox dispatching, and auditing.
+
+Both Tier 1 and Tier 2 return identical RFC 9457 `application/problem+json` validation error shapes, verified by unit and integration tests.
+
+---
+
+### 2.7 Autonomous Microservice Extraction & The Strangler Fig Pattern
+
+In [`services/CrowdFunding.Moderation.Service/`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/services/CrowdFunding.Moderation.Service/README.md), the codebase provides physical proof of the **Strangler Fig Pattern** in action:
+
+- The `Moderation` module was extracted into an autonomous, standalone ASP.NET Core Web API host.
+- It references existing, untouched modular assemblies:
+  - `CrowdFunding.Modules.Moderation.Contracts`
+  - `CrowdFunding.Modules.Moderation.Application`
+  - `CrowdFunding.Modules.Moderation.Domain`
+  - `CrowdFunding.Modules.Moderation.Infrastructure`
+- **Lines of business logic rewritten:** Exactly **ZERO**.
+- The service features its own `Dockerfile`, executes independent schema migrations via `dotnet run -- migrate`, and authenticates requests using decentralized public JWKS discovery (`/.well-known/jwks.json`) over HTTP.
+
+---
+
+### 2.8 Asynchronous Replicated Read Models & Pluggable Message Bus
+
+#### Eliminating Synchronous Cross-Module Queries
+In earlier iterations, `Contributions` executed a synchronous in-process query via `ICampaignContributionAvailabilityReader` to verify if a campaign was active before accepting pledges. When moving toward microservices, this synchronous call creates a **Distributed Monolith** (if Campaigns is down, Contributions cannot accept pledges).
+
+In [`TICKET-023`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/qa-tickets/TICKET-023-ASYNCHRONOUS-REPLICATED-READ-MODELS.md), this was replaced with **Event-Carried State Transfer**:
+- `Contributions` maintains its own local `contributions.campaign_read_models` table.
+- When `CampaignPublishedApplicationEvent` or `CampaignCancelledApplicationEvent` fires, a background consumer updates this local read model.
+- Pledge validation checks the local read model in 0.1ms, ensuring **100% autonomous availability**.
+
+#### Pluggable `IMessageBus` Abstraction
+In [`TICKET-024`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/qa-tickets/TICKET-024-PLUGGABLE-MESSAGE-BUS-RABBITMQ-KAFKA.md), the monolith decoupled event delivery from in-process memory via `IMessageBus`:
+- `InMemoryMessageBus`: Uses `System.Threading.Channels` for ultra-fast, zero-infrastructure local execution.
+- `RabbitMQMessageBus`: Pluggable distributed broker implementation for cluster deployments.
+
+---
+
 ## 3. Component & Library Catalog
 
 Every library integrated into `CrowdFundingHub` was selected following rigorous architectural analysis. Below is the comprehensive rationalization matrix:
@@ -583,6 +646,20 @@ Pushes real-time campaign funding progress updates, backer counters, and funding
 - **vs. Raw WebSockets:** Building on raw WebSockets requires manually handling connection lifecycles, ping/pong heartbeats, reconnection buffering, group subscriptions, and transport fallbacks. SignalR provides high-level `Hub` abstractions and connection group management (`Clients.Group(campaignId)`) out of the box.
 - **vs. Server-Sent Events (SSE):** SSE is strictly unidirectional (server-to-client only), lacks native binary message framing, and requires custom client-side connection recovery. SignalR provides automatic transport negotiation (WebSockets -> SSE -> Long Polling).
 - **vs. Third-Party Hosted WebSockets (Pusher, Ably):** Third-party real-time providers add recurring monthly costs, payload size limitations, and network latency. SignalR runs within the host process and can scale horizontally across multiple container replicas using a standard Redis backplane.
+
+---
+
+### 3.12 OpenTelemetry Distributed Tracing & W3C Traceparent Propagation
+
+- **Package/Runtime:** `System.Diagnostics.DiagnosticSource`, `OpenTelemetry.Api`
+- **Location:** [`OutboxMessage.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxMessage.cs), [`TICKET-030`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/qa-tickets/TICKET-030-DISTRIBUTED-TRACING-OPENTELEMETRY-OUTBOX-PROPAGATION.md)
+
+#### Problem It Solves
+When operations span transactional outbox boundaries or extracted microservices, the causal link between the initial HTTP request and the asynchronous background consumer execution is severed, preventing end-to-end distributed latency analysis.
+
+#### Why Chosen Over Alternatives
+- **vs. Proprietary APM Tracing (Datadog/NewRelic Agents):** Vendor agents create runtime lock-in and require proprietary binaries. OpenTelemetry adheres to the **W3C Distributed Tracing Recommendation (`traceparent` header)**.
+- **Outbox Trace Context Preservation:** When an event is captured, the active `Activity.Current?.Id` is recorded in `OutboxMessage.TraceParent`. When the outbox processor claims the row, it initializes an `ActivityContext.Parse(traceParent)`, ensuring that asynchronous background jobs and distributed consumers appear under the **exact same trace span tree** in Jaeger, Tempo, or Datadog.
 
 ---
 
