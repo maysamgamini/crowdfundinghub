@@ -1,4 +1,6 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using CrowdFunding.Modules.CampaignUpdates.Application.Features.WebhookSubscriptions.Commands.RegisterWebhookSubscription;
+using FluentValidation;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CrowdFunding.Modules.CampaignUpdates.Application.DependencyInjection;
 
@@ -14,6 +16,9 @@ public static class CampaignUpdatesApplicationDependencyInjection
     /// <returns>The configured service collection.</returns>
     public static IServiceCollection AddCampaignUpdatesApplication(this IServiceCollection services)
     {
+        services.AddScoped<RegisterWebhookSubscriptionCommandHandler>();
+        services.AddScoped<IValidator<RegisterWebhookSubscriptionCommand>, RegisterWebhookSubscriptionCommandValidator>();
+
         return services;
     }
 }

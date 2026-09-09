@@ -12,6 +12,8 @@ using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.BuildingBlocks.Infrastructure.Messaging;
 using CrowdFunding.BuildingBlocks.Infrastructure.Metering;
 using CrowdFunding.Modules.CampaignUpdates.Application.DependencyInjection;
+using CrowdFunding.Modules.CampaignUpdates.Infrastructure.DependencyInjection;
+using CrowdFunding.Modules.CampaignUpdates.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
 using CrowdFunding.Modules.Campaigns.Application.DependencyInjection;
 using CrowdFunding.Modules.Campaigns.Infrastructure.DependencyInjection;
@@ -69,7 +71,8 @@ builder.Services.AddHealthChecks()
     .AddCheck<DbContextHealthCheck<ContributionsDbContext>>("contributions-db", tags: ["ready"])
     .AddCheck<DbContextHealthCheck<IdentityDbContext>>("identity-db", tags: ["ready"])
     .AddCheck<DbContextHealthCheck<ModerationDbContext>>("moderation-db", tags: ["ready"])
-    .AddCheck<DbContextHealthCheck<NotificationsDbContext>>("notifications-db", tags: ["ready"]);
+    .AddCheck<DbContextHealthCheck<NotificationsDbContext>>("notifications-db", tags: ["ready"])
+    .AddCheck<DbContextHealthCheck<CampaignUpdatesDbContext>>("campaign-updates-db", tags: ["ready"]);
 
 builder.Services.AddOpenMeterMetering(builder.Configuration);
 
@@ -158,6 +161,7 @@ builder.Services.AddModerationInfrastructure(builder.Configuration);
 builder.Services.AddNotificationsApplication();
 builder.Services.AddNotificationsInfrastructure(builder.Configuration);
 builder.Services.AddCampaignUpdatesApplication();
+builder.Services.AddCampaignUpdatesInfrastructure(builder.Configuration);
 
 builder.Services.AddRosettaStoneSample(builder.Configuration);
 
@@ -166,6 +170,7 @@ CampaignsMappingConfig.Register(typeAdapterConfig);
 ContributionsMappingConfig.Register(typeAdapterConfig);
 IdentityMappingConfig.Register(typeAdapterConfig);
 ModerationMappingConfig.Register(typeAdapterConfig);
+CampaignUpdatesMappingConfig.Register(typeAdapterConfig);
 
 builder.Services.AddSingleton(typeAdapterConfig);
 builder.Services.AddScoped<IMapper, ServiceMapper>();

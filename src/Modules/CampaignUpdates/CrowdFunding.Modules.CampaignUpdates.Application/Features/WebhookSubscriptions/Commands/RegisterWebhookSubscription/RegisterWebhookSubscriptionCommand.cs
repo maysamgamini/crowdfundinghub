@@ -1,0 +1,3 @@
+namespace CrowdFunding.Modules.CampaignUpdates.Application.Features.WebhookSubscriptions.Commands.RegisterWebhookSubscription;
+
+public sealed record RegisterWebhookSubscriptionCommand(Guid CampaignId, string TargetUrl);

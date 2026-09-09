@@ -4,7 +4,7 @@
 **Severity:** 🟡 P2 (Medium - Enterprise Integration Feature Justifying Outbox & DLQ)  
 **QA Focus Area:** External Webhook Delivery, Security (SSRF/HMAC) & Dead-Letter Queueing  
 **Found By:** `qa-architect-curriculum`  
-**Status:** Open  
+**Status:** Fixed  
 **Project Mode:** Greenfield (Benchmark Educational Standard)  
 
 ---
@@ -122,3 +122,71 @@ public sealed class WebhookDispatcherBackgroundService : BackgroundService
 1. **SSRF Rejection:** Attempting to register a webhook target pointing to `http://127.0.0.1` or `http://169.254.169.254` is rejected with `400 Bad Request`.
 2. **Non-Blocking Resilience:** If the target webhook URL takes 10 seconds to respond, the calling user's pledge API response is completely unaffected and returns in < 100ms.
 3. **Dead-Letter Recovery:** After 5 consecutive failed delivery attempts, the subscription is marked `Degraded/Disabled` and the message is archived in the Dead-Letter table with the final HTTP error payload.
+
+---
+
+## 6. Resolution
+
+CampaignUpdates was, like Notifications before TICKET-031, a pure stub module with no
+Infrastructure at all — this ticket built the module out from scratch, following the same
+pattern established there.
+
+### What was built
+- **`WebhookSubscription`** (Domain aggregate): `TargetUrl`, `SecretKey`, `IsActive`,
+  `ConsecutiveFailureCount`. `RecordDeliveryFailure(maxConsecutiveFailures)` disables the
+  subscription once the threshold is reached (this ticket's "Degraded/Disabled" state);
+  `RecordDeliverySuccess()` resets the counter — only *unbroken* runs of failure count.
+- **`WebhookDeliveryTask`**: one durable row per delivery, with its own `MarkFailed` backoff
+  schedule (1m, 5m, 15m, 1h, then terminal `Dead`) — deliberately its own queue rather than
+  reusing the generic cross-module outbox (`OutboxMessage`), since these deliveries never leave
+  this module and the fan-out-per-subscription shape doesn't fit the outbox's one-event-many-
+  handlers model. A `Dead` row *is* the dead-letter record (TICKET-038's precedent: no separate
+  archive table needed) — it retains `LastError` and never re-enters the poll query.
+- **SSRF defense** (`UrlSecurityValidator`): HTTPS-only, DNS-resolved and checked against RFC
+  1918 private ranges, loopback, and the `169.254.169.254` cloud-metadata address — enforced
+  once, at registration (`RegisterWebhookSubscriptionCommandHandler`), not re-checked at dispatch
+  time, since a URL that couldn't be registered can never reach the dispatch queue in the first
+  place.
+- **Ownership enforcement**: a new `CampaignOwnerCache` replicated read model (mirrors
+  `CampaignTitleCache` from TICKET-031 file-for-file), fed by `CampaignCreatedActivityHandler`
+  reacting to Campaigns' `CampaignCreatedApplicationEvent` — no synchronous cross-module call to
+  check who owns a campaign.
+- **`ContributionPaymentConfirmedActivityHandler`** (previously a stub): on a confirmed pledge,
+  fans out into one `WebhookDeliveryTask` per active subscription on that campaign — itself just
+  a durable database write, never an HTTP call, so a slow or hostile creator endpoint can never
+  make this handler (which runs inside *Contributions'* outbox worker) slow or unreliable.
+- **`WebhookDispatcherBackgroundService`**: polls every 5s, claims due tasks, signs each payload
+  with `WebhookPayloadSigner` (`X-CrowdFunding-Signature: t=...,v1=...`, the same shape as
+  TICKET-033's inbound Stripe verification, applied in the signing rather than verifying
+  direction), posts with a 5-second `HttpClient` timeout. Non-blocking is architectural, not
+  something a test asserts: there is no code path from `POST /api/campaigns/{id}/contributions`
+  to this dispatcher at all — the pledge request returns as soon as its own transaction commits,
+  regardless of how slow or unreachable any creator's endpoint is.
+- New endpoint: `POST /api/campaigns/{campaignId}/webhook-subscriptions` (owner-only; the
+  `secretKey` is returned exactly once, at registration, and never re-exposed).
+
+### What was deliberately left out of scope
+- No subscription management beyond registration (list/rotate-secret/delete) — not exercised by
+  any acceptance criterion.
+- No re-enabling a `Degraded` subscription — a deliberate, separate creator action the ticket
+  doesn't specify a mechanism for.
+- No re-validation of the target's safety at dispatch time (DNS can change between registration
+  and delivery — a real TOCTOU gap) — accepted as a reasonable simplification given the ticket's
+  own acceptance criteria only test registration-time rejection.
+
+### Tests
+`tests/UnitTests/CrowdFunding.UnitTests/WebhookSubscriptionTests.cs` (13 tests: SSRF validator
+across loopback/cloud-metadata/private ranges/non-HTTPS/valid public HTTPS, signature format and
+payload-sensitivity, the failure-threshold/reset state machine, the backoff-then-dead schedule)
+and `tests/IntegrationTests/CrowdFunding.IntegrationTests/WebhookSubscriptionE2ETests.cs` (4
+tests against real HTTP + Postgres, including a genuine second Kestrel host standing in for a
+creator's server — it independently recomputes the HMAC over the bytes it actually received and
+asserts it matches exactly, proving the signer and a verifier written from scratch agree, not
+just that the dispatcher's own code is internally consistent): private-network target rejected,
+public HTTPS target accepted with a one-time secret, non-owner registration forbidden, and a
+signed end-to-end delivery.
+
+Verified: full solution build clean in Debug and Release (0 warnings); unit tests 233/233 (220
+prior + 13 new); architecture tests 20/20 unchanged (the new module's boundary rules — no
+reference to any other module's Application/Infrastructure/Domain — hold); integration tests
+68/68 (64 prior + 4 new), against real Postgres/Redis/RabbitMQ Testcontainers.

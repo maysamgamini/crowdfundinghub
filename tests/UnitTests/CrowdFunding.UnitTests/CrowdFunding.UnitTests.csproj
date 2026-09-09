@@ -22,6 +22,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\API\CrowdFunding.API\CrowdFunding.API.csproj" />
     <ProjectReference Include="..\..\..\src\BuildingBlocks\CrowdFunding.BuildingBlocks.Infrastructure\CrowdFunding.BuildingBlocks.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\src\Modules\CampaignUpdates\CrowdFunding.Modules.CampaignUpdates.Application\CrowdFunding.Modules.CampaignUpdates.Application.csproj" />
+    <ProjectReference Include="..\..\..\src\Modules\CampaignUpdates\CrowdFunding.Modules.CampaignUpdates.Domain\CrowdFunding.Modules.CampaignUpdates.Domain.csproj" />
+    <ProjectReference Include="..\..\..\src\Modules\CampaignUpdates\CrowdFunding.Modules.CampaignUpdates.Infrastructure\CrowdFunding.Modules.CampaignUpdates.Infrastructure.csproj" />
     <ProjectReference Include="..\..\..\src\Modules\Campaigns\CrowdFunding.Modules.Campaigns.Application\CrowdFunding.Modules.Campaigns.Application.csproj" />
     <ProjectReference Include="..\..\..\src\Modules\Campaigns\CrowdFunding.Modules.Campaigns.Contracts\CrowdFunding.Modules.Campaigns.Contracts.csproj" />
     <ProjectReference Include="..\..\..\src\Modules\Campaigns\CrowdFunding.Modules.Campaigns.Domain\CrowdFunding.Modules.Campaigns.Domain.csproj" />

@@ -27,6 +27,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\API\CrowdFunding.API\CrowdFunding.API.csproj" />
+    <ProjectReference Include="..\..\..\src\Modules\CampaignUpdates\CrowdFunding.Modules.CampaignUpdates.Domain\CrowdFunding.Modules.CampaignUpdates.Domain.csproj" />
+    <ProjectReference Include="..\..\..\src\Modules\CampaignUpdates\CrowdFunding.Modules.CampaignUpdates.Infrastructure\CrowdFunding.Modules.CampaignUpdates.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

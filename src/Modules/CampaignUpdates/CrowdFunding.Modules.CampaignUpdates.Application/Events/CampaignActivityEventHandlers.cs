@@ -1,6 +1,10 @@
-﻿using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignCancelled;
+﻿using System.Text.Json;
+using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignCancelled;
 using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignCreated;
 using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignPublished;
+using CrowdFunding.Modules.CampaignUpdates.Application.Abstractions.Persistence;
+using CrowdFunding.Modules.CampaignUpdates.Application.Abstractions.Services;
+using CrowdFunding.Modules.CampaignUpdates.Domain.Aggregates;
 using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPaymentConfirmed;
 using CrowdFunding.Modules.Moderation.Contracts.Events.CampaignReviewApproved;
 using CrowdFunding.Modules.Moderation.Contracts.Events.CampaignReviewRejected;
@@ -9,12 +13,23 @@ using CrowdFunding.BuildingBlocks.Application.Events;
 namespace CrowdFunding.Modules.CampaignUpdates.Application.Events;
 
 /// <summary>
-/// Handles campaign-created events for the campaign updates module.
+/// Replicates a campaign's owner into CampaignUpdates' own local
+/// <see cref="ICampaignOwnerCacheRepository"/> (Event-Carried State Transfer), so registering a
+/// webhook subscription can enforce ownership without a synchronous cross-module call. See
+/// TICKET-023 / TICKET-035.
 /// </summary>
 public sealed class CampaignCreatedActivityHandler : IEventHandler<CampaignCreatedApplicationEvent>
 {
+    private readonly ICampaignOwnerCacheRepository _repository;
+
+    public CampaignCreatedActivityHandler(ICampaignOwnerCacheRepository repository)
+    {
+        _repository = repository;
+    }
+
     /// <inheritdoc/>
-    public Task Handle(CampaignCreatedApplicationEvent notification, CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task Handle(CampaignCreatedApplicationEvent notification, CancellationToken cancellationToken)
+        => _repository.UpsertAsync(notification.CampaignId, notification.OwnerId, DateTime.UtcNow, cancellationToken);
 }
 
 /// <summary>
@@ -36,12 +51,53 @@ public sealed class CampaignCancelledActivityHandler : IEventHandler<CampaignCan
 }
 
 /// <summary>
-/// Handles contribution-payment-confirmed events for the campaign updates module.
+/// Fans a confirmed pledge out into one durable <see cref="WebhookDeliveryTask"/> per active
+/// webhook subscription on the campaign — never an in-memory/synchronous HTTP call from inside
+/// this handler, which already runs inside Contributions' own outbox worker and must not become
+/// slow or unreliable because a creator's CRM endpoint is. See TICKET-035.
 /// </summary>
 public sealed class ContributionPaymentConfirmedActivityHandler : IEventHandler<ContributionPaymentConfirmedApplicationEvent>
 {
+    private const string PledgeConfirmedEventType = "pledge.confirmed";
+
+    private readonly IWebhookSubscriptionRepository _subscriptionRepository;
+    private readonly IWebhookDeliveryTaskRepository _deliveryTaskRepository;
+    private readonly ICampaignUpdatesDateTimeProvider _dateTimeProvider;
+
+    public ContributionPaymentConfirmedActivityHandler(
+        IWebhookSubscriptionRepository subscriptionRepository,
+        IWebhookDeliveryTaskRepository deliveryTaskRepository,
+        ICampaignUpdatesDateTimeProvider dateTimeProvider)
+    {
+        _subscriptionRepository = subscriptionRepository;
+        _deliveryTaskRepository = deliveryTaskRepository;
+        _dateTimeProvider = dateTimeProvider;
+    }
+
     /// <inheritdoc/>
-    public Task Handle(ContributionPaymentConfirmedApplicationEvent notification, CancellationToken cancellationToken) => Task.CompletedTask;
+    public async Task Handle(ContributionPaymentConfirmedApplicationEvent notification, CancellationToken cancellationToken)
+    {
+        var subscriptions = await _subscriptionRepository.GetActiveByCampaignIdAsync(notification.CampaignId, cancellationToken);
+        if (subscriptions.Count == 0)
+        {
+            return;
+        }
+
+        var payload = JsonSerializer.Serialize(new
+        {
+            eventType = PledgeConfirmedEventType,
+            contributionId = notification.ContributionId,
+            campaignId = notification.CampaignId,
+            amount = notification.Amount,
+            currency = notification.Currency,
+        });
+
+        foreach (var subscription in subscriptions)
+        {
+            var task = WebhookDeliveryTask.Create(subscription.Id, PledgeConfirmedEventType, payload, _dateTimeProvider.UtcNow);
+            await _deliveryTaskRepository.AddAsync(task, cancellationToken);
+        }
+    }
 }
 
 /// <summary>
