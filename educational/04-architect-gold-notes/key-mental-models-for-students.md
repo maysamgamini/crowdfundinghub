@@ -137,7 +137,89 @@ When Service B needs data from Service A:
 
 ---
 
-## 7. The 10 Commandments of Decomposition-Ready Architecture
+---
+
+## 7. "Databases Are Not Queues: MVCC Write Amplification & Autovacuum"
+
+Many architects blindly implement the Transactional Outbox pattern by adding an `outbox` table and updating rows from `Status = Pending` to `Status = Processing` to `Status = Processed`.
+
+**The Mechanical Sympathy Lesson:**
+In PostgreSQL's Multi-Version Concurrency Control (MVCC), an `UPDATE` does not overwrite the row on disk. It writes a brand new row version (tuple) and marks the old one dead.
+- Under 500 events/sec, mutating outbox row statuses generates **1,500 dead tuples per second**.
+- PostgreSQL's `autovacuum` daemon falls behind, causing catastrophic table fragmentation, B-tree index bloat, and eviction of active domain data from `shared_buffers`.
+
+```
+Naive Outbox:   [Insert Row] -> [Update to Processing] -> [Update to Processed] = 3 Dead Tuples per Event!
+Optimal Outbox: [Insert Row] -> [DELETE FROM outbox WHERE id = @id]            = Bounded Table Heap!
+```
+
+**The Golden Law:**
+> *"If you use PostgreSQL as a transactional message outbox, delete messages immediately upon successful dispatch (`DELETE ON SUCCESS`). Archive failures to an append-only dead-letter table. Never let processed messages accumulate in an active poller table."*
+
+---
+
+## 8. "The Stateless Token Revocation Dilemma"
+
+Architects choose asymmetric JWTs (ES256) so services can verify authentication offline against public JWKS (`/.well-known/jwks.json`) without hitting the Identity database.
+
+**The Architectural Dilemma:**
+Because validation is 100% offline and stateless, **a compromised token or deactivated user cannot be revoked until the token expires naturally**.
+
+```
+Pure Stateless JWT:    Fast offline verification, but ZERO immediate revocation capability.
+Database Session Auth: Instant revocation capability, but CENTRALIZED DATABASE BOTTLENECK on every request.
+```
+
+**The Principal Solution (The Hybrid Tier):**
+1. Issue **short-lived access tokens** (10–15 minutes).
+2. Use **Refresh Token Rotation (RTR)** with automated reuse detection.
+3. Maintain a low-latency **Redis Security Stamp blacklist**: downstream services perform local cryptographic verification for normal endpoints, and check Redis only when high-value administrative/financial actions occur.
+
+---
+
+## 9. "Cross-Cutting Governance: Pipeline Behaviors Over Handler Pollution"
+
+When enforcing cross-cutting concerns (immutable audit logs, validation, metrics, distributed tracing):
+
+**The Antipattern:**
+Manually injecting `IAuditRepository` or `ILogger` into 40 distinct command handlers.
+- Violates Single Responsibility.
+- Pollutes domain orchestration with infrastructure plumbing.
+- Guarantees that future engineers will forget to add audit logging to new endpoints.
+
+**The Golden Law:**
+> *"Cross-cutting governance belongs in the Dispatcher Pipeline Behavior (Decorator pattern), never in the Use Case Handler. Command handlers must remain 100% pure business logic."*
+
+---
+
+## 10. "Multi-Replica Scaling: Pre-Commit Cache Eviction Races"
+
+Monoliths are never deployed as single instances in production; they run across 3, 5, or 10 container replicas behind an Application Load Balancer.
+
+**The Race Condition:**
+If Pod A updates an entity and evicts its Redis cache key *before* `SaveChangesAsync` commits the transaction to PostgreSQL, Pod B can concurrently handle a read request, query the database, read the **uncommitted old data**, and repopulate Redis with stale data for 30 minutes!
+
+```mermaid
+sequenceDiagram
+    participant PodA as Pod A (Writer)
+    participant Redis as Redis Cache
+    participant DB as PostgreSQL
+    participant PodB as Pod B (Reader)
+
+    PodA->>Redis: 1. Evict Cache Key (BEFORE Commit!)
+    PodB->>Redis: 2. Cache Miss!
+    PodB->>DB: 3. Read Entity (Returns OLD DB State!)
+    PodB->>Redis: 4. Populate Redis with OLD State (TTL 30s)
+    PodA->>DB: 5. SaveChangesAsync() (NEW State Committed!)
+    Note over PodA,PodB: Cache is now poisoned with stale data for 30 seconds!
+```
+
+**The Golden Law:**
+> *"Never evict or invalidate caches inside the transactional write path before commit. Always bind cache evictions to post-commit hooks (`ITransactionExecutor.OnCommitted`) and broadcast invalidations across replicas via Redis Pub/Sub channels."*
+
+---
+
+## 11. The 10 Commandments of Decomposition-Ready Architecture
 
 1. **Thou shalt not reference another module's domain assembly.**
 2. **Thou shalt communicate across module boundaries exclusively through contract DTOs and integration events.**
@@ -149,3 +231,4 @@ When Service B needs data from Service A:
 8. **Thou shalt right-size each vertical slice: keep simple CRUD simple, and save heavy DDD for mission-critical aggregates.**
 9. **Thou shalt automate boundary enforcement in CI via architecture unit tests (`NetArchTest`).**
 10. **Thou shalt design systems so that extracting a microservice requires zero lines of business logic rewritten.**
+

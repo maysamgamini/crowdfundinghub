@@ -73,8 +73,10 @@ This directory is organized into four thematic areas serving both as **teaching 
   Step-by-step engineering runbook showing how to extract the `Moderation` module into a standalone Dockerized microservice with zero lines of business logic rewritten.
 
 ### [04. Architect's Gold Notes](./04-architect-gold-notes/)
+- **[`pedagogical-benefits-and-learning-matrix.md`](./04-architect-gold-notes/pedagogical-benefits-and-learning-matrix.md)**:  
+  *The Pedagogical Value Catalog.* Comprehensive pedagogical analysis breaking down the 10 landmark educational lessons of the Modular Monolith curriculum, solving the "Distributed Systems Learning Paradox", and providing role-based learning outcomes for students, tech leads, and principal architects.
 - **[`key-mental-models-for-students.md`](./04-architect-gold-notes/key-mental-models-for-students.md)**:  
-  High-impact mental models, diagrams, and timeless maxims worth teaching to principal engineers and students (e.g., *"Coupling is the enemy, not the monolith"*, *"Database foreign keys are concrete chains"*, *"Event-Carried State Transfer vs. Synchronous RPC"*).
+  High-impact mental models, diagrams, and timeless maxims worth teaching to principal engineers and students (e.g., *"Coupling is the enemy, not the monolith"*, *"Databases are not queues: MVCC write amplification"*, *"The Stateless JWT Revocation Dilemma"*, *"Pre-commit cache eviction races"*).
 
 ---
 
