@@ -4,7 +4,7 @@
 **Severity:** 🟠 P1 (High - High-Throughput Database Bloat & Write Amplification)  
 **QA Focus Area:** Database Engine Internals, PostgreSQL MVCC & Outbox Maintenance  
 **Found By:** `qa-platform-shortcomings`  
-**Status:** Open  
+**Status:** Fixed  
 **Project Mode:** Greenfield (Benchmark Educational Standard)  
 
 ---
@@ -108,3 +108,46 @@ DROP TABLE campaigns.campaigns_outbox_messages_2026_09_01;
 1. **Zero Row Accumulation:** Running a load test producing 1,000 outbox messages results in an outbox table containing 0 rows once processing completes.
 2. **Dead-Letter Isolation:** Forcing a message failure past retry limits removes the row from the active outbox and verifies its presence in `dead_letter_messages` with the full stack trace.
 3. **PostgreSQL Autovacuum Metrics:** Database statistics (`pg_stat_user_tables`) confirm `n_dead_tup` remains minimal and does not trigger table vacuum lag.
+
+---
+
+## 7. Resolution
+
+Implemented **Strategy A (delete-on-success)** and completed **Strategy B (dead-letter
+archival)** in the one shared file every module's outbox already runs through —
+[`ModuleOutboxProcessor.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Outbox/ModuleOutboxProcessor.cs):
+
+- **Before this ticket**: a successfully published message called `MarkProcessed(nowUtc)` —
+  an `UPDATE` that left the row in the table forever with `Status = Processed`. A
+  terminally-failed message already got *copied* into `DeadLetterEvent` (that half of Strategy B
+  already existed), but the *original* outbox row was never deleted — it just sat there with
+  `Status = DeadLetter`, permanently. Both paths accumulated rows without bound, exactly the
+  MVCC dead-tuple trap this ticket describes.
+- **Now**: on successful publish, the row is `Remove()`d instead of marked processed — no
+  `UPDATE` at all, straight to `DELETE`. On dead-letter (both the "unresolvable event type" path
+  and the "exceeded `MaxAttempts`" path), the row is still copied into `DeadLetterEvent` first,
+  then also `Remove()`d from the active table. A row below `MaxAttempts` still goes back to
+  `Pending` with a backed-off `ScheduledAtUtc` — it stays because it's still active work, not
+  because anything is being retained after completion.
+- **Strategy C (declarative partitioning)** was intentionally **not** implemented — the ticket
+  itself marks it optional, and it would require restructuring the primary key to
+  `(id, occurred_on_utc)` across every module's outbox table purely to support 30-day audit
+  retention this codebase has no regulatory requirement for. With delete-on-success in place,
+  the active table's steady-state size is bounded by in-flight message count (single digits to
+  low hundreds under load), not by total lifetime message volume — partitioning an
+  already-bounded table buys nothing here. If retention becomes a real requirement,
+  `DeadLetterEvent` is already the append-only archive to partition instead.
+- New tests: `tests/IntegrationTests/CrowdFunding.IntegrationTests/OutboxLeanTableE2ETests.cs` —
+  (1) publishing a real campaign end-to-end and confirming zero `Processed`-status rows remain
+  afterward, and (2) inserting a message for an event type deliberately never registered with
+  `EventTypeRegistry`, confirming it's archived into `DeadLetterEvents` *and* removed from the
+  active `OutboxMessages` table by the same `ProcessBatchAsync` pass — both against a real
+  Postgres Testcontainer.
+- Verified: full solution build clean; unit tests 203/203 (the existing `OutboxTests.cs` unit
+  tests target `OutboxMessage`'s own `MarkProcessed`/`MarkFailed`/`MarkDeadLetter` methods
+  directly and are unaffected — those methods still exist and behave identically; only what the
+  *processor* does with the row afterward changed); integration tests 51/51 (49 prior + 2 new),
+  against real Postgres/Redis/RabbitMQ Testcontainers — including every existing test across
+  Campaigns/Contributions/Moderation that calls `ProcessOutboxMessagesAsync`, none of which
+  asserted on rows surviving in the outbox table post-processing, so nothing needed updating
+  beyond the processor itself.

@@ -83,9 +83,15 @@ public abstract class ModuleOutboxProcessor<TDbContext> : BackgroundService, IOu
                     "Routing unresolvable outbox message {MessageId} (EventType={EventType}, Version={Version}) to dead-letter: {Reason}",
                     message.Id, message.EventType, message.Version, failureReason);
 
-                message.MarkDeadLetter(failureReason!);
                 dbContext.Set<DeadLetterEvent>().Add(new DeadLetterEvent(
                     message.Id, message.EventType, message.Version, message.Payload, failureReason!, nowUtc));
+                // TICKET-038: the active outbox table must hold only pending/in-flight rows —
+                // leaving processed/dead-lettered rows in place forever is exactly the PostgreSQL
+                // MVCC write-amplification trap (every UPDATE leaves a dead tuple; a row that's
+                // never deleted just accumulates them under Status mutations too). The row's
+                // permanent record now lives in DeadLetterEvents; deleting it here keeps the
+                // outbox table bounded to only what a SKIP LOCKED claim actually needs to scan.
+                dbContext.Set<OutboxMessage>().Remove(message);
 
                 continue;
             }
@@ -95,7 +101,10 @@ public abstract class ModuleOutboxProcessor<TDbContext> : BackgroundService, IOu
             try
             {
                 await messageBus.PublishAsync(applicationEvent!, cancellationToken);
-                message.MarkProcessed(nowUtc);
+                // Delete-on-success (TICKET-038 Strategy A): no UPDATE-then-keep-forever: a
+                // successfully published message has no further reason to exist in the active
+                // table, so it's removed immediately rather than marked Processed and left behind.
+                dbContext.Set<OutboxMessage>().Remove(message);
             }
             catch (Exception exception)
             {
@@ -111,7 +120,11 @@ public abstract class ModuleOutboxProcessor<TDbContext> : BackgroundService, IOu
                     dbContext.Set<DeadLetterEvent>().Add(new DeadLetterEvent(
                         message.Id, message.EventType, message.Version, message.Payload,
                         $"Exceeded {MaxAttempts} attempts. Last error: {exception.Message}", nowUtc));
+                    dbContext.Set<OutboxMessage>().Remove(message);
                 }
+                // Below MaxAttempts, MarkFailed already pushed the row back to Pending with a
+                // backed-off ScheduledAtUtc — it stays in the table because it's still active
+                // work, not because it's being retained after completion.
             }
         }
 
