@@ -3,6 +3,7 @@ using CrowdFunding.Modules.Moderation.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Services;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Moderation.Contracts.Queries.GetCampaignReviewStatusByCampaignId;
+using CrowdFunding.Modules.Moderation.Infrastructure.Outbox;
 using CrowdFunding.Modules.Moderation.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.Moderation.Infrastructure.Persistence.Repositories;
 using CrowdFunding.Modules.Moderation.Infrastructure.Services;
@@ -33,6 +34,7 @@ public static class ModerationInfrastructureDependencyInjection
         services.AddScoped<ICampaignReviewReadService, CampaignReviewReadService>();
         services.AddScoped<IModerationTransactionExecutor, ModerationTransactionExecutor>();
         services.AddSingleton<IModerationDateTimeProvider, SystemDateTimeProvider>();
+        services.AddHostedService<ModerationOutboxBackgroundService>();
 
         return services;
     }

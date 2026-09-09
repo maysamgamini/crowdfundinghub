@@ -1,9 +1,24 @@
 # Outbox architecture: SKIP LOCKED vs. Debezium CDC
 
 This document records the decision behind the outbox implementation in
-`OutboxProcessorBackgroundService` / `OutboxMessage`, and — just as importantly — the point at
+`ModuleOutboxProcessor<TDbContext>` / `OutboxMessage`, and — just as importantly — the point at
 which that decision should be revisited. Keep it up to date if the throughput assumptions below
 change.
+
+> **Update (TICKET-024/025/030):** the single, centralized `OutboxProcessorBackgroundService`
+> that used to live in `CrowdFunding.API` and knew about all three module DbContexts by name has
+> been replaced by `ModuleOutboxProcessor<TDbContext>` (`BuildingBlocks.Infrastructure.Outbox`),
+> an abstract `BackgroundService` each module subclasses and registers in its own Infrastructure
+> DI extension (`CampaignsOutboxBackgroundService`, `ContributionsOutboxBackgroundService`,
+> `ModerationOutboxBackgroundService`). The API host no longer references any module's DbContext
+> or outbox table name — three independent workers run on independent `PeriodicTimer`s inside the
+> same process, so a slow or failing module's outbox can no longer starve the others, and
+> extracting a module into its own service moves its outbox engine with it unchanged. Each
+> processor publishes through `IMessageBus` (`InProcessMessageBus` by default; `RabbitMqMessageBus`
+> when `Messaging:Provider = "RabbitMQ"`) instead of calling `IEventPublisher` directly, and
+> restores the W3C `traceparent` captured in `OutboxMessage.Headers` at write time so the
+> dispatch span stays a child of the originating HTTP request in a distributed trace. Everything
+> below about the SKIP LOCKED claim query itself is unchanged — only who owns the polling loop.
 
 ## What problem the outbox solves
 

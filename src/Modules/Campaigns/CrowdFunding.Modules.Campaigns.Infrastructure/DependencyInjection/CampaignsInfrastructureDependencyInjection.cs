@@ -4,6 +4,7 @@ using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Campaigns.Contracts.Queries.GetCampaignContributionAvailability;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Caching;
+using CrowdFunding.Modules.Campaigns.Infrastructure.Outbox;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Repositories;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Services;
@@ -50,6 +51,7 @@ public static class CampaignsInfrastructureDependencyInjection
                 sp.GetRequiredService<ILogger<CachedCampaignReadService>>()));
         services.AddScoped<ICampaignTransactionExecutor, CampaignTransactionExecutor>();
         services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();
+        services.AddHostedService<CampaignsOutboxBackgroundService>();
 
         return services;
     }

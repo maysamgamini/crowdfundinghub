@@ -1,5 +1,4 @@
 using System.Text;
-using CrowdFunding.API.Background;
 using CrowdFunding.API.Documentation;
 using CrowdFunding.API.Mapping;
 using CrowdFunding.API.Migrations;
@@ -10,7 +9,7 @@ using CrowdFunding.API.Security;
 using CrowdFunding.BuildingBlocks.Application.Events;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
-using CrowdFunding.BuildingBlocks.Infrastructure.Events;
+using CrowdFunding.BuildingBlocks.Infrastructure.Messaging;
 using CrowdFunding.BuildingBlocks.Infrastructure.Metering;
 using CrowdFunding.Modules.CampaignUpdates.Application.DependencyInjection;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
@@ -71,10 +70,9 @@ builder.Services.AddScoped<ICampaignRealtimeNotifier, SignalRCampaignRealtimeNot
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
-builder.Services.AddScoped<IEventPublisher, ServiceProviderEventPublisher>();
+builder.Services.AddCrowdFundingMessaging(builder.Configuration);
 builder.Services.AddScoped<ICommandDispatcher, CommandDispatcher>();
 builder.Services.AddScoped<IQueryDispatcher, QueryDispatcher>();
-builder.Services.AddHostedService<OutboxProcessorBackgroundService>();
 
 builder.Services.AddRequestHandlersFromAssemblies(
     typeof(IdentityApplicationDependencyInjection).Assembly,

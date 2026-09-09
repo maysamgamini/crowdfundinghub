@@ -1,5 +1,5 @@
-using CrowdFunding.API.Background;
 using CrowdFunding.API.Migrations;
+using CrowdFunding.BuildingBlocks.Infrastructure.Outbox;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -95,18 +95,23 @@ public sealed class CrowdFundingApiFactory : WebApplicationFactory<Program>, IAs
     }
 
     /// <summary>
-    /// Runs one outbox claim-and-publish pass per module synchronously, so tests can deterministically
-    /// observe cross-module side effects (e.g. Campaign Created -> Moderation Review Created) instead
-    /// of waiting on <see cref="OutboxProcessorBackgroundService"/>'s 5-second polling interval.
+    /// Runs one outbox claim-and-publish pass on every module's autonomous outbox worker
+    /// (<see cref="IOutboxDispatcher"/>) synchronously, so tests can deterministically observe
+    /// cross-module side effects (e.g. Campaign Created -> Moderation Review Created) instead of
+    /// waiting on each worker's 5-second polling interval. Discovers dispatchers by interface
+    /// rather than by module DbContext type, so this fixture needs no changes when a module is
+    /// added, removed, or extracted into its own service.
     /// </summary>
     public async Task ProcessOutboxMessagesAsync(CancellationToken cancellationToken = default)
     {
         using var scope = Services.CreateScope();
-        var processor = scope.ServiceProvider
+        var dispatchers = scope.ServiceProvider
             .GetServices<IHostedService>()
-            .OfType<OutboxProcessorBackgroundService>()
-            .First();
+            .OfType<IOutboxDispatcher>();
 
-        await processor.ProcessOutboxBatchAsync(cancellationToken);
+        foreach (var dispatcher in dispatchers)
+        {
+            await dispatcher.ProcessBatchAsync(cancellationToken);
+        }
     }
 }

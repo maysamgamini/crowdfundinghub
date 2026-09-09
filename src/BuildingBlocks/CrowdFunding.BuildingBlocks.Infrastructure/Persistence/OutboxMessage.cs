@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using CrowdFunding.BuildingBlocks.Application.Events;
 
@@ -16,12 +17,13 @@ public sealed class OutboxMessage
     {
     }
 
-    private OutboxMessage(Guid id, string eventType, int version, string payload, DateTime occurredOnUtc)
+    private OutboxMessage(Guid id, string eventType, int version, string payload, string headers, DateTime occurredOnUtc)
     {
         Id = id;
         EventType = eventType;
         Version = version;
         Payload = payload;
+        Headers = headers;
         OccurredOnUtc = occurredOnUtc;
         ScheduledAtUtc = occurredOnUtc;
         Status = OutboxMessageStatus.Pending;
@@ -35,6 +37,14 @@ public sealed class OutboxMessage
     public string EventType { get; private set; } = string.Empty;
     public int Version { get; private set; }
     public string Payload { get; private set; } = string.Empty;
+
+    /// <summary>JSON-serialized W3C trace context (<c>traceparent</c>/<c>tracestate</c>) captured
+    /// from <see cref="Activity.Current"/> at the moment this row was created, restored by the
+    /// outbox processor so the causal link between the originating HTTP request and this event's
+    /// downstream handling survives crossing the outbox's async boundary. <c>"{}"</c> when no
+    /// ambient activity existed (e.g. a CLI seeder or a background cron job).</summary>
+    public string Headers { get; private set; } = "{}";
+
     public DateTime OccurredOnUtc { get; private set; }
     public DateTime? ProcessedOnUtc { get; private set; }
     public string? Error { get; private set; }
@@ -66,7 +76,18 @@ public sealed class OutboxMessage
         var version = EventTypeRegistry.GetVersion(eventType);
         var payload = JsonSerializer.Serialize(applicationEvent, eventType, SerializerOptions);
 
-        return new OutboxMessage(Guid.NewGuid(), discriminator, version, payload, occurredOnUtc);
+        var currentActivity = Activity.Current;
+        var headers = currentActivity is null
+            ? "{}"
+            : JsonSerializer.Serialize(
+                new Dictionary<string, string>
+                {
+                    ["traceparent"] = currentActivity.Id ?? string.Empty,
+                    ["tracestate"] = currentActivity.TraceStateString ?? string.Empty,
+                },
+                SerializerOptions);
+
+        return new OutboxMessage(Guid.NewGuid(), discriminator, version, payload, headers, occurredOnUtc);
     }
 
     /// <summary>

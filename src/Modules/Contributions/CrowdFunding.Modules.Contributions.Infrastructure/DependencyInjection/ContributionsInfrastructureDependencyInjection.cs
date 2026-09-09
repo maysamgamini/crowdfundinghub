@@ -2,6 +2,7 @@
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Transactions;
+using CrowdFunding.Modules.Contributions.Infrastructure.Outbox;
 using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.Repositories;
 using CrowdFunding.Modules.Contributions.Infrastructure.Services;
@@ -31,6 +32,7 @@ public static class ContributionsInfrastructureDependencyInjection
         services.AddScoped<IContributionReadService, ContributionReadService>();
         services.AddScoped<IContributionTransactionExecutor, ContributionTransactionExecutor>();
         services.AddSingleton<IContributionDateTimeProvider, SystemDateTimeProvider>();
+        services.AddHostedService<ContributionsOutboxBackgroundService>();
 
         return services;
     }

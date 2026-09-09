@@ -78,6 +78,12 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Migrations
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)");
 
+                    b.Property<string>("Headers")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("{}");
+
                     b.Property<string>("LockedBy")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");

@@ -192,6 +192,37 @@ public sealed class OutboxMessageTests
         Assert.Equal("unresolvable event type", message.Error);
     }
 
+    [Fact]
+    public void Create_ShouldDefaultHeadersToEmptyObject_WhenNoActivityIsAmbient()
+    {
+        System.Diagnostics.Activity.Current = null;
+
+        var message = OutboxMessage.Create(new SampleApplicationEvent { Value = "x" }, DateTime.UtcNow);
+
+        Assert.Equal("{}", message.Headers);
+    }
+
+    [Fact]
+    public void Create_ShouldCaptureTraceParent_WhenAnActivityIsAmbient()
+    {
+        using var activitySource = new System.Diagnostics.ActivitySource("Tests.OutboxMessage");
+        using var listener = new System.Diagnostics.ActivityListener
+        {
+            ShouldListenTo = _ => true,
+            Sample = (ref System.Diagnostics.ActivityCreationOptions<System.Diagnostics.ActivityContext> _) =>
+                System.Diagnostics.ActivitySamplingResult.AllData,
+        };
+        System.Diagnostics.ActivitySource.AddActivityListener(listener);
+
+        using var activity = activitySource.StartActivity("test-request");
+        Assert.NotNull(activity);
+
+        var message = OutboxMessage.Create(new SampleApplicationEvent { Value = "x" }, DateTime.UtcNow);
+
+        var headers = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(message.Headers)!;
+        Assert.Equal(activity!.Id, headers["traceparent"]);
+    }
+
     private sealed class SampleApplicationEvent : BaseApplicationEvent
     {
         public string Value { get; init; } = string.Empty;

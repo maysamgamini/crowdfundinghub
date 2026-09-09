@@ -22,6 +22,7 @@ public static class ModelBuilderExtensions
             builder.Property(x => x.EventType).HasMaxLength(512).IsRequired();
             builder.Property(x => x.Version).IsRequired();
             builder.Property(x => x.Payload).IsRequired();
+            builder.Property(x => x.Headers).IsRequired().HasDefaultValue("{}");
             builder.Property(x => x.Error).HasMaxLength(4000);
             builder.Property(x => x.Attempts).HasDefaultValue(0);
             builder.Property(x => x.Status).HasConversion<int>().IsRequired();
