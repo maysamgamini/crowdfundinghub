@@ -4,7 +4,7 @@
 **Severity:** 🟠 P1 (High - Core Architectural Feature Justifying Outbox & Event Choreography)  
 **QA Focus Area:** Serverless Cloud Functions, Asynchronous Compute & Cryptographic Webhooks  
 **Found By:** `qa-architect-curriculum`  
-**Status:** Open  
+**Status:** Fixed  
 **Project Mode:** Greenfield (Benchmark Educational Standard)  
 
 ---
@@ -153,3 +153,50 @@ public sealed class ModerationWebhooksController : ControllerBase
 1. **Sub-100ms Campaign Creation:** `POST /api/campaigns` completes in under 100ms, immediately returning `201 Created` without waiting on the Cloud Function.
 2. **HMAC Signature Enforcement:** Calls to `/api/webhooks/moderation/media-analysis` without a valid `X-Cloud-Signature` return `401 Unauthorized`.
 3. **End-to-End Simulation Test:** Add an integration test simulating the Cloud Function callback, verifying the campaign review transitions automatically from `PendingMediaAnalysis` to `Approved` or `NeedsHumanReview`.
+
+---
+
+## 6. Resolution
+
+### `NeedsHumanReview` is `Pending` — no new status was added
+`CampaignReviewStatus` already has exactly the state a below-threshold analysis needs to leave
+the review in: `Pending` **is** "awaiting human moderation" — that's what it has always meant.
+Adding a distinct `NeedsHumanReview` status would have meant two statuses a moderator's review
+queue has to treat identically. Instead, `CampaignReview` gained nullable `ToxicityScore`/
+`AdultContentScore` fields, so a below-threshold analysis is recorded (not discarded) and visible
+to whichever moderator reviews the still-`Pending` queue — richer than the ticket's own two-value
+outcome, without a redundant status.
+
+### Sub-100ms campaign creation was already true — and stays true
+Nothing in `CreateCampaignCommandHandler` calls an AI/vision service today, so acceptance
+criterion #1 doesn't require new work to satisfy — it requires **not introducing** a synchronous
+call, which this implementation doesn't. No outbound call to a real Cloud Function/Vision API is
+made anywhere: there's no such service to call in this environment, and building a fake one to
+call would be circular. What's implemented is the **inbound** half — receiving and verifying the
+callback — which is the half this ticket's acceptance criteria actually test.
+
+### What was built
+- `CampaignReview.RecordAutomatedMediaAnalysis(passedSafetyCheck, toxicityScore, adultContentScore, analyzedAtUtc)`:
+  records the scores always; auto-approves (via the existing `CampaignReviewApprovedDomainEvent`
+  pipeline, so the same downstream consumers as a human approval fire) only if
+  `passedSafetyCheck`. A no-op, not a thrown exception, if the review already left `Pending` by
+  the time this arrives — a human moderator may well act before a 3-15 second analysis completes,
+  and that decision must never be silently overwritten. Automated approval is attributed to
+  `Guid.Empty` in the domain event (there is no human `ModeratorId`); `ModeratorId` on the
+  aggregate itself stays `null` and the `Notes` text is the durable record of what happened.
+- `RecordMediaAnalysisCommandHandler` — no `ICurrentUser` authorization check at all, unlike
+  every other Moderation command: this one is only ever dispatched from the anonymous,
+  signature-verified webhook controller, which is its actual authentication.
+- `CloudFunctionSignatureVerifier` (`X-Cloud-Signature: sha256=...`, single HMAC over the whole
+  body, no timestamp window — this ticket's own spec, distinct from TICKET-033's Stripe-style
+  `t=...,v1=...` scheme) and a new anonymous `POST /api/webhooks/moderation/media-analysis`
+  endpoint, reusing TICKET-033's generic `webhook-strict` rate-limit policy rather than minting a
+  third one.
+- Tests: `tests/UnitTests/CrowdFunding.UnitTests/CloudFunctionSignatureVerifierTests.cs` (6
+  tests) and `tests/IntegrationTests/CrowdFunding.IntegrationTests/MediaAnalysisWebhookE2ETests.cs`
+  (5 tests against real HTTP + Postgres: passing analysis auto-approves; failing analysis leaves
+  the review `Pending`; missing signature → 401; unknown campaign → 404; an analysis arriving
+  after a human already approved is acknowledged but doesn't overwrite the human's decision).
+- Verified: full solution build clean in Debug and Release (0 warnings); unit tests 220/220 (214
+  prior + 6 new); architecture tests 20/20 unchanged; integration tests 64/64 (59 prior + 5 new),
+  against real Postgres/Redis/RabbitMQ Testcontainers.

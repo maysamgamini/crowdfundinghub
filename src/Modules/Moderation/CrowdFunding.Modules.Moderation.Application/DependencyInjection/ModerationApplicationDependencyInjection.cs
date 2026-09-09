@@ -1,5 +1,6 @@
 ﻿using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Commands.ApproveCampaignReview;
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Commands.CreateCampaignReview;
+using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Commands.RecordMediaAnalysis;
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Commands.RejectCampaignReview;
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Queries.GetCampaignReviewByCampaignId;
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Queries.GetCampaignReviewStatusByCampaignId;
@@ -23,10 +24,12 @@ public static class ModerationApplicationDependencyInjection
         services.AddScoped<CreateCampaignReviewCommandHandler>();
         services.AddScoped<ApproveCampaignReviewCommandHandler>();
         services.AddScoped<RejectCampaignReviewCommandHandler>();
+        services.AddScoped<RecordMediaAnalysisCommandHandler>();
         services.AddScoped<GetCampaignReviewByCampaignIdQueryHandler>();
         services.AddScoped<GetCampaignReviewStatusByCampaignIdQueryHandler>();
         services.AddScoped<IValidator<ApproveCampaignReviewCommand>, ApproveCampaignReviewCommandValidator>();
         services.AddScoped<IValidator<RejectCampaignReviewCommand>, RejectCampaignReviewCommandValidator>();
+        services.AddScoped<IValidator<RecordMediaAnalysisCommand>, RecordMediaAnalysisCommandValidator>();
 
         return services;
     }

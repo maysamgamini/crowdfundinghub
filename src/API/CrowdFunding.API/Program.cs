@@ -61,6 +61,8 @@ builder.Services.AddProblemDetails();
 builder.Services.AddCrowdFundingRateLimiting(builder.Configuration);
 builder.Services.Configure<PaymentGatewayWebhookOptions>(
     builder.Configuration.GetSection(PaymentGatewayWebhookOptions.SectionName));
+builder.Services.Configure<CloudFunctionWebhookOptions>(
+    builder.Configuration.GetSection(CloudFunctionWebhookOptions.SectionName));
 
 builder.Services.AddHealthChecks()
     .AddCheck<DbContextHealthCheck<CampaignsDbContext>>("campaigns-db", tags: ["ready"])

@@ -17,6 +17,15 @@ public sealed class CampaignReview : BaseEntity
     public DateTime CreatedAtUtc { get; private set; }
     public DateTime? ReviewedAtUtc { get; private set; }
 
+    /// <summary>Toxicity/phishing score from an automated media-safety analysis (0.0-1.0), if
+    /// one has run. Persisted even when it doesn't clear the auto-approve threshold, so a human
+    /// moderator reviewing the queue sees the AI's finding instead of starting from nothing.
+    /// See TICKET-032.</summary>
+    public decimal? ToxicityScore { get; private set; }
+
+    /// <summary>Adult-content score from the same automated analysis (0.0-1.0).</summary>
+    public decimal? AdultContentScore { get; private set; }
+
     private CampaignReview()
     {
     }
@@ -79,6 +88,42 @@ public sealed class CampaignReview : BaseEntity
         ReviewedAtUtc = reviewedAtUtc;
         Status = CampaignReviewStatus.Rejected;
         AddDomainEvent(new CampaignReviewRejectedDomainEvent(CampaignId, ModeratorId!.Value, Notes));
+    }
+
+    /// <summary>
+    /// Records the result of an asynchronous, serverless media-safety analysis (TICKET-032) —
+    /// offloaded out of the request thread precisely because it takes 3-15 seconds, arriving here
+    /// later via a signed webhook rather than inline during campaign creation. A score clearing
+    /// the gateway's own safety threshold (<paramref name="passedSafetyCheck"/>) auto-approves the
+    /// review without waiting on a human moderator; otherwise the scores are simply recorded so a
+    /// moderator reviewing the (still Pending) queue sees the AI's finding instead of nothing.
+    /// A no-op, not an error, if the review already left Pending by the time this arrives — a
+    /// human moderator may well act before a 3-15 second analysis completes.
+    /// </summary>
+    public void RecordAutomatedMediaAnalysis(bool passedSafetyCheck, decimal toxicityScore, decimal adultContentScore, DateTime analyzedAtUtc)
+    {
+        if (Status != CampaignReviewStatus.Pending)
+        {
+            return;
+        }
+
+        ToxicityScore = toxicityScore;
+        AdultContentScore = adultContentScore;
+
+        if (!passedSafetyCheck)
+        {
+            return;
+        }
+
+        // Guid.Empty marks this as an automated, non-human approval — ModeratorId stays nullable
+        // specifically to distinguish "no moderator acted" from "a moderator with this id acted";
+        // Guid.Empty here would be indistinguishable from an unset moderator to a reader of this
+        // aggregate alone, so the Notes text is the durable record of what actually happened.
+        ModeratorId = null;
+        Notes = $"Auto-approved by automated media safety analysis (toxicity={toxicityScore:0.00}, adultContent={adultContentScore:0.00}).";
+        ReviewedAtUtc = analyzedAtUtc;
+        Status = CampaignReviewStatus.Approved;
+        AddDomainEvent(new CampaignReviewApprovedDomainEvent(CampaignId, Guid.Empty, Notes));
     }
 
     private void EnsurePending()

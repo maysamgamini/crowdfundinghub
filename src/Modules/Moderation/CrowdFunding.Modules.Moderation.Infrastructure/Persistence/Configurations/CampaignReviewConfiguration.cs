@@ -36,6 +36,12 @@ public sealed class CampaignReviewConfiguration : IEntityTypeConfiguration<Campa
         builder.Property(x => x.Notes)
             .HasMaxLength(500);
 
+        builder.Property(x => x.ToxicityScore)
+            .HasPrecision(3, 2);
+
+        builder.Property(x => x.AdultContentScore)
+            .HasPrecision(3, 2);
+
         builder.Property(x => x.CreatedAtUtc)
             .IsRequired();
     }
