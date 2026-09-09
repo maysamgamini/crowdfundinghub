@@ -41,6 +41,15 @@ internal static class ApiTestExtensions
         return (userId, accessToken);
     }
 
+    public static async Task<LoginUserResponse> LoginWithTokensAsync(
+        this HttpClient client, string email, string password = DefaultPassword)
+    {
+        var response = await client.PostAsJsonAsync(
+            "/api/identity/login", new LoginUserRequest(email, password));
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<LoginUserResponse>())!;
+    }
+
     public static void SetBearerToken(this HttpClient client, string accessToken)
         => client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 

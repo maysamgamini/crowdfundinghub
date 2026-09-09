@@ -9,7 +9,6 @@ using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.LoginUse
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.Logout;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.RefreshAccessToken;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.RegisterUser;
-using CrowdFunding.Modules.Identity.Domain.Entities;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.SeedAdmin;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Queries.GetCurrentUser;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
@@ -713,4 +712,311 @@ internal sealed class FakeRefreshTokenService : IRefreshTokenService
     public string GenerateToken() => NextToken;
 
     public string Hash(string rawToken) => $"hashed:{rawToken}";
+}
+
+internal sealed class FakeSecurityStampRevocationStore : ISecurityStampRevocationStore
+{
+    private readonly HashSet<(Guid UserId, Guid Stamp)> _revoked = [];
+
+    public List<(Guid UserId, Guid Stamp)> RevokedCalls { get; } = [];
+
+    public Task RevokeAsync(Guid userId, Guid revokedStamp, CancellationToken cancellationToken)
+    {
+        _revoked.Add((userId, revokedStamp));
+        RevokedCalls.Add((userId, revokedStamp));
+        return Task.CompletedTask;
+    }
+
+    public Task<bool> IsRevokedAsync(Guid userId, Guid stamp, CancellationToken cancellationToken)
+        => Task.FromResult(_revoked.Contains((userId, stamp)));
+}
+
+public sealed class RefreshTokenDomainTests
+{
+    [Fact]
+    public void Issue_ShouldSetExpirationRelativeToIssuedAtUtc()
+    {
+        var issuedAt = new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc);
+
+        var token = RefreshToken.Issue(Guid.NewGuid(), "hash", issuedAt, TimeSpan.FromDays(30));
+
+        Assert.Equal(issuedAt, token.IssuedAtUtc);
+        Assert.Equal(issuedAt.AddDays(30), token.ExpiresAtUtc);
+        Assert.False(token.IsRevoked);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Issue_ShouldThrow_WhenTokenHashIsMissing(string blankHash)
+    {
+        var action = () => RefreshToken.Issue(Guid.NewGuid(), blankHash, DateTime.UtcNow, TimeSpan.FromDays(1));
+
+        Assert.Throws<ArgumentException>(action);
+    }
+
+    [Fact]
+    public void Issue_ShouldThrow_WhenLifetimeIsNotPositive()
+    {
+        var action = () => RefreshToken.Issue(Guid.NewGuid(), "hash", DateTime.UtcNow, TimeSpan.Zero);
+
+        Assert.Throws<ArgumentException>(action);
+    }
+
+    [Fact]
+    public void IsActive_ShouldReturnFalse_OnceExpired()
+    {
+        var issuedAt = new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc);
+        var token = RefreshToken.Issue(Guid.NewGuid(), "hash", issuedAt, TimeSpan.FromMinutes(1));
+
+        Assert.True(token.IsActive(issuedAt.AddSeconds(30)));
+        Assert.False(token.IsActive(issuedAt.AddMinutes(2)));
+    }
+
+    [Fact]
+    public void Revoke_ShouldSetRevokedAtAndReplacedByHash()
+    {
+        var token = RefreshToken.Issue(Guid.NewGuid(), "hash", DateTime.UtcNow, TimeSpan.FromDays(1));
+        var now = DateTime.UtcNow;
+
+        token.Revoke(now, "new-hash");
+
+        Assert.True(token.IsRevoked);
+        Assert.Equal(now, token.RevokedAtUtc);
+        Assert.Equal("new-hash", token.ReplacedByTokenHash);
+        Assert.False(token.IsActive(now));
+    }
+
+    [Fact]
+    public void Revoke_ShouldBeIdempotent_AndKeepTheFirstRevocationDetails()
+    {
+        var token = RefreshToken.Issue(Guid.NewGuid(), "hash", DateTime.UtcNow, TimeSpan.FromDays(1));
+        var firstRevocation = DateTime.UtcNow;
+
+        token.Revoke(firstRevocation, "first-replacement");
+        token.Revoke(firstRevocation.AddMinutes(5), "second-replacement");
+
+        Assert.Equal(firstRevocation, token.RevokedAtUtc);
+        Assert.Equal("first-replacement", token.ReplacedByTokenHash);
+    }
+}
+
+public sealed class RefreshAccessTokenCommandHandlerTests
+{
+    private static readonly DateTime Now = new(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc);
+
+    private static RefreshAccessTokenCommandHandler CreateHandler(
+        IUserRepository userRepository,
+        IRefreshTokenRepository refreshTokenRepository,
+        ISecurityStampRevocationStore? revocationStore = null,
+        IAccessTokenProvider? accessTokenProvider = null,
+        IRefreshTokenService? refreshTokenService = null)
+    {
+        return new RefreshAccessTokenCommandHandler(
+            accessTokenProvider ?? new FakeAccessTokenProvider(),
+            userRepository,
+            refreshTokenRepository,
+            refreshTokenService ?? new FakeRefreshTokenService(),
+            revocationStore ?? new FakeSecurityStampRevocationStore(),
+            new FakeIdentityDateTimeProvider(Now),
+            new FakeIdentityTransactionExecutor());
+    }
+
+    [Fact]
+    public async Task Handle_ShouldRotateToken_AndReturnNewAccessAndRefreshTokens()
+    {
+        var user = User.Register("creator@example.com", "Creator", "hash", DateTime.UtcNow);
+        var userRepository = new FakeUserRepository(user);
+        var refreshTokenRepository = new FakeRefreshTokenRepository();
+        var refreshTokenService = new FakeRefreshTokenService { NextToken = "rotated-token" };
+        var oldToken = RefreshToken.Issue(user.Id, refreshTokenService.Hash("raw-old-token"), Now.AddMinutes(-1), TimeSpan.FromDays(30));
+        await refreshTokenRepository.AddAsync(oldToken, CancellationToken.None);
+        var handler = CreateHandler(userRepository, refreshTokenRepository, refreshTokenService: refreshTokenService);
+
+        var result = await handler.Handle(new RefreshAccessTokenCommand("raw-old-token"), CancellationToken.None);
+
+        Assert.Equal("rotated-token", result.RefreshToken);
+        Assert.True(oldToken.IsRevoked);
+        Assert.Equal(refreshTokenService.Hash("rotated-token"), oldToken.ReplacedByTokenHash);
+        Assert.Equal(2, refreshTokenRepository.Tokens.Count);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldThrow_WhenTokenIsUnknown()
+    {
+        var handler = CreateHandler(new FakeUserRepository(), new FakeRefreshTokenRepository());
+
+        var action = async () => await handler.Handle(new RefreshAccessTokenCommand("never-issued"), CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(action);
+        Assert.Equal("Invalid refresh token.", exception.Message);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldThrow_WhenTokenHasExpired()
+    {
+        var user = User.Register("creator@example.com", "Creator", "hash", DateTime.UtcNow);
+        var userRepository = new FakeUserRepository(user);
+        var refreshTokenRepository = new FakeRefreshTokenRepository();
+        var refreshTokenService = new FakeRefreshTokenService();
+        var expiredToken = RefreshToken.Issue(user.Id, refreshTokenService.Hash("raw-token"), Now.AddDays(-31), TimeSpan.FromDays(30));
+        await refreshTokenRepository.AddAsync(expiredToken, CancellationToken.None);
+        var handler = CreateHandler(userRepository, refreshTokenRepository, refreshTokenService: refreshTokenService);
+
+        var action = async () => await handler.Handle(new RefreshAccessTokenCommand("raw-token"), CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(action);
+        Assert.Equal("Refresh token has expired.", exception.Message);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldDetectReuse_AndRevokeEverySessionForTheUser()
+    {
+        // The defining scenario TICKET-036 exists for: an already-rotated-away token being
+        // presented a second time. Two active sessions exist for the user; presenting the
+        // already-revoked token must kill both, rotate the security stamp, and blacklist the
+        // stamp that was valid a moment ago.
+        var user = User.Register("creator@example.com", "Creator", "hash", DateTime.UtcNow);
+        var compromisedStamp = user.SecurityStamp;
+        var userRepository = new FakeUserRepository(user);
+        var refreshTokenRepository = new FakeRefreshTokenRepository();
+        var refreshTokenService = new FakeRefreshTokenService();
+        var revocationStore = new FakeSecurityStampRevocationStore();
+
+        var alreadyRotatedToken = RefreshToken.Issue(user.Id, refreshTokenService.Hash("stolen-token"), Now.AddDays(-1), TimeSpan.FromDays(30));
+        alreadyRotatedToken.Revoke(Now.AddMinutes(-30), "some-other-hash");
+        await refreshTokenRepository.AddAsync(alreadyRotatedToken, CancellationToken.None);
+
+        var otherActiveToken = RefreshToken.Issue(user.Id, refreshTokenService.Hash("other-active-token"), Now.AddMinutes(-10), TimeSpan.FromDays(30));
+        await refreshTokenRepository.AddAsync(otherActiveToken, CancellationToken.None);
+
+        var handler = CreateHandler(userRepository, refreshTokenRepository, revocationStore, refreshTokenService: refreshTokenService);
+
+        var action = async () => await handler.Handle(new RefreshAccessTokenCommand("stolen-token"), CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(action);
+        Assert.Equal("Refresh token reuse detected; all sessions have been revoked.", exception.Message);
+        Assert.True(otherActiveToken.IsRevoked);
+        Assert.NotEqual(compromisedStamp, user.SecurityStamp);
+        Assert.Contains((user.Id, compromisedStamp), revocationStore.RevokedCalls);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldThrow_WhenUserIsInactive()
+    {
+        var user = User.Register("creator@example.com", "Creator", "hash", DateTime.UtcNow);
+        user.Deactivate();
+        var userRepository = new FakeUserRepository(user);
+        var refreshTokenRepository = new FakeRefreshTokenRepository();
+        var refreshTokenService = new FakeRefreshTokenService();
+        var token = RefreshToken.Issue(user.Id, refreshTokenService.Hash("raw-token"), Now.AddMinutes(-1), TimeSpan.FromDays(30));
+        await refreshTokenRepository.AddAsync(token, CancellationToken.None);
+        var handler = CreateHandler(userRepository, refreshTokenRepository, refreshTokenService: refreshTokenService);
+
+        var action = async () => await handler.Handle(new RefreshAccessTokenCommand("raw-token"), CancellationToken.None);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(action);
+    }
+}
+
+public sealed class LogoutCommandHandlerTests
+{
+    [Fact]
+    public async Task Handle_ShouldRevokeToken_AndRotateSecurityStamp_AndBlacklistOldStamp()
+    {
+        var user = User.Register("creator@example.com", "Creator", "hash", DateTime.UtcNow);
+        var staleStamp = user.SecurityStamp;
+        var userRepository = new FakeUserRepository(user);
+        var refreshTokenRepository = new FakeRefreshTokenRepository();
+        var refreshTokenService = new FakeRefreshTokenService();
+        var revocationStore = new FakeSecurityStampRevocationStore();
+        var token = RefreshToken.Issue(user.Id, refreshTokenService.Hash("raw-token"), DateTime.UtcNow, TimeSpan.FromDays(30));
+        await refreshTokenRepository.AddAsync(token, CancellationToken.None);
+        var handler = new LogoutCommandHandler(
+            new TestCurrentUser { UserId = user.Id },
+            userRepository,
+            refreshTokenRepository,
+            refreshTokenService,
+            revocationStore,
+            new FakeIdentityDateTimeProvider(DateTime.UtcNow),
+            new FakeIdentityTransactionExecutor());
+
+        await handler.Handle(new LogoutCommand("raw-token"), CancellationToken.None);
+
+        Assert.True(token.IsRevoked);
+        Assert.NotEqual(staleStamp, user.SecurityStamp);
+        Assert.Contains((user.Id, staleStamp), revocationStore.RevokedCalls);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldIgnoreATokenBelongingToAnotherUser_ButStillLogOutTheCaller()
+    {
+        var caller = User.Register("caller@example.com", "Caller", "hash", DateTime.UtcNow);
+        var someoneElse = User.Register("someone-else@example.com", "Someone Else", "hash", DateTime.UtcNow);
+        var userRepository = new FakeUserRepository(caller, someoneElse);
+        var refreshTokenRepository = new FakeRefreshTokenRepository();
+        var refreshTokenService = new FakeRefreshTokenService();
+        var someoneElsesToken = RefreshToken.Issue(someoneElse.Id, refreshTokenService.Hash("not-mine"), DateTime.UtcNow, TimeSpan.FromDays(30));
+        await refreshTokenRepository.AddAsync(someoneElsesToken, CancellationToken.None);
+        var callerStamp = caller.SecurityStamp;
+        var handler = new LogoutCommandHandler(
+            new TestCurrentUser { UserId = caller.Id },
+            userRepository,
+            refreshTokenRepository,
+            refreshTokenService,
+            new FakeSecurityStampRevocationStore(),
+            new FakeIdentityDateTimeProvider(DateTime.UtcNow),
+            new FakeIdentityTransactionExecutor());
+
+        await handler.Handle(new LogoutCommand("not-mine"), CancellationToken.None);
+
+        Assert.False(someoneElsesToken.IsRevoked);
+        Assert.NotEqual(callerStamp, caller.SecurityStamp);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldThrow_WhenCallerIsNotAuthenticated()
+    {
+        var handler = new LogoutCommandHandler(
+            new TestCurrentUser { IsAuthenticated = false, UserId = Guid.Empty },
+            new FakeUserRepository(),
+            new FakeRefreshTokenRepository(),
+            new FakeRefreshTokenService(),
+            new FakeSecurityStampRevocationStore(),
+            new FakeIdentityDateTimeProvider(DateTime.UtcNow),
+            new FakeIdentityTransactionExecutor());
+
+        var action = async () => await handler.Handle(new LogoutCommand("whatever"), CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(action);
+        Assert.Equal("The current user must be authenticated to log out.", exception.Message);
+    }
+}
+
+public sealed class RefreshAccessTokenCommandValidatorTests
+{
+    [Fact]
+    public void Validate_ShouldReturnError_WhenRefreshTokenIsMissing()
+    {
+        var validator = new RefreshAccessTokenCommandValidator();
+
+        var result = validator.Validate(new RefreshAccessTokenCommand(""));
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, error => error.PropertyName == nameof(RefreshAccessTokenCommand.RefreshToken));
+    }
+}
+
+public sealed class LogoutCommandValidatorTests
+{
+    [Fact]
+    public void Validate_ShouldReturnError_WhenRefreshTokenIsMissing()
+    {
+        var validator = new LogoutCommandValidator();
+
+        var result = validator.Validate(new LogoutCommand(""));
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, error => error.PropertyName == nameof(LogoutCommand.RefreshToken));
+    }
 }
