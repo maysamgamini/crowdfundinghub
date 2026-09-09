@@ -24,4 +24,14 @@ public interface ICampaignTransactionExecutor
     /// <summary>Non-generic, advisory-lock-taking overload — see the locked
     /// <see cref="ExecuteAsync{T}(long, Func{CancellationToken, Task{T}}, CancellationToken)"/> overload's remarks.</summary>
     Task ExecuteAsync(long advisoryLockKey, Func<CancellationToken, Task> action, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Queues a distributed cache key for eviction once the currently-executing
+    /// <c>ExecuteAsync</c> call's transaction has actually committed (TICKET-037). Call this from
+    /// inside the <c>action</c> delegate instead of evicting the cache directly — evicting before
+    /// commit leaves a window where a concurrent read can repopulate the cache with the
+    /// about-to-be-overwritten value, which would then serve stale data for a full TTL instead of
+    /// until the next write.
+    /// </summary>
+    void EnqueueCacheInvalidation(string cacheKey);
 }

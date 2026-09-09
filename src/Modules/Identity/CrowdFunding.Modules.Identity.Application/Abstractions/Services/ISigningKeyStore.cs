@@ -36,4 +36,13 @@ public interface ISigningKeyStore
     /// <summary>Every known key with only its public component populated, for JWKS publication
     /// and token verification.</summary>
     IReadOnlyList<SigningKeyMaterial> GetPublicSigningKeys();
+
+    /// <summary>
+    /// Generates a new active signing key, retires the previous one (without deleting it — still
+    /// unexpired tokens it signed must keep verifying), and notifies every other running replica
+    /// of this monolith to reload (TICKET-037), closing the multi-replica split-brain window
+    /// where other instances would otherwise keep signing/verifying with the now-retired key
+    /// until their own next restart.
+    /// </summary>
+    Task RotateAsync(CancellationToken cancellationToken);
 }

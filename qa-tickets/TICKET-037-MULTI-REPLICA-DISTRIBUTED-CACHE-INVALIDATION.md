@@ -4,7 +4,7 @@
 **Severity:** 🟠 P1 (High - Multi-Replica Monolith Scaling & Cache Consistency)  
 **QA Focus Area:** High Availability, Distributed Caching & Split-Brain Prevention  
 **Found By:** `qa-platform-shortcomings`  
-**Status:** Open  
+**Status:** Fixed  
 **Project Mode:** Greenfield (Benchmark Educational Standard)  
 
 ---
@@ -148,3 +148,79 @@ public async Task<TResult> ExecuteAsync<TResult>(Func<Task<TResult>> action, Can
 1. **Multi-Instance Invalidation Simulation:** An integration test spinning up two distinct `ServiceProvider` scopes connected to the same Redis instance verifies that rotating keys on Instance A triggers reload on Instance B within 100ms.
 2. **Zero Pre-Commit Eviction:** Verify that during a campaign balance update, cache eviction occurs strictly after `tx.CommitAsync()` succeeds.
 3. **Resilience to Redis Disconnection:** If Redis Pub/Sub is temporarily unreachable, key reloading falls back gracefully to a time-based TTL (e.g. 5 minutes) without crashing the application.
+
+---
+
+## 6. Resolution
+
+### Scope: a real rotation mechanism had to be built first
+Neither flaw this ticket describes had a trigger in the existing codebase — there was no
+`RotateSigningKey` operation and no way to reach `CampaignRepository.UpdateAsync`'s eviction path
+except through a normal write. Making the ticket's own acceptance criteria concretely testable
+therefore required adding the missing capability, not just wiring notifications around it:
+`ISigningKeyStore.RotateAsync()` (generates a new active key, retires — but keeps, for JWKS
+verification of still-unexpired tokens — the previous one, persists, and publishes) is new. No
+admin HTTP endpoint calls it yet (that's a distinct authorization/audit-logging concern of its
+own); the method and its test coverage exist so that endpoint is a thin wrapper whenever it's
+added.
+
+### A reusable Redis Pub/Sub mechanism, not a signing-keys-only one
+`CrowdFunding.BuildingBlocks.Infrastructure/Caching/` adds `IDistributedCacheInvalidationPublisher`
+(publish), `CacheInvalidationSubscription` + `DistributedCacheInvalidationSubscriber` (a single
+hosted service that owns every registered channel's subscription), and an
+`AddDistributedCacheInvalidation`/`AddCacheInvalidationSubscription` DI extension pair. Identity is
+the only current consumer (`EfSigningKeyStore.SigningKeysInvalidationChannel`), but the mechanism
+itself belongs in BuildingBlocks so a future module facing the same "singleton in-memory cache
+across replicas" problem reuses it instead of re-implementing Pub/Sub plumbing.
+
+### Public JWKS now serves every known key, not just the active one
+The ticket's own domain sample only ever kept one key in memory. Rotating that key the moment a
+new one is generated would immediately break verification of any token signed moments earlier but
+not yet expired — a real bug the ticket doesn't call out but the fix has to avoid. `WarmUpAsync`
+now loads every `SigningKeyRecord` row (never deleted, only marked inactive by
+`SigningKeyRecord.Deactivate()`) into `GetPublicSigningKeys()`, while `GetActiveSigningKey()` still
+returns only the current one for signing new tokens.
+
+### Zero pre-commit eviction, via a queue on the transaction executor
+`ICampaignTransactionExecutor.EnqueueCacheInvalidation(string cacheKey)` replaces
+`CampaignRepository.UpdateAsync`'s previous immediate `IDistributedCache.RemoveAsync` call.
+`CampaignTransactionExecutor` collects queued keys through the life of one `ExecuteAsync` call and
+flushes them in `FlushPendingCacheInvalidationsAsync` only once `transaction.CommitAsync` has
+actually returned; on rollback the queue is discarded unflushed. This closes the exact window the
+ticket describes — a concurrent read between eviction and commit repopulating the cache with the
+pre-update row — without changing `CachedCampaignReadService`'s existing 30s-TTL safety net, which
+still exists as defense-in-depth for a missed invalidation, not as the primary mechanism.
+
+### Resilience: two independent fallbacks, not one
+`DistributedCacheInvalidationSubscriber.StartAsync` logs and continues if `SubscribeAsync` throws
+(e.g. Redis is unreachable at startup) rather than crashing the host — a cache-coherence mechanism
+must never be a hard dependency for the app to run. `SigningKeyRefreshBackgroundService` is the
+named "5-minute TTL fallback" the ticket asks for: it re-runs `WarmUpAsync` on a fixed 5-minute
+timer regardless of whether any Pub/Sub message was ever received, bounding the staleness window
+for a replica that missed rotation notifications (disconnected from Redis at the wrong moment) to
+that interval instead of leaving it stale until its next restart.
+
+### What was built
+- `CrowdFunding.BuildingBlocks.Infrastructure/Caching/`: `IDistributedCacheInvalidationPublisher`,
+  `RedisDistributedCacheInvalidationPublisher`, `CacheInvalidationSubscription`,
+  `DistributedCacheInvalidationSubscriber`, `DistributedCacheInvalidationDependencyInjection`.
+- `ISigningKeyStore.RotateAsync()`; `EfSigningKeyStore` rewritten to load all keys for JWKS, add
+  `RotateAsync`, and publish after committing; `SigningKeyRecord.Deactivate()`.
+- `SigningKeyRefreshBackgroundService` (5-minute periodic `WarmUpAsync`).
+- `ICampaignTransactionExecutor.EnqueueCacheInvalidation`; `CampaignTransactionExecutor` now takes
+  `IDistributedCache`/`ILogger` and flushes queued keys strictly post-commit;
+  `CampaignRepository.UpdateAsync` enqueues instead of evicting directly.
+
+### Tests
+Unit: `SigningKeyRecordTests` (Deactivate). Integration (real Postgres/Redis Testcontainers):
+`SigningKeyMultiReplicaInvalidationE2ETests` — a second, independently constructed
+`ServiceProvider` ("Pod B") pointed at the same connection strings as the running
+`CrowdFundingApiFactory` ("Pod A"); rotating on Pod A propagates Pod A's new key id to Pod B within
+2 seconds via Redis Pub/Sub alone (Pod B never calls `RotateAsync` itself), and Pod B's public JWKS
+retains both the retired and the new key. `CampaignCachePostCommitInvalidationTests` — proves the
+cache key is untouched mid-transaction and only evicted after a real `CommitAsync`, and proves a
+rolled-back transaction evicts nothing at all.
+
+Verified: full solution build clean in Debug and Release (0 warnings); unit tests 261/261 (260
+prior + 1 new); architecture tests 20/20 unchanged; integration tests 77/77 (74 prior + 3 new),
+against real Postgres/Redis/RabbitMQ Testcontainers.

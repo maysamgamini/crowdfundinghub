@@ -12,6 +12,9 @@ internal sealed class FakeCampaignTransactionExecutor : ICampaignTransactionExec
 {
     public int InvocationCount { get; private set; }
     public long? LastAdvisoryLockKey { get; private set; }
+    public List<string> EnqueuedCacheKeys { get; } = [];
+
+    public void EnqueueCacheInvalidation(string cacheKey) => EnqueuedCacheKeys.Add(cacheKey);
 
     public Task<T> ExecuteAsync<T>(Func<CancellationToken, Task<T>> action, CancellationToken cancellationToken)
     {

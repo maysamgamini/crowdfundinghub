@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Infrastructure.Caching;
 using CrowdFunding.BuildingBlocks.Infrastructure.Configuration;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Services;
@@ -47,7 +48,18 @@ public static class IdentityInfrastructureDependencyInjection
         services.AddSingleton<IRefreshTokenService, RefreshTokenService>();
         services.AddSingleton<ISecurityStampRevocationStore, RedisSecurityStampRevocationStore>();
         services.AddSingleton<IIdentityDateTimeProvider, SystemDateTimeProvider>();
+
+        // TICKET-037: distributed cache coherence for the signing-key singleton across replicas.
+        // AddDistributedCacheInvalidation is safe to call from more than one module (it uses
+        // TryAddSingleton internally) — Identity happens to be the only current consumer, but the
+        // mechanism itself belongs in BuildingBlocks so any future module needing the same
+        // pattern doesn't have to reinvent it.
+        services.AddDistributedCacheInvalidation(configuration);
+        services.AddCacheInvalidationSubscription(
+            EfSigningKeyStore.SigningKeysInvalidationChannel,
+            (provider, cancellationToken) => provider.GetRequiredService<ISigningKeyStore>().WarmUpAsync(cancellationToken));
         services.AddSingleton<ISigningKeyStore, EfSigningKeyStore>();
+        services.AddHostedService<SigningKeyRefreshBackgroundService>();
 
         return services;
     }

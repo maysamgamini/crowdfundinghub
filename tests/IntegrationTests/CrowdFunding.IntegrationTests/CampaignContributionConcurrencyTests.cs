@@ -98,9 +98,9 @@ public sealed class CampaignContributionConcurrencyTests
         // Each call gets its own DbContext/repository/executor, mirroring separate concurrent
         // requests/outbox-consumer instances hitting the same campaign row.
         await using var dbContext = _fixture.CreateDbContext();
-        var repository = new CampaignRepository(dbContext, NoOpDistributedCache, NullLogger<CampaignRepository>.Instance);
+        var transactionExecutor = new CampaignTransactionExecutor(dbContext, NoOpDistributedCache, NullLogger<CampaignTransactionExecutor>.Instance);
+        var repository = new CampaignRepository(dbContext, transactionExecutor);
         var ledger = new ContributionLedger(dbContext);
-        var transactionExecutor = new CampaignTransactionExecutor(dbContext);
         var handler = new AddContributionToCampaignCommandHandler(repository, ledger, transactionExecutor, new NoOpCampaignRealtimeNotifier());
 
         await handler.Handle(

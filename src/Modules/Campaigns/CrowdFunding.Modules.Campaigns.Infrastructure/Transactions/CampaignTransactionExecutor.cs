@@ -11,6 +11,8 @@ using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignSucceeded;
 using CrowdFunding.Modules.Campaigns.Domain.Events;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Logging;
 
 namespace CrowdFunding.Modules.Campaigns.Infrastructure.Transactions;
 
@@ -20,11 +22,25 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Transactions;
 public sealed class CampaignTransactionExecutor : ICampaignTransactionExecutor
 {
     private readonly CampaignsDbContext _dbContext;
+    private readonly IDistributedCache _cache;
+    private readonly ILogger<CampaignTransactionExecutor> _logger;
 
-    public CampaignTransactionExecutor(CampaignsDbContext dbContext)
+    // TICKET-037: keys queued by EnqueueCacheInvalidation during the *currently executing*
+    // ExecuteAsync call. This executor is a scoped (per-request) service, so there is exactly one
+    // logical operation in flight per instance at a time — nested ExecuteAsync calls (advisory
+    // lock re-entrancy) share this same list and only the outermost call flushes it, which is
+    // exactly the point at which the outermost transaction has committed.
+    private readonly List<string> _pendingCacheKeys = [];
+
+    public CampaignTransactionExecutor(CampaignsDbContext dbContext, IDistributedCache cache, ILogger<CampaignTransactionExecutor> logger)
     {
         _dbContext = dbContext;
+        _cache = cache;
+        _logger = logger;
     }
+
+    /// <inheritdoc/>
+    public void EnqueueCacheInvalidation(string cacheKey) => _pendingCacheKeys.Add(cacheKey);
 
     public Task<T> ExecuteAsync<T>(Func<CancellationToken, Task<T>> action, CancellationToken cancellationToken)
         => ExecuteInternalAsync(null, action, cancellationToken);
@@ -80,6 +96,13 @@ public sealed class CampaignTransactionExecutor : ICampaignTransactionExecutor
             if (transaction is not null)
             {
                 await transaction.CommitAsync(cancellationToken);
+
+                // Only the call that owns the transaction flushes the queue, and only after
+                // CommitAsync has actually returned — a concurrent reader can no longer observe
+                // the pre-update row by the time this runs, closing the pre-commit eviction
+                // window TICKET-037 flags (previously CampaignRepository.UpdateAsync evicted
+                // immediately after Update(), before SaveChanges/Commit had even run).
+                await FlushPendingCacheInvalidationsAsync(cancellationToken);
             }
 
             return result;
@@ -110,6 +133,27 @@ public sealed class CampaignTransactionExecutor : ICampaignTransactionExecutor
             if (transaction is not null)
             {
                 await transaction.DisposeAsync();
+
+                // Clear regardless of commit vs. rollback: on rollback nothing should be evicted
+                // (the data didn't actually change), and on commit FlushPendingCacheInvalidationsAsync
+                // above already drained the list. Only the owning (outermost) call clears — a
+                // nested call must leave the outer call's still-pending keys alone.
+                _pendingCacheKeys.Clear();
+            }
+        }
+    }
+
+    private async Task FlushPendingCacheInvalidationsAsync(CancellationToken cancellationToken)
+    {
+        foreach (var cacheKey in _pendingCacheKeys)
+        {
+            try
+            {
+                await _cache.RemoveAsync(cacheKey, cancellationToken);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning(exception, "Failed to invalidate cache key {CacheKey} after commit.", cacheKey);
             }
         }
     }

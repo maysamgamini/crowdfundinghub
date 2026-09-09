@@ -25,4 +25,11 @@ public sealed class SigningKeyRecord
     public string PrivateKeyPkcs8Base64 { get; private set; } = string.Empty;
     public DateTime CreatedAtUtc { get; private set; }
     public bool IsActive { get; private set; }
+
+    /// <summary>
+    /// Retires this key as the one used to sign new tokens (TICKET-037's key rotation). The
+    /// record itself is kept, not deleted — the public JWKS still needs it to verify tokens
+    /// signed under this <see cref="Kid"/> before they expire.
+    /// </summary>
+    public void Deactivate() => IsActive = false;
 }

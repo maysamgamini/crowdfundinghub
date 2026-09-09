@@ -4,10 +4,26 @@ using System.Security.Cryptography;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Services;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
 using CrowdFunding.Modules.Identity.Domain.Aggregates;
+using CrowdFunding.Modules.Identity.Infrastructure.Persistence;
 using CrowdFunding.Modules.Identity.Infrastructure.Services;
 using Microsoft.Extensions.Configuration;
 
 namespace CrowdFunding.UnitTests;
+
+public sealed class SigningKeyRecordTests
+{
+    [Fact]
+    public void Deactivate_ShouldTurnOffIsActive_WithoutClearingTheKeyMaterial()
+    {
+        var record = new SigningKeyRecord("kid-1", "base64-key", DateTime.UtcNow);
+
+        record.Deactivate();
+
+        Assert.False(record.IsActive);
+        Assert.Equal("kid-1", record.Kid);
+        Assert.Equal("base64-key", record.PrivateKeyPkcs8Base64);
+    }
+}
 
 public sealed class Pbkdf2PasswordHasherTests
 {
@@ -189,4 +205,6 @@ internal sealed class FakeSigningKeyStore : ISigningKeyStore
     public SigningKeyMaterial GetActiveSigningKey() => _key;
 
     public IReadOnlyList<SigningKeyMaterial> GetPublicSigningKeys() => [_key];
+
+    public Task RotateAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }
