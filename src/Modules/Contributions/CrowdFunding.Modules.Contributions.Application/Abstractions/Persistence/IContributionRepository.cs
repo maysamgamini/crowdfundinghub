@@ -9,6 +9,12 @@ public interface IContributionRepository
 {
     Task AddAsync(Contribution contribution, CancellationToken cancellationToken);
     Task<Contribution?> GetByIdAsync(Guid contributionId, CancellationToken cancellationToken);
+
+    /// <summary>Looks up a contribution by the external payment gateway's own reference — how a
+    /// payment webhook (which knows nothing of our internal <c>ContributionId</c>) reconciles.
+    /// See TICKET-033.</summary>
+    Task<Contribution?> GetByExternalPaymentIntentIdAsync(string externalPaymentIntentId, CancellationToken cancellationToken);
+
     Task UpdateAsync(Contribution contribution, CancellationToken cancellationToken);
 
     /// <summary>Loads every currently-Succeeded contribution for a campaign, for the refund

@@ -100,7 +100,8 @@ public sealed class ContributionReadService : IContributionReadService
                 x.PaymentReference,
                 x.FailureReason,
                 x.CreatedAtUtc,
-                x.ProcessedAtUtc))
+                x.ProcessedAtUtc,
+                x.ExternalPaymentIntentId))
             .FirstOrDefaultAsync(cancellationToken);
     }
 }

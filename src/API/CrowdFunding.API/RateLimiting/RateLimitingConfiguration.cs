@@ -13,6 +13,7 @@ public static class RateLimitingConfiguration
 {
     public const string AuthPolicy = "auth-strict";
     public const string PaymentPolicy = "payment-strict";
+    public const string WebhookPolicy = "webhook-strict";
 
     /// <summary>
     /// Registers IP- and user-partitioned rate limiting policies for authentication and payment routes.
@@ -29,6 +30,8 @@ public static class RateLimitingConfiguration
         var authWindowSeconds = configuration.GetValue("RateLimiting:Auth:WindowSeconds", 60);
         var paymentPermitLimit = configuration.GetValue("RateLimiting:Payment:PermitLimit", 20);
         var paymentWindowSeconds = configuration.GetValue("RateLimiting:Payment:WindowSeconds", 60);
+        var webhookPermitLimit = configuration.GetValue("RateLimiting:Webhook:PermitLimit", 200);
+        var webhookWindowSeconds = configuration.GetValue("RateLimiting:Webhook:WindowSeconds", 60);
 
         services.AddRateLimiter(options =>
         {
@@ -54,6 +57,20 @@ public static class RateLimitingConfiguration
                 {
                     PermitLimit = paymentPermitLimit,
                     Window = TimeSpan.FromSeconds(paymentWindowSeconds),
+                }));
+
+            // Anonymous, high-volume, gateway-originated calls (Stripe et al.) — neither IP nor
+            // user identity is a safe partition key (the sender is a shared, rotating pool of
+            // gateway IPs, and there is no authenticated user), so this policy is kept
+            // deliberately generous and its real defense is the HMAC signature check inside the
+            // handler, not this limiter. It exists only to bound worst-case abuse of a publicly
+            // reachable, unauthenticated endpoint.
+            options.AddPolicy(WebhookPolicy, httpContext => RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                factory: _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = webhookPermitLimit,
+                    Window = TimeSpan.FromSeconds(webhookWindowSeconds),
                 }));
         });
 

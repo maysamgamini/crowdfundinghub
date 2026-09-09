@@ -3,6 +3,7 @@ using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Transactions;
+using CrowdFunding.Modules.Contributions.Domain.Enums;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
 
 namespace CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.ConfirmContributionPayment;
@@ -41,6 +42,16 @@ public sealed class ConfirmContributionPaymentCommandHandler : ICommandHandler<C
         if (contribution is null || contribution.CampaignId != command.CampaignId)
         {
             throw new KeyNotFoundException($"Contribution '{command.ContributionId}' was not found for campaign '{command.CampaignId}'.");
+        }
+
+        // TICKET-033 "Out-of-Order Safety": a payment gateway webhook can reconcile this exact
+        // contribution to Succeeded before the client's own confirmation call arrives (the
+        // webhook can beat the browser redirect back to the app). Treating that race as success
+        // rather than throwing is what makes the client-facing confirm path safe to call
+        // regardless of which side — webhook or client — got there first.
+        if (contribution.Status == ContributionStatus.Succeeded)
+        {
+            return new ConfirmContributionPaymentResult(contribution.Id, contribution.Status.ToString(), contribution.PaymentReference!);
         }
 
         // Reads Contributions' own locally replicated campaign snapshot rather than calling back

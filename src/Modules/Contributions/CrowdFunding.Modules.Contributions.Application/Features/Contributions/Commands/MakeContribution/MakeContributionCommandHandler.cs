@@ -71,6 +71,12 @@ public sealed class MakeContributionCommandHandler : ICommandHandler<MakeContrib
             command.Currency,
             _dateTimeProvider.UtcNow);
 
+        // In a real integration this id/reference comes back from creating a PaymentIntent (or
+        // equivalent) with the external gateway before the client is redirected to complete
+        // authentication (3DS) — see TICKET-033. No live gateway call is made here; this is the
+        // correlation key an inbound webhook reconciles against in ReconcilePaymentWebhookCommandHandler.
+        contribution.AttachPaymentIntent($"pi_mock_{contribution.Id:N}", "Mock");
+
         await _transactionExecutor.ExecuteAsync(async ct =>
         {
             await _contributionRepository.AddAsync(contribution, ct);

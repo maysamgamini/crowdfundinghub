@@ -41,6 +41,18 @@ public sealed class ContributionConfiguration : IEntityTypeConfiguration<Contrib
         builder.Property(x => x.FailureReason)
             .HasMaxLength(500);
 
+        builder.Property(x => x.ExternalPaymentIntentId)
+            .HasMaxLength(100);
+
+        builder.Property(x => x.PaymentGateway)
+            .HasMaxLength(50);
+
+        // The webhook reconciliation handler's correlation lookup (TICKET-033) — a payment
+        // gateway webhook arrives keyed by its own intent id, never by our internal ContributionId.
+        builder.HasIndex(x => x.ExternalPaymentIntentId)
+            .IsUnique()
+            .HasFilter("\"ExternalPaymentIntentId\" IS NOT NULL");
+
         builder.OwnsOne(x => x.Money, money =>
         {
             money.Property(x => x.Amount)

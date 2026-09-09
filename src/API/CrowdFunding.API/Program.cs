@@ -59,6 +59,8 @@ builder.Services.AddCrowdFundingSwagger();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services.AddCrowdFundingRateLimiting(builder.Configuration);
+builder.Services.Configure<PaymentGatewayWebhookOptions>(
+    builder.Configuration.GetSection(PaymentGatewayWebhookOptions.SectionName));
 
 builder.Services.AddHealthChecks()
     .AddCheck<DbContextHealthCheck<CampaignsDbContext>>("campaigns-db", tags: ["ready"])

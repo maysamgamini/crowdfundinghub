@@ -777,6 +777,9 @@ internal sealed class FakeRefundableContributionRepository : IContributionReposi
     public Task<Contribution?> GetByIdAsync(Guid contributionId, CancellationToken cancellationToken)
         => Task.FromResult(_contributions.FirstOrDefault(x => x.Id == contributionId));
 
+    public Task<Contribution?> GetByExternalPaymentIntentIdAsync(string externalPaymentIntentId, CancellationToken cancellationToken)
+        => Task.FromResult(_contributions.FirstOrDefault(x => x.ExternalPaymentIntentId == externalPaymentIntentId));
+
     public Task UpdateAsync(Contribution contribution, CancellationToken cancellationToken)
         => Task.CompletedTask;
 
@@ -944,6 +947,16 @@ internal sealed class FakeContributionRepository : IContributionRepository
         return Task.FromResult(SavedContribution?.Id == contributionId ? SavedContribution : null);
     }
 
+    public Task<Contribution?> GetByExternalPaymentIntentIdAsync(string externalPaymentIntentId, CancellationToken cancellationToken)
+    {
+        if (_contribution?.ExternalPaymentIntentId == externalPaymentIntentId)
+        {
+            return Task.FromResult<Contribution?>(_contribution);
+        }
+
+        return Task.FromResult(SavedContribution?.ExternalPaymentIntentId == externalPaymentIntentId ? SavedContribution : null);
+    }
+
     public Task UpdateAsync(Contribution contribution, CancellationToken cancellationToken)
     {
         WasUpdated = true;
@@ -1037,6 +1050,7 @@ internal sealed class FakeContributionReadService : IContributionReadService
                 match.PaymentReference,
                 match.FailureReason,
                 match.CreatedAtUtc,
-                match.ProcessedAtUtc));
+                match.ProcessedAtUtc,
+                ExternalPaymentIntentId: null));
     }
 }

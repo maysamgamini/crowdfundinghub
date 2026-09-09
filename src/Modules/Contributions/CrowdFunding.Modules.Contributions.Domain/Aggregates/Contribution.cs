@@ -20,6 +20,17 @@ public sealed class Contribution : BaseEntity
     public DateTime CreatedAtUtc { get; private set; }
     public DateTime? ProcessedAtUtc { get; private set; }
 
+    /// <summary>The external payment service provider's reference for this pledge (e.g. a
+    /// Stripe PaymentIntent id) — the correlation key an inbound payment webhook reconciles
+    /// against. See TICKET-033.</summary>
+    public string? ExternalPaymentIntentId { get; private set; }
+
+    /// <summary>Which external payment gateway <see cref="ExternalPaymentIntentId"/> belongs to
+    /// (e.g. "Stripe", "Mock") — a contribution could in principle move providers if the platform
+    /// migrates gateways mid-lifecycle, so this travels with the reference rather than being a
+    /// platform-wide constant.</summary>
+    public string? PaymentGateway { get; private set; }
+
     private Contribution()
     {
     }
@@ -71,6 +82,28 @@ public sealed class Contribution : BaseEntity
             money,
             ContributionStatus.Pending,
             createdAtUtc);
+    }
+
+    /// <summary>
+    /// Records the external payment gateway's reference for this pledge, obtained when the
+    /// gateway's payment-intent/charge object was created. Settable only while the contribution
+    /// is still awaiting payment — once a terminal state is reached, the reference that produced
+    /// it is immutable history.
+    /// </summary>
+    public void AttachPaymentIntent(string externalPaymentIntentId, string paymentGateway)
+    {
+        if (Status != ContributionStatus.Pending)
+        {
+            throw new InvalidOperationException("A payment intent can only be attached while the contribution is pending.");
+        }
+
+        if (string.IsNullOrWhiteSpace(externalPaymentIntentId))
+        {
+            throw new ArgumentException("External payment intent id is required.", nameof(externalPaymentIntentId));
+        }
+
+        ExternalPaymentIntentId = externalPaymentIntentId.Trim();
+        PaymentGateway = paymentGateway;
     }
 
     /// <summary>

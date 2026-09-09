@@ -35,6 +35,13 @@ public sealed class ContributionRepository : IContributionRepository
     }
 
     /// <inheritdoc/>
+    public Task<Contribution?> GetByExternalPaymentIntentIdAsync(string externalPaymentIntentId, CancellationToken cancellationToken)
+    {
+        return _dbContext.Contributions
+            .SingleOrDefaultAsync(x => x.ExternalPaymentIntentId == externalPaymentIntentId, cancellationToken);
+    }
+
+    /// <inheritdoc/>
     public Task UpdateAsync(Contribution contribution, CancellationToken cancellationToken)
     {
         _dbContext.Contributions.Update(contribution);

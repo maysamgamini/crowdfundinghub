@@ -1,6 +1,7 @@
 ﻿using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.ConfirmContributionPayment;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.FailContributionPayment;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.MakeContribution;
+using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.ReconcilePaymentWebhook;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Queries.ListContributionsByCampaign;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,10 +23,12 @@ public static class ContributionsApplicationDependencyInjection
         services.AddScoped<ConfirmContributionPaymentCommandHandler>();
         services.AddScoped<FailContributionPaymentCommandHandler>();
         services.AddScoped<MakeContributionCommandHandler>();
+        services.AddScoped<ReconcilePaymentWebhookCommandHandler>();
         services.AddScoped<ListContributionsByCampaignQueryHandler>();
         services.AddScoped<IValidator<ConfirmContributionPaymentCommand>, ConfirmContributionPaymentCommandValidator>();
         services.AddScoped<IValidator<FailContributionPaymentCommand>, FailContributionPaymentCommandValidator>();
         services.AddScoped<IValidator<MakeContributionCommand>, MakeContributionCommandValidator>();
+        services.AddScoped<IValidator<ReconcilePaymentWebhookCommand>, ReconcilePaymentWebhookCommandValidator>();
 
         return services;
     }

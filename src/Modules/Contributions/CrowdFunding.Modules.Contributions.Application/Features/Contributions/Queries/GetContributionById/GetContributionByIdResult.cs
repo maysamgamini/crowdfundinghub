@@ -13,4 +13,5 @@ public sealed record GetContributionByIdResult(
     string? PaymentReference,
     string? FailureReason,
     DateTime CreatedAtUtc,
-    DateTime? ProcessedAtUtc);
+    DateTime? ProcessedAtUtc,
+    string? ExternalPaymentIntentId);
