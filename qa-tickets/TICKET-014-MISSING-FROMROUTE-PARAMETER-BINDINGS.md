@@ -4,7 +4,7 @@
 **Severity:** 🟡 P2 (Medium - API Contract & OpenAPI Schema Fidelity)  
 **QA Focus Area:** API Contracts & Route Parameter Binding  
 **Found By:** `qa-api-contracts`  
-**Status:** Open  
+**Status:** Fixed  
 **Project Mode:** Greenfield (No backward compatibility required)  
 
 ---
@@ -55,3 +55,9 @@ public async Task<ActionResult<ConfirmContributionPaymentResponse>> ConfirmPayme
     [FromBody] ConfirmContributionPaymentRequest request,
     CancellationToken cancellationToken)
 ```
+
+---
+
+## Resolution Note (doc reconciliation pass)
+
+This ticket's fix already landed in commit `bdfb810` earlier in this session's branch history; the `Status` field above was not updated at the time. Verified against current code during the TICKET-036/037/039 follow-up audit (2026-09-08) — the described defect no longer reproduces.

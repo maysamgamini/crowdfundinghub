@@ -4,7 +4,7 @@
 **Severity:** 🔴 P1 (High - Test Infrastructure & Coverage Gap)  
 **QA Focus Area:** Integration Testing & HTTP Test Harness  
 **Found By:** `qa-api-contracts` / `qa-integration-testing`  
-**Status:** Open  
+**Status:** Fixed  
 **Project Mode:** Greenfield (No backward compatibility required)  
 
 ---
@@ -107,3 +107,9 @@ Create automated HTTP test suites under `tests/IntegrationTests`:
 - `UserAuthenticationE2ETests.cs`: Registration -> Login -> Get `/me` -> Role Assignment.
 - `CampaignLifecycleE2ETests.cs`: Create Campaign -> Process Outbox -> Moderation Approve -> Publish Campaign.
 - `ContributionAndOutboxE2ETests.cs`: Make Contribution -> Confirm Payment -> Process Outbox -> Verify Campaign Raised Amount and SignalR pledge broadcast.
+
+---
+
+## Resolution Note (doc reconciliation pass)
+
+This ticket's fix already landed in commit `bdfb810` earlier in this session's branch history; the `Status` field above was not updated at the time. Verified against current code during the TICKET-036/037/039 follow-up audit (2026-09-08) — the described defect no longer reproduces.

@@ -4,7 +4,7 @@
 **Severity:** 🔴 P1 (Critical - Core Domain Incompleteness & Missing Distributed Saga Pattern)  
 **QA Focus Area:** Domain Completeness, Asynchronous Choreography & Financial Compensation Sagas  
 **Found By:** `qa-architect-curriculum`  
-**Status:** Open  
+**Status:** Fixed  
 **Project Mode:** Greenfield (Benchmark Educational Standard)  
 
 ---
@@ -185,3 +185,9 @@ public sealed class CampaignTerminationRefundHandler :
    - Verify all 3 contributions transition to `ContributionStatus.Refunded`.
    - Verify outbox emits 3 `ContributionRefundedApplicationEvent`s.
 3. **Idempotency:** Re-delivering `CampaignCancelledApplicationEvent` does not produce double-refunds or throw exceptions.
+
+---
+
+## Resolution Note (doc reconciliation pass)
+
+This ticket's fix already landed in commit `95fe028` earlier in this session's branch history; the `Status` field above was not updated at the time. Verified against current code during the TICKET-036/037/039 follow-up audit (2026-09-08) — the described defect no longer reproduces.

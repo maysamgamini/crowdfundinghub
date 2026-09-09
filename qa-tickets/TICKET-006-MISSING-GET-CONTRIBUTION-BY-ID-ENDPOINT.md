@@ -4,7 +4,7 @@
 **Severity:** 🟡 P2 (Medium - API Contract & REST Standards)  
 **QA Focus Area:** API Contracts & Architecture QA  
 **Found By:** `qa-api-contracts`  
-**Status:** Open  
+**Status:** Fixed  
 **Project Mode:** Greenfield (No backward compatibility required)  
 
 ---
@@ -63,3 +63,9 @@ Issues:
    ```csharp
    return CreatedAtAction(nameof(GetById), new { campaignId, contributionId = response.ContributionId }, response);
    ```
+
+---
+
+## Resolution Note (doc reconciliation pass)
+
+This ticket's fix already landed in commit `26d51bb` earlier in this session's branch history; the `Status` field above was not updated at the time. Verified against current code during the TICKET-036/037/039 follow-up audit (2026-09-08) — the described defect no longer reproduces.

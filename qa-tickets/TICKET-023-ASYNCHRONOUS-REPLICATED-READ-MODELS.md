@@ -4,7 +4,7 @@
 **Severity:** 🔴 P1 (Critical - Microservice Decomposition Blocker)  
 **QA Focus Area:** Distributed Monolith Prevention & Inter-Module Coupling  
 **Found By:** `qa-architect-curriculum`  
-**Status:** Open  
+**Status:** Fixed  
 **Project Mode:** Greenfield (Benchmark Educational Standard)  
 
 ---
@@ -166,3 +166,9 @@ if (cachedCampaign is null || cachedCampaign.DeadlineUtc <= DateTime.UtcNow)
 2. **Local Schema Independence:** `contributions.active_campaigns_cache` is owned and migrated solely by `ContributionsDbContext`.
 3. **Resilience Test:** Disabling `CampaignsDbContext` entirely does not prevent `Contributions` from reading active campaign state and accepting pledges for previously published campaigns.
 4. **Architecture Test:** Add NetArchTest verifying that `Contributions.Application` does NOT reference `Campaigns.Contracts.ReadServices`.
+
+---
+
+## Resolution Note (doc reconciliation pass)
+
+This ticket's fix already landed in commit `f380f58` earlier in this session's branch history; the `Status` field above was not updated at the time. Verified against current code during the TICKET-036/037/039 follow-up audit (2026-09-08) — the described defect no longer reproduces.

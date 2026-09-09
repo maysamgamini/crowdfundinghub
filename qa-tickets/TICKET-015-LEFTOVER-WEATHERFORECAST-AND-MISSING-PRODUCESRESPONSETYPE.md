@@ -4,7 +4,7 @@
 **Severity:** 🟡 P2 (Medium - API Cleanliness & Contract Completeness)  
 **QA Focus Area:** API Contracts & Hygiene  
 **Found By:** `qa-api-contracts`  
-**Status:** Open  
+**Status:** Fixed  
 **Project Mode:** Greenfield (No backward compatibility required)  
 
 ---
@@ -53,3 +53,9 @@ In REST semantics (RFC 9110 §15.5.10):
    ```
 3. **Introduce a dedicated `ResourceConflictException`:**
    Throw `ResourceConflictException` (or `DuplicateResourceException`) for duplicate email registration and invalid state machine transitions, and map it in `GlobalExceptionHandler` to `409 Conflict`.
+
+---
+
+## Resolution Note (doc reconciliation pass)
+
+This ticket's fix already landed in commit `bdfb810` earlier in this session's branch history; the `Status` field above was not updated at the time. Verified against current code during the TICKET-036/037/039 follow-up audit (2026-09-08) — the described defect no longer reproduces.

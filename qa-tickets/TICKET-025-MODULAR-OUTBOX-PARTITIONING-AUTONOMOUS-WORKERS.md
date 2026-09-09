@@ -4,7 +4,7 @@
 **Severity:** 🟠 P1 (High - Architectural Coupling & Concurrency Starvation)  
 **QA Focus Area:** Concurrency, Modular Monolith Autonomy & Outbox Resilience  
 **Found By:** `qa-architect-curriculum`  
-**Status:** Open  
+**Status:** Fixed  
 **Project Mode:** Greenfield (Benchmark Educational Standard)  
 
 ---
@@ -140,3 +140,9 @@ Now, when `Campaigns` is compiled into a standalone microservice executable (`Cr
 2. **Zero Centralized References:** Remove `CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs`. The API project contains 0 references to module outbox tables or background workers.
 3. **Failure Isolation:** Simulating a continuous error or long processing delay in `Contributions` outbox does NOT delay or degrade `Campaigns` or `Moderation` event publishing.
 4. **Integration Test Support:** Expose an `IOutboxDispatcher` marker interface on each worker allowing integration test fixtures to invoke `await factory.ProcessOutboxMessagesAsync<CampaignsDbContext>()` independently.
+
+---
+
+## Resolution Note (doc reconciliation pass)
+
+This ticket's fix already landed in commit `883f515` earlier in this session's branch history; the `Status` field above was not updated at the time. Verified against current code during the TICKET-036/037/039 follow-up audit (2026-09-08) — the described defect no longer reproduces.

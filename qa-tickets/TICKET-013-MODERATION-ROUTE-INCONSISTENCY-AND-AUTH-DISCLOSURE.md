@@ -4,7 +4,7 @@
 **Severity:** 🟠 P1 (High - Security / Information Disclosure & API Usability)  
 **QA Focus Area:** API Contracts & Security QA  
 **Found By:** `qa-api-contracts`  
-**Status:** Open  
+**Status:** Fixed  
 **Project Mode:** Greenfield (No backward compatibility required)  
 
 ---
@@ -93,3 +93,9 @@ public async Task<ActionResult<PagedResponse<CampaignReviewResponse>>> List(
     [FromQuery] int? pageSize,
     CancellationToken cancellationToken)
 ```
+
+---
+
+## Resolution Note (doc reconciliation pass)
+
+This ticket's fix already landed in commit `bdfb810` earlier in this session's branch history; the `Status` field above was not updated at the time. Verified against current code during the TICKET-036/037/039 follow-up audit (2026-09-08) — the described defect no longer reproduces.

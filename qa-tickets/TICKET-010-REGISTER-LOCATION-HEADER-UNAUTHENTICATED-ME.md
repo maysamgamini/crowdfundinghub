@@ -4,7 +4,7 @@
 **Severity:** 🟡 P2 (Medium - API Contract & Client Navigation)  
 **QA Focus Area:** API Contracts & Auth QA  
 **Found By:** `qa-api-contracts` / `qa-security-auth`  
-**Status:** Open  
+**Status:** Fixed  
 **Project Mode:** Greenfield (No backward compatibility required)  
 
 ---
@@ -55,3 +55,9 @@ However, the `Me` action is protected by `[Authorize]`. A user who just called `
 Two clean greenfield options:
 1. **Option A (Recommended for modern APIs)**: Modify `RegisterUserCommandHandler` to also issue a JWT token on registration and return both `UserId` and `Token` so the user is immediately logged in upon successful registration.
 2. **Option B**: Return `CreatedAtAction(nameof(GetById), new { id = result.UserId }, ...)` or a standard `201 Created` without pointing to `/me`.
+
+---
+
+## Resolution Note (doc reconciliation pass)
+
+This ticket's fix already landed in commit `bdfb810` earlier in this session's branch history; the `Status` field above was not updated at the time. Verified against current code during the TICKET-036/037/039 follow-up audit (2026-09-08) — the described defect no longer reproduces.

@@ -4,7 +4,7 @@
 **Severity:** 🔴 P1 (Critical - Microservice Decomposition Blocker)  
 **QA Focus Area:** Event-Driven Architecture & Message Broker Decoupling  
 **Found By:** `qa-architect-curriculum`  
-**Status:** Open  
+**Status:** Fixed  
 **Project Mode:** Greenfield (Benchmark Educational Standard)  
 
 ---
@@ -156,3 +156,9 @@ public static IServiceCollection AddCrowdFundingMessaging(this IServiceCollectio
 1. **Configuration-Driven Provider:** Changing `Messaging:Provider` from `"InProcess"` to `"RabbitMQ"` requires zero code changes in application handlers or controllers.
 2. **CloudEvents Standard Compliance:** All messages delivered to RabbitMQ contain valid CloudEvents headers (`ce-id`, `ce-source`, `ce-type`, `ce-specversion: 1.0`).
 3. **Integration Test Suite:** Add a Testcontainers-backed RabbitMQ integration test (`RabbitMqMessageBusTests.cs`) verifying pub/sub delivery across independent simulated services.
+
+---
+
+## Resolution Note (doc reconciliation pass)
+
+This ticket's fix already landed in commit `883f515` earlier in this session's branch history; the `Status` field above was not updated at the time. Verified against current code during the TICKET-036/037/039 follow-up audit (2026-09-08) — the described defect no longer reproduces.

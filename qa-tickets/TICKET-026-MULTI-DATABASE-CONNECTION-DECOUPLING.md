@@ -4,7 +4,7 @@
 **Severity:** 🟡 P2 (Medium - Architectural Flexibility & Deployment Topology)  
 **QA Focus Area:** Database Isolation, Microservices Deployment & Configuration Architecture  
 **Found By:** `qa-architect-curriculum`  
-**Status:** Open  
+**Status:** Fixed  
 **Project Mode:** Greenfield (Benchmark Educational Standard)  
 
 ---
@@ -123,3 +123,9 @@ var connectionString = configuration.GetRequiredModuleConnectionString("Moderati
 1. **Monolithic Backwards Compatibility:** With only `ConnectionStrings:DefaultConnection` configured, all 4 modules start, migrate, and operate normally.
 2. **Independent Database Isolation Test:** Add an integration test configuring `CampaignsDb` pointing to a secondary Postgres container and verify `CampaignsDbContext` communicates exclusively with the secondary database while `ContributionsDbContext` uses the primary.
 3. **Informative Error Messages:** If neither connection string is present, the thrown exception clearly states both expected keys.
+
+---
+
+## Resolution Note (doc reconciliation pass)
+
+This ticket's fix already landed in commit `c7ec73d` earlier in this session's branch history; the `Status` field above was not updated at the time. Verified against current code during the TICKET-036/037/039 follow-up audit (2026-09-08) — the described defect no longer reproduces.

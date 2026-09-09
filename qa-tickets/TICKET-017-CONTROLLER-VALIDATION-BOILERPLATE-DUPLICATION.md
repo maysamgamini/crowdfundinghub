@@ -4,7 +4,7 @@
 **Severity:** 🟡 P2 (Medium - Code Cleanliness & Architecture Hygiene)  
 **QA Focus Area:** Clean Architecture & API Controller Hygiene  
 **Found By:** `qa-code-cleanliness`  
-**Status:** Open  
+**Status:** Partial (see Resolution Note at end of file)  
 **Project Mode:** Greenfield (No backward compatibility required)  
 
 ---
@@ -114,3 +114,25 @@ In a clean C# 12 / .NET 10 CQRS architecture, validation is a cross-cutting pipe
 If controller-level validation execution is retained, extract `ValidationExtensions` into a dedicated file:
 - `src/API/CrowdFunding.API/Extensions/ValidationExtensions.cs`
 - Add XML documentation summaries as required by `DEV_GUIDELINES.md`.
+
+---
+
+## Resolution Note (doc reconciliation pass, 2026-09-08)
+
+Partially resolved. Issue 1 (the hidden internal `ValidationExtensions` class tucked into
+`CampaignsController.cs`, silently depended on by every other controller) is fixed — it now lives
+in its own `src/API/CrowdFunding.API/Validation/ValidationExtensions.cs` file.
+
+Issues 2 and 3 (per-controller constructor injection of one `IValidator<TCommand>` per command,
+and the repeated 5-line validate/`ModelState`/`ValidationProblem` block in every mutating action)
+remain open. The natural complete fix — an automatic `ValidationPipelineBehavior` running
+FluentValidation inside the command dispatcher (using the `ICommandPipelineBehavior<,>` mechanism
+built for TICKET-039), so controllers stop injecting or calling validators at all — was
+deliberately **not** attempted in this pass: it changes the error-response code path for every
+single mutating endpoint in the API (moving validation failures from `ModelState`/`ValidationProblem`
+to a caught `FluentValidation.ValidationException` translated by `GlobalExceptionHandler`), and
+verifying that transition preserves the exact current 400 response shape across every controller
+without a regression is a larger, higher-risk piece of work than the remaining boilerplate
+duplication itself justifies right now. Left open with this scoping note rather than either
+silently claiming it's fully fixed or leaving future readers to wonder why constructor-injected
+validators are still everywhere despite Issue 1's fix.

@@ -4,7 +4,7 @@
 **Severity:** 🟡 P2 (Medium - Async Hygiene & Persistence Discipline)  
 **QA Focus Area:** Async/Await Hygiene & Persistence Discipline  
 **Found By:** `qa-code-cleanliness`  
-**Status:** Open  
+**Status:** Fixed  
 **Project Mode:** Greenfield (No backward compatibility required)  
 
 ---
@@ -78,3 +78,9 @@ Static analysis revealed multiple async hygiene and persistence discipline incon
    ```
 2. **Align Identity Persistence with Other Modules**:
    Introduce an `IIdentityTransactionExecutor` (or `IUnitOfWork`) for the Identity module, removing `SaveChangesAsync` from `UserRepository.AddAsync` and `UserRepository.UpdateAsync`. Handlers orchestrate changes and commit via the transaction executor.
+
+---
+
+## Resolution Note (doc reconciliation pass)
+
+This ticket's fix already landed in commit `8fe5edf` earlier in this session's branch history; the `Status` field above was not updated at the time. Verified against current code during the TICKET-036/037/039 follow-up audit (2026-09-08) — the described defect no longer reproduces.

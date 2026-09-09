@@ -4,7 +4,7 @@
 **Severity:** 🟡 P2 (Medium - Code Smells & Interface Ergonomics)  
 **QA Focus Area:** Transaction Boundaries & Clean Architecture  
 **Found By:** `qa-code-cleanliness`  
-**Status:** Open  
+**Status:** Fixed  
 **Project Mode:** Greenfield (No backward compatibility required)  
 
 ---
@@ -110,3 +110,9 @@ public abstract class ModuleTransactionExecutorBase<TDbContext> where TDbContext
 }
 ```
 Each module's executor then inherits this base, cutting down redundant persistence logic across the solution.
+
+---
+
+## Resolution Note (doc reconciliation pass)
+
+This ticket's fix already landed in commit `57d01e1` earlier in this session's branch history; the `Status` field above was not updated at the time. Verified against current code during the TICKET-036/037/039 follow-up audit (2026-09-08) — the described defect no longer reproduces.

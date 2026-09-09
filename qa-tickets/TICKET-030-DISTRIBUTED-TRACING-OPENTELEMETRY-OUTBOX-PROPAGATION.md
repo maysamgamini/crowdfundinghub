@@ -4,7 +4,7 @@
 **Severity:** 🟡 P2 (Medium - Enterprise Observability & Distributed Systems Diagnostics)  
 **QA Focus Area:** Distributed Tracing, OpenTelemetry & Cross-Boundary Observability  
 **Found By:** `qa-architect-curriculum`  
-**Status:** Open  
+**Status:** Fixed  
 **Project Mode:** Greenfield (Benchmark Educational Standard)  
 
 ---
@@ -144,3 +144,9 @@ await bus.PublishAsync(applicationEvent, cancellationToken);
 2. **Span Parent-Child Hierarchy:** In OpenTelemetry traces, the outbox dispatch and event handler activities appear as direct child spans of the HTTP request span.
 3. **Fallback Resilience:** When an event is queued outside an HTTP request context (e.g. CLI seeder or background cron), the outbox processor starts a new root trace cleanly without throwing null reference exceptions.
 4. **Integration Test:** Add an integration test using `ActivityListener` verifying that publishing an event via the outbox retains the exact same `TraceId` from the initiating HTTP call.
+
+---
+
+## Resolution Note (doc reconciliation pass)
+
+This ticket's fix already landed in commit `883f515` earlier in this session's branch history; the `Status` field above was not updated at the time. Verified against current code during the TICKET-036/037/039 follow-up audit (2026-09-08) — the described defect no longer reproduces.
