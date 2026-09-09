@@ -35,7 +35,21 @@ These tickets specifically target the architectural transformation required to m
 
 ---
 
-## 3. Core Defect, Concurrency & Quality Tickets
+## 3. Platform Hardening & Architectural Governance Tickets (Multi-Replica Scale, MVCC & Security)
+
+These tickets bridge the critical distributed systems and infrastructure shortcomings identified in [`docs/PLATFORM_SHORTCOMINGS.md`](../docs/PLATFORM_SHORTCOMINGS.md), ensuring the Modular Monolith is horizontally scalable, autovacuum-resilient, and cryptographically secure:
+
+| Ticket ID | Title | Severity | Focus Area | Status |
+| :--- | :--- | :---: | :--- | :---: |
+| [TICKET-036](./TICKET-036-DECENTRALIZED-SESSION-REVOCATION-REFRESH-TOKEN-ROTATION.md) | Decentralized Session Revocation & Refresh Token Rotation (RTR) under Asymmetric JWKS | 🔴 P1 | Security, Decentralized Auth & Revocation | Open |
+| [TICKET-037](./TICKET-037-MULTI-REPLICA-DISTRIBUTED-CACHE-INVALIDATION.md) | Multi-Replica Distributed Cache Invalidation via Redis Pub/Sub & Post-Commit Hooks | 🟠 P1 | High Availability, Caching & Split-Brain Defense | Open |
+| [TICKET-038](./TICKET-038-POSTGRESQL-OUTBOX-MVCC-PARTITIONING-DELETE-ON-SUCCESS.md) | PostgreSQL Outbox MVCC Optimization: Table Partitioning & Immediate Delete-on-Success | 🟠 P1 | Database Engine Internals & Autovacuum Defense | Open |
+| [TICKET-039](./TICKET-039-PIPELINE-BEHAVIORS-IMMUTABLE-AUDIT-LOGGING.md) | Architectural Pipeline Behaviors: Immutable Administrative Audit Logging via Dispatcher | 🔴 P1 | Clean Architecture Pipelines & Governance | Open |
+| [TICKET-040](./TICKET-040-ARCHITECTURAL-FITNESS-FUNCTIONS-CI-CD-AUTOMATION.md) | Architectural Fitness Functions: Automated CI/CD Boundary Enforcement via GitHub Actions | 🟠 P1 | Architectural Governance & NetArchTest Automation | Open |
+
+---
+
+## 4. Core Defect, Concurrency & Quality Tickets
 
 | Ticket ID | Title | Severity | Focus Area | Status |
 | :--- | :--- | :---: | :--- | :---: |

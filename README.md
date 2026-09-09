@@ -89,9 +89,10 @@ A master curriculum suite is published under [`educational/`](./educational/READ
 
 All identified improvements, architectural defects, and concrete feature tasks are registered in the [`qa-tickets/`](./qa-tickets/README.md) registry. Every ticket includes a dedicated **Educational Rationale** section explaining what the task teaches architects and why it belongs in a Modular Monolith:
 
-- **[TICKET-023 to TICKET-030](./qa-tickets/README.md#1-monolith-to-microservices-decomposition--educational-benchmark-tickets)**: Architectural decomposition tickets (Asynchronous Replicated Read Models, Pluggable `IMessageBus`, Modular Outbox Partitioning, Multi-Database Connection Decoupling, Expiration & Refund Saga, Pedagogical Rosetta Stone, and W3C Distributed Tracing).
-- **[TICKET-031 to TICKET-035](./qa-tickets/README.md#2-concrete-features-justifying-outbox--complex-crud-external-apis--cloud-functions)**: Concrete external integration features (SendGrid Email Receipts, Serverless Cloud Function AI Media Safety, Stripe Webhook Reconciliation Saga, Reward Perk Reservation State Machine, and Outbound HMAC Webhook Engine).
-- **[TICKET-001 to TICKET-022](./qa-tickets/README.md#3-core-defect-concurrency--quality-tickets)**: Core quality, concurrency, security, and contract compliance tickets.
+- **[TICKET-031 to TICKET-035](./qa-tickets/README.md#1-concrete-features-justifying-outbox--complex-crud-external-apis--cloud-functions)**: Concrete external integration features (SendGrid Email Receipts, Serverless Cloud Function AI Media Safety, Stripe Webhook Reconciliation Saga, Reward Perk Reservation State Machine, and Outbound HMAC Webhook Engine).
+- **[TICKET-023 to TICKET-030](./qa-tickets/README.md#2-monolith-to-microservices-decomposition--educational-benchmark-tickets)**: Architectural decomposition tickets (Asynchronous Replicated Read Models, Pluggable `IMessageBus`, Modular Outbox Partitioning, Multi-Database Connection Decoupling, Expiration & Refund Saga, Pedagogical Rosetta Stone, and W3C Distributed Tracing).
+- **[TICKET-036 to TICKET-040](./qa-tickets/README.md#3-platform-hardening--architectural-governance-tickets-multi-replica-scale-mvcc--security)**: Platform hardening & distributed systems governance (Decentralized Session Revocation under Asymmetric JWKS, Multi-Replica Distributed Cache Invalidation via Redis Pub/Sub, PostgreSQL Outbox MVCC Table Partitioning, Pipeline Audit Behaviors, and Automated CI/CD Fitness Functions).
+- **[TICKET-001 to TICKET-022](./qa-tickets/README.md#4-core-defect-concurrency--quality-tickets)**: Core quality, concurrency, security, and contract compliance tickets.
 
 ---
 
