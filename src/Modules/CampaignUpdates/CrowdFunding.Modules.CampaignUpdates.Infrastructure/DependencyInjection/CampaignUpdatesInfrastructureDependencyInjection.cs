@@ -33,9 +33,13 @@ public static class CampaignUpdatesInfrastructureDependencyInjection
         // A named client rather than a typed client: the dispatcher calls whatever URL each
         // subscription holds, not one fixed base address. The custom primary handler blocks
         // redirect-based and DNS-rebinding SSRF at dispatch time — see
-        // SsrfSafeHttpMessageHandlerFactory (TICKET-050).
+        // SsrfSafeHttpMessageHandlerFactory (TICKET-050). "WebhookDispatcher:AllowPrivateNetworkTargets"
+        // defaults to unset/false everywhere except the E2E test host, which opts in via an
+        // environment variable purely so its in-process loopback stand-in receiver
+        // (WebhookSubscriptionE2ETests) can be reached — see that setting's own doc comment.
+        var allowPrivateNetworkTargets = configuration.GetValue<bool>("WebhookDispatcher:AllowPrivateNetworkTargets");
         services.AddHttpClient(nameof(WebhookDispatcherBackgroundService))
-            .ConfigurePrimaryHttpMessageHandler(SsrfSafeHttpMessageHandlerFactory.Create);
+            .ConfigurePrimaryHttpMessageHandler(() => SsrfSafeHttpMessageHandlerFactory.Create(allowPrivateNetworkTargets));
         services.AddSingleton<WebhookDispatcherBackgroundService>();
         services.AddHostedService(sp => sp.GetRequiredService<WebhookDispatcherBackgroundService>());
 

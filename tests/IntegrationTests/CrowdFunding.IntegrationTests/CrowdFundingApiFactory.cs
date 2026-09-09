@@ -55,6 +55,14 @@ public sealed class CrowdFundingApiFactory : WebApplicationFactory<Program>, IAs
         Environment.SetEnvironmentVariable("RateLimiting__Auth__PermitLimit", "100000");
         Environment.SetEnvironmentVariable("RateLimiting__Payment__PermitLimit", "100000");
 
+        // TICKET-050's dispatch-time SSRF guard correctly refuses to connect to loopback/private
+        // addresses, which is exactly what WebhookSubscriptionE2ETests.
+        // DispatchingADueDelivery_ShouldPostASignedRequest_ThatARealReceiverCanVerify needs to
+        // reach its in-process stand-in receiver on 127.0.0.1. This is test-host-only — see
+        // SsrfSafeHttpMessageHandlerFactory's doc comment for why nothing outside this fixture
+        // should ever set it.
+        Environment.SetEnvironmentVariable("WebhookDispatcher__AllowPrivateNetworkTargets", "true");
+
         // Force the host to build (WebApplicationFactory builds it lazily on first access to
         // Server/Services), then apply every module's migrations up front so individual tests
         // never race the schema.

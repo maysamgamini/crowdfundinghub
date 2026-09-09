@@ -23,14 +23,22 @@ namespace CrowdFunding.Modules.CampaignUpdates.Infrastructure.Services;
 /// </summary>
 public static class SsrfSafeHttpMessageHandlerFactory
 {
-    public static SocketsHttpHandler Create() => new()
+    /// <param name="allowPrivateNetworkTargets">Must stay <see langword="false"/> in every real
+    /// deployment — this exists solely so integration tests can point a webhook subscription at
+    /// an in-process loopback receiver to exercise the dispatcher's signing/delivery-recording
+    /// logic without an actual public endpoint. Never wire this to anything but a hardcoded
+    /// <see langword="false"/> outside of test host configuration; it is intentionally not read
+    /// from any setting an operator could accidentally leave enabled (see
+    /// <c>CampaignUpdatesInfrastructureDependencyInjection</c> for where the real value comes
+    /// from). Auto-redirect stays disabled regardless.</param>
+    public static SocketsHttpHandler Create(bool allowPrivateNetworkTargets = false) => new()
     {
         AllowAutoRedirect = false,
-        ConnectCallback = ConnectAsync,
+        ConnectCallback = (context, cancellationToken) => ConnectAsync(context, allowPrivateNetworkTargets, cancellationToken),
     };
 
     private static async ValueTask<System.IO.Stream> ConnectAsync(
-        SocketsHttpConnectionContext context, CancellationToken cancellationToken)
+        SocketsHttpConnectionContext context, bool allowPrivateNetworkTargets, CancellationToken cancellationToken)
     {
         IPAddress[] addresses;
 
@@ -44,7 +52,9 @@ public static class SsrfSafeHttpMessageHandlerFactory
                 $"Unable to resolve webhook target host '{context.DnsEndPoint.Host}'.", exception);
         }
 
-        var safeAddress = addresses.FirstOrDefault(address => !UrlSecurityValidator.IsPrivateOrLinkLocal(address));
+        var safeAddress = allowPrivateNetworkTargets
+            ? addresses.FirstOrDefault()
+            : addresses.FirstOrDefault(address => !UrlSecurityValidator.IsPrivateOrLinkLocal(address));
 
         if (safeAddress is null)
         {

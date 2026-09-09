@@ -1,4 +1,5 @@
 ﻿using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.AssignRoleToUser;
+using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.DeactivateUser;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.GrantPermissionToUser;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.LoginUser;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.Logout;
@@ -29,12 +30,14 @@ public static class IdentityApplicationDependencyInjection
         services.AddScoped<AssignRoleToUserCommandHandler>();
         services.AddScoped<GrantPermissionToUserCommandHandler>();
         services.AddScoped<GetCurrentUserQueryHandler>();
+        services.AddScoped<DeactivateUserCommandHandler>();
         services.AddScoped<IValidator<RegisterUserCommand>, RegisterUserCommandValidator>();
         services.AddScoped<IValidator<LoginUserCommand>, LoginUserCommandValidator>();
         services.AddScoped<IValidator<RefreshAccessTokenCommand>, RefreshAccessTokenCommandValidator>();
         services.AddScoped<IValidator<LogoutCommand>, LogoutCommandValidator>();
         services.AddScoped<IValidator<AssignRoleToUserCommand>, AssignRoleToUserCommandValidator>();
         services.AddScoped<IValidator<GrantPermissionToUserCommand>, GrantPermissionToUserCommandValidator>();
+        services.AddScoped<IValidator<DeactivateUserCommand>, DeactivateUserCommandValidator>();
 
         return services;
     }

@@ -412,9 +412,16 @@ Consider what would occur if CrowdFunding Hub used an eventual consistency model
 
 ### 2.6 In-Memory SignalR vs. Distributed Redis Backplane
 
+> [!NOTE]
+> **Resolved (TICKET-048):** `Program.cs` now wires `AddStackExchangeRedis()` onto the SignalR
+> server builder whenever `ConnectionStrings:Redis` is configured, falling back to in-memory-only
+> operation otherwise (still correct for a single instance, just not horizontally scalable). The
+> "Current State" description and Deployment Blocker callout below describe the *prior* state and
+> are kept for the architectural rationale; they no longer describe the shipped configuration.
+
 The API layer hosts [`CampaignHub`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/RealTime/CampaignHub.cs) to stream real-time funding progress (`PledgeReceived`) to connected browser clients via WebSocket connections.
 
-In [`Program.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Program.cs#L64), SignalR is currently configured using the standard in-memory message bus:
+Previously, in [`Program.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Program.cs#L64), SignalR was configured using only the standard in-memory message bus:
 ```csharp
 builder.Services.AddSignalR();
 builder.Services.AddScoped<ICampaignRealtimeNotifier, SignalRCampaignRealtimeNotifier>();
@@ -472,10 +479,8 @@ graph TB
 
 #### Architectural Evaluation
 
-> [!CAUTION]
-> **Immediate Deployment Blocker for Multi-Instance Deployments:**  
-> While the codebase already provisions Redis for response caching ([`CachedCampaignReadService`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Caching/CachedCampaignReadService.cs)), it has not yet wired `AddStackExchangeRedis()` into SignalR.
-> **Deploying the current application across more than one container instance behind a round-robin load balancer will result in intermittent, silent real-time broadcast loss.**
+> [!NOTE]
+> **Resolved:** the codebase already provisioned Redis for response caching ([`CachedCampaignReadService`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Caching/CachedCampaignReadService.cs)); `AddStackExchangeRedis()` is now wired into SignalR against that same connection string (TICKET-048), so deploying across multiple instances behind a load balancer no longer silently drops real-time broadcasts.
 
 ---
 

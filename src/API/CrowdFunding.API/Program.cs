@@ -78,7 +78,24 @@ builder.Services.AddHealthChecks()
 
 builder.Services.AddOpenMeterMetering(builder.Configuration);
 
-builder.Services.AddSignalR();
+// Without a distributed backplane, SignalR's group membership and broadcasts are local to each
+// instance's memory — under >=1 replica behind a load balancer, a backer connected to Instance A
+// never receives a pledge broadcast raised by Instance B (TICKET-048). Redis Pub/Sub makes every
+// instance's Clients.Group(...).SendAsync(...) call fan out to connections held by every other
+// instance, not just its own. Falls back to in-memory-only when Redis isn't configured (e.g. some
+// local dev/test setups) rather than failing startup — single-instance operation is still
+// perfectly correct, just not horizontally scalable.
+var signalRBuilder = builder.Services.AddSignalR();
+var signalRRedisConnectionString = builder.Configuration.GetConnectionString("Redis");
+
+if (!string.IsNullOrWhiteSpace(signalRRedisConnectionString))
+{
+    signalRBuilder.AddStackExchangeRedis(signalRRedisConnectionString, options =>
+    {
+        options.Configuration.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal("crowdfunding_signalr");
+    });
+}
+
 builder.Services.AddScoped<ICampaignRealtimeNotifier, SignalRCampaignRealtimeNotifier>();
 
 builder.Services.AddHttpContextAccessor();
