@@ -13,17 +13,17 @@ namespace CrowdFunding.Modules.Campaigns.Application.Features.RewardTiers.Events
 /// </summary>
 public sealed class ContributionPaymentFailedRewardTierHandler : IEventHandler<ContributionPaymentFailedApplicationEvent>
 {
-    private readonly IRewardTierRepository _rewardTierRepository;
     private readonly IRewardTierReservationRepository _reservationRepository;
+    private readonly IRewardTierRepository _rewardTierRepository;
     private readonly ICampaignTransactionExecutor _transactionExecutor;
 
     public ContributionPaymentFailedRewardTierHandler(
-        IRewardTierRepository rewardTierRepository,
         IRewardTierReservationRepository reservationRepository,
+        IRewardTierRepository rewardTierRepository,
         ICampaignTransactionExecutor transactionExecutor)
     {
-        _rewardTierRepository = rewardTierRepository;
         _reservationRepository = reservationRepository;
+        _rewardTierRepository = rewardTierRepository;
         _transactionExecutor = transactionExecutor;
     }
 
