@@ -1,0 +1,3 @@
+namespace CrowdFunding.Modules.CampaignUpdates.Application.Features.WebhookSubscriptions.Commands.DeleteWebhookSubscription;
+
+public sealed record DeleteWebhookSubscriptionResult;

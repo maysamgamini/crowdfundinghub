@@ -82,4 +82,21 @@ public sealed class WebhookSubscription : BaseEntity
             IsActive = false;
         }
     }
+
+    /// <summary>
+    /// Deliberately disables the subscription — the creator's own action (their destination
+    /// changed or was compromised), distinct from <see cref="RecordDeliveryFailure"/>'s automatic
+    /// disable after repeated delivery failures. Modeled as a soft delete: the row and its
+    /// delivery history are kept rather than removed, and the dispatcher simply stops selecting
+    /// it (mirrors <see cref="RecordDeliveryFailure"/>'s exclusion). See TICKET-047.
+    /// </summary>
+    public void Deactivate()
+    {
+        if (!IsActive)
+        {
+            throw new InvalidOperationException("This webhook subscription is already inactive.");
+        }
+
+        IsActive = false;
+    }
 }

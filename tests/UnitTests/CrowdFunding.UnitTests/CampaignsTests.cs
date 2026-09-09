@@ -1080,6 +1080,9 @@ internal sealed class FakeRewardTierRepository : IRewardTierRepository
     public Task<RewardTier?> GetByIdAsync(Guid rewardTierId, CancellationToken cancellationToken)
         => Task.FromResult(_rewardTiers.GetValueOrDefault(rewardTierId));
 
+    public Task<IReadOnlyList<RewardTier>> GetByCampaignIdAsync(Guid campaignId, CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<RewardTier>>(_rewardTiers.Values.Where(x => x.CampaignId == campaignId).ToList());
+
     public Task UpdateAsync(RewardTier rewardTier, CancellationToken cancellationToken)
     {
         _rewardTiers[rewardTier.Id] = rewardTier;

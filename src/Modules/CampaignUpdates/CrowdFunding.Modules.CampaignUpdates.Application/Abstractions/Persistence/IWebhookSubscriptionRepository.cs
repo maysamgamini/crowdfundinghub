@@ -10,5 +10,10 @@ public interface IWebhookSubscriptionRepository
 
     Task<IReadOnlyList<WebhookSubscription>> GetActiveByCampaignIdAsync(Guid campaignId, CancellationToken cancellationToken);
 
+    /// <summary>Every subscription for a campaign regardless of <c>IsActive</c> — the creator's
+    /// management view (list/GET-by-id/DELETE), as opposed to <see cref="GetActiveByCampaignIdAsync"/>
+    /// which only the dispatcher's send loop uses.</summary>
+    Task<IReadOnlyList<WebhookSubscription>> GetByCampaignIdAsync(Guid campaignId, CancellationToken cancellationToken);
+
     Task UpdateAsync(WebhookSubscription subscription, CancellationToken cancellationToken);
 }

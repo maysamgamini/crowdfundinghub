@@ -23,6 +23,12 @@ public sealed class RewardTierRepository : IRewardTierRepository
     public Task<RewardTier?> GetByIdAsync(Guid rewardTierId, CancellationToken cancellationToken)
         => _dbContext.RewardTiers.SingleOrDefaultAsync(x => x.Id == rewardTierId, cancellationToken);
 
+    public async Task<IReadOnlyList<RewardTier>> GetByCampaignIdAsync(Guid campaignId, CancellationToken cancellationToken)
+        => await _dbContext.RewardTiers
+            .Where(x => x.CampaignId == campaignId)
+            .OrderBy(x => x.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+
     public Task UpdateAsync(RewardTier rewardTier, CancellationToken cancellationToken)
     {
         _dbContext.RewardTiers.Update(rewardTier);

@@ -7,6 +7,8 @@ using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.Cre
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.PublishCampaign;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.GetCampaignById;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.ListCampaigns;
+using CrowdFunding.Modules.Campaigns.Application.Features.RewardTiers.Queries.GetRewardTierById;
+using CrowdFunding.Modules.Campaigns.Application.Features.RewardTiers.Queries.ListRewardTiersByCampaign;
 using Mapster;
 
 namespace CrowdFunding.API.Mapping;
@@ -30,5 +32,8 @@ public static class CampaignsMappingConfig
         config.NewConfig<ListCampaignsResult, ListCampaignsResponse>();
         config.NewConfig<CreateRewardTierResult, CreateRewardTierResponse>();
         config.NewConfig<ReserveRewardTierSlotResult, ReserveRewardTierSlotResponse>();
+        config.NewConfig<GetRewardTierByIdResult, RewardTierResponse>();
+        config.NewConfig<RewardTierSummary, RewardTierResponse>();
+        config.NewConfig<ListRewardTiersByCampaignResult, ListRewardTiersResponse>();
     }
 }

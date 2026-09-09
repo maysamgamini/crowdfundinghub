@@ -28,6 +28,12 @@ public sealed class WebhookSubscriptionRepository : IWebhookSubscriptionReposito
             .Where(x => x.CampaignId == campaignId && x.IsActive)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<WebhookSubscription>> GetByCampaignIdAsync(Guid campaignId, CancellationToken cancellationToken)
+        => await _dbContext.WebhookSubscriptions
+            .Where(x => x.CampaignId == campaignId)
+            .OrderBy(x => x.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+
     public async Task UpdateAsync(WebhookSubscription subscription, CancellationToken cancellationToken)
     {
         _dbContext.WebhookSubscriptions.Update(subscription);
