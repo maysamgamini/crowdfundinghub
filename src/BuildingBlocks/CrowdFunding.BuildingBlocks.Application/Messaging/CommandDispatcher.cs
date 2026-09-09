@@ -22,7 +22,8 @@ public sealed class CommandDispatcher : ICommandDispatcher
             _serviceProvider,
             typeof(ICommandHandler<,>),
             command,
-            cancellationToken);
+            cancellationToken,
+            typeof(ICommandPipelineBehavior<,>));
     }
 
     private sealed class TResultMarker

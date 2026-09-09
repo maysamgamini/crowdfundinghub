@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Infrastructure.Audit;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.Identity.Infrastructure.Persistence.DbContexts;
@@ -37,6 +38,7 @@ public static class MigrationRunner
         await MigrateAsync<ModerationDbContext>(scope.ServiceProvider, logger, cancellationToken);
         await MigrateAsync<NotificationsDbContext>(scope.ServiceProvider, logger, cancellationToken);
         await MigrateAsync<CampaignUpdatesDbContext>(scope.ServiceProvider, logger, cancellationToken);
+        await MigrateAsync<AuditDbContext>(scope.ServiceProvider, logger, cancellationToken);
         await MigrateAsync<RosettaStoneDbContext>(scope.ServiceProvider, logger, cancellationToken);
     }
 

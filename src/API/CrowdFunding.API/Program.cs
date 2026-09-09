@@ -9,6 +9,7 @@ using CrowdFunding.API.Security;
 using CrowdFunding.BuildingBlocks.Application.Events;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
+using CrowdFunding.BuildingBlocks.Infrastructure.Audit;
 using CrowdFunding.BuildingBlocks.Infrastructure.Messaging;
 using CrowdFunding.BuildingBlocks.Infrastructure.Metering;
 using CrowdFunding.Modules.CampaignUpdates.Application.DependencyInjection;
@@ -72,7 +73,8 @@ builder.Services.AddHealthChecks()
     .AddCheck<DbContextHealthCheck<IdentityDbContext>>("identity-db", tags: ["ready"])
     .AddCheck<DbContextHealthCheck<ModerationDbContext>>("moderation-db", tags: ["ready"])
     .AddCheck<DbContextHealthCheck<NotificationsDbContext>>("notifications-db", tags: ["ready"])
-    .AddCheck<DbContextHealthCheck<CampaignUpdatesDbContext>>("campaign-updates-db", tags: ["ready"]);
+    .AddCheck<DbContextHealthCheck<CampaignUpdatesDbContext>>("campaign-updates-db", tags: ["ready"])
+    .AddCheck<DbContextHealthCheck<AuditDbContext>>("audit-db", tags: ["ready"]);
 
 builder.Services.AddOpenMeterMetering(builder.Configuration);
 
@@ -81,9 +83,14 @@ builder.Services.AddScoped<ICampaignRealtimeNotifier, SignalRCampaignRealtimeNot
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
+builder.Services.AddScoped<IRequestContext, HttpRequestContext>();
 builder.Services.AddCrowdFundingMessaging(builder.Configuration);
 builder.Services.AddScoped<ICommandDispatcher, CommandDispatcher>();
 builder.Services.AddScoped<IQueryDispatcher, QueryDispatcher>();
+
+// TICKET-039: registers the audit-logging pipeline behavior globally, applying to every command
+// dispatched via ICommandDispatcher — see AuditLoggingPipelineBehavior for the interception rule.
+builder.Services.AddAuditInfrastructure(builder.Configuration);
 
 builder.Services.AddRequestHandlersFromAssemblies(
     typeof(IdentityApplicationDependencyInjection).Assembly,
