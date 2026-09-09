@@ -4,7 +4,7 @@
 **Severity:** 🔴 P1 (Critical - Core Architectural Feature Justifying Outbox Pattern)  
 **QA Focus Area:** External Third-Party Integration, Dual-Write Defense & Reliable Notification Delivery  
 **Found By:** `qa-architect-curriculum`  
-**Status:** Open  
+**Status:** Fixed  
 **Project Mode:** Greenfield (Benchmark Educational Standard)  
 
 ---
@@ -147,3 +147,83 @@ In `Notifications.Infrastructure`:
 1. **Dual-Write Immunity:** If the email API simulator returns HTTP 503, the contribution payment in the database remains intact and `Succeeded`. The outbox worker schedules a retry with exponential backoff.
 2. **Idempotency Header:** Outbound email requests include an idempotent message header (`X-Message-Id: contribution-{id}`) preventing duplicate emails on network retry.
 3. **Integration Test Suite:** Add `EmailNotificationOutboxE2ETests.cs` verifying that confirming a contribution processes the outbox message and dispatches the receipt without in-memory coupling.
+
+---
+
+## 6. Resolution
+
+### The real interfaces differ from this ticket's draft sample code
+Research before implementing found two factual corrections to this ticket's own spec:
+Notifications' handlers implement `CrowdFunding.BuildingBlocks.Application.Events.IEventHandler<T>.Handle(...)`,
+not an `IApplicationEventHandler<T>.HandleAsync(...)` (no such interface exists); and
+`ContributionPaymentConfirmedApplicationEvent`/`CampaignCancelledApplicationEvent` carried none of
+the display fields (`ContributorEmail`, `ContributorName`, `CampaignTitle`, `PaymentTransactionId`)
+this ticket's sample handler reads — those simply didn't exist on the real events. Implementation
+below reflects the real codebase, not the draft.
+
+### Why recipient email/name is never fetched from Identity directly
+`ContributionPaymentConfirmedApplicationEvent` originally carried no `ContributorId` either (fixed
+below) and never carried an email address — Contribution the aggregate stores only
+`ContributorId`, a bare Identity foreign key, by design (no PII duplication into Contributions).
+The obvious fix — Notifications dispatches a query into Identity to resolve `ContributorId` to an
+email — is **explicitly forbidden** by this repo's own architecture guardrail,
+`NotificationsModuleDependencyTests.Application_ShouldNotReference_OtherModulesInternals`, which
+lists `CrowdFunding.Modules.Identity.Application`/`.Infrastructure`/`.Domain` among the assemblies
+Notifications.Application must never reference. That test predates this ticket and was written
+for exactly this reason: a "just query the other module" instinct is the same synchronous
+cross-module coupling TICKET-023 eliminated, just moved from a write path to a read path. So
+`IEmailNotificationService`'s methods take a `recipientUserId: Guid`, honestly reflecting what
+data is actually available at this layer — resolving that id to a mailbox address is left to
+whichever infrastructure implementation needs a real address (a production `HttpEmailNotificationService`
+talking to a provider that itself maintains synced contacts, or a future ticket adding an
+Identity-owned outbox emitting a `UserRegisteredApplicationEvent` for Notifications to replicate
+via the same Event-Carried State Transfer technique used below for campaign titles).
+
+### What was built
+- **`CampaignTitleCache`** (`src/Modules/Notifications/.../Infrastructure/Persistence/ReadModels/`):
+  a replicated read model populated by a new `ReplicatedCampaignTitleEventHandler` reacting to
+  Campaigns' existing `CampaignCreatedApplicationEvent` (which already carries `Title` — its own
+  code comment says "carried so consumers can build their own local read model... instead of
+  calling back into Campaigns synchronously"). This mirrors Contributions'
+  `ActiveCampaignCache`/`IActiveCampaignCacheRepository` pattern (TICKET-023) file-for-file, so an
+  email can name the campaign without any cross-module call. New `NotificationsDbContext` (its
+  own schema/migration, `notifications-db` health check, wired via a new
+  `AddNotificationsInfrastructure` DI extension — Notifications previously had no Infrastructure
+  DI registration or DbContext at all).
+- **`IEmailNotificationService`** (`Notifications.Application/Abstractions/Services/`) with the
+  two methods this ticket specifies, plus **two implementations**, selected via
+  `Notifications:EmailProvider` config (mirrors the existing `Messaging:Provider` config-driven
+  pattern for `IMessageBus`):
+  - `LoggingEmailNotificationService` (default) — the ticket's own "local development
+    implementation" fallback: logs structurally and records into an injectable
+    `IEmailNotificationSink` (in-memory, singleton) so tests can assert on what was "sent" without
+    a real mail provider.
+  - `HttpEmailNotificationService` — a real outbound HTTP call (typed `HttpClient` +
+    `.AddStandardResilienceHandler()`, mirroring `OpenMeterClient`'s established pattern), setting
+    `X-Message-Id: contribution-{id}` / `cancellation-{id}` per this ticket's acceptance criterion
+    #2, and — unlike `OpenMeterClient`, which deliberately swallows failures — letting
+    `EnsureSuccessStatusCode()` throw, which is the actual dual-write defense mechanism.
+- **Two stub handlers replaced with real logic** in `NotificationEventHandlers.cs`:
+  `ContributionPaymentConfirmedNotificationHandler` (receipt) and a new
+  `ContributionRefundedNotificationHandler` (cancellation alert). `CampaignCancelledNotificationHandler`
+  itself stays a stub, now with a comment explaining why: `CampaignCancelledApplicationEvent`
+  carries only `CampaignId`/`OwnerId`, not a backer list, while the refund saga (TICKET-027)
+  already fires `ContributionRefundedApplicationEvent` once per actually-affected backer — the
+  correct event to react to for a per-backer alert, and the one this ticket's "alerting all
+  campaign backers" acceptance criterion is really asking for.
+- **Fixed a real gap found while wiring this up**: `ContributionPaymentConfirmedApplicationEvent`
+  (and its domain-event source, `ContributionPaymentConfirmedDomainEvent`) carried no
+  `ContributorId` at all — added it (plus the domain event's raise site in
+  `Contribution.ConfirmPayment` and the mapping in `ContributionTransactionExecutor`), since
+  without it there was no way to identify the receipt's recipient at all, notification-email
+  concerns aside.
+- Tests: `tests/IntegrationTests/CrowdFunding.IntegrationTests/EmailNotificationOutboxE2ETests.cs`
+  (the exact filename this ticket asks for) — end-to-end through real HTTP + Postgres, proving a
+  receipt/alert is only ever "sent" once `ProcessOutboxMessagesAsync` claims the row, never
+  in-memory-coupled to the command handler. `tests/UnitTests/CrowdFunding.UnitTests/NotificationsTests.cs`
+  — proves a failing send propagates (the mechanism the outbox's existing retry/dead-letter
+  machinery needs to engage) and proves the HTTP provider's idempotency header and error handling.
+- Verified: full solution build clean in both Debug and Release (`/warnaserror`-equivalent, 0
+  warnings); unit tests 206/206 (203 prior + 3 new); architecture tests 20/20 unchanged — including
+  the Notifications boundary test that shaped this design; integration tests 53/53 (51 prior + 2
+  new), against real Postgres/Redis/RabbitMQ Testcontainers.

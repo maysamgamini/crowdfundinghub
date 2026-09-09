@@ -100,7 +100,7 @@ public sealed class PledgeConfirmedMeteringEventHandlerTests
         var campaignId = Guid.NewGuid();
 
         await handler.Handle(
-            new ContributionPaymentConfirmedApplicationEvent(contributionId, campaignId, 100m, "USD"),
+            new ContributionPaymentConfirmedApplicationEvent(contributionId, campaignId, Guid.NewGuid(), 100m, "USD"),
             CancellationToken.None);
 
         Assert.NotNull(recordingClient.LastCloudEvent);
@@ -124,7 +124,7 @@ public sealed class PledgeConfirmedMeteringEventHandlerTests
         var recordingClient = new RecordingUsageMeteringClient();
         var handler = new PledgeConfirmedMeteringEventHandler(recordingClient, new OpenMeterFeeOptions());
         var contributionId = Guid.NewGuid();
-        var notification = new ContributionPaymentConfirmedApplicationEvent(contributionId, Guid.NewGuid(), 10m, "USD");
+        var notification = new ContributionPaymentConfirmedApplicationEvent(contributionId, Guid.NewGuid(), Guid.NewGuid(), 10m, "USD");
 
         await handler.Handle(notification, CancellationToken.None);
         var firstId = recordingClient.LastCloudEvent!.Id;

@@ -7,16 +7,18 @@ namespace CrowdFunding.Modules.Contributions.Domain.Events;
 /// </summary>
 public sealed class ContributionPaymentConfirmedDomainEvent : BaseEvent
 {
-    public ContributionPaymentConfirmedDomainEvent(Guid contributionId, Guid campaignId, decimal amount, string currency)
+    public ContributionPaymentConfirmedDomainEvent(Guid contributionId, Guid campaignId, Guid contributorId, decimal amount, string currency)
     {
         ContributionId = contributionId;
         CampaignId = campaignId;
+        ContributorId = contributorId;
         Amount = amount;
         Currency = currency;
     }
 
     public Guid ContributionId { get; }
     public Guid CampaignId { get; }
+    public Guid ContributorId { get; }
     public decimal Amount { get; }
     public string Currency { get; }
 }

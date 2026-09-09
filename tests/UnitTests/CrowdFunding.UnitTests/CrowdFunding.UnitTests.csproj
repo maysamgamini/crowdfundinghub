@@ -33,6 +33,8 @@
     <ProjectReference Include="..\..\..\src\Modules\Moderation\CrowdFunding.Modules.Moderation.Application\CrowdFunding.Modules.Moderation.Application.csproj" />
     <ProjectReference Include="..\..\..\src\Modules\Moderation\CrowdFunding.Modules.Moderation.Contracts\CrowdFunding.Modules.Moderation.Contracts.csproj" />
     <ProjectReference Include="..\..\..\src\Modules\Moderation\CrowdFunding.Modules.Moderation.Domain\CrowdFunding.Modules.Moderation.Domain.csproj" />
+    <ProjectReference Include="..\..\..\src\Modules\Notifications\CrowdFunding.Modules.Notifications.Application\CrowdFunding.Modules.Notifications.Application.csproj" />
+    <ProjectReference Include="..\..\..\src\Modules\Notifications\CrowdFunding.Modules.Notifications.Infrastructure\CrowdFunding.Modules.Notifications.Infrastructure.csproj" />
     <ProjectReference Include="..\..\..\src\Samples\RosettaStone\CrowdFunding.Samples.RosettaStone.csproj" />
   </ItemGroup>
 

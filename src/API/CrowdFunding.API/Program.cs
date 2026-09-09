@@ -28,6 +28,8 @@ using CrowdFunding.Modules.Moderation.Application.DependencyInjection;
 using CrowdFunding.Modules.Moderation.Infrastructure.DependencyInjection;
 using CrowdFunding.Modules.Moderation.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.Notifications.Application.DependencyInjection;
+using CrowdFunding.Modules.Notifications.Infrastructure.DependencyInjection;
+using CrowdFunding.Modules.Notifications.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Samples.RosettaStone;
 using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignCreated;
 using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPaymentConfirmed;
@@ -62,7 +64,8 @@ builder.Services.AddHealthChecks()
     .AddCheck<DbContextHealthCheck<CampaignsDbContext>>("campaigns-db", tags: ["ready"])
     .AddCheck<DbContextHealthCheck<ContributionsDbContext>>("contributions-db", tags: ["ready"])
     .AddCheck<DbContextHealthCheck<IdentityDbContext>>("identity-db", tags: ["ready"])
-    .AddCheck<DbContextHealthCheck<ModerationDbContext>>("moderation-db", tags: ["ready"]);
+    .AddCheck<DbContextHealthCheck<ModerationDbContext>>("moderation-db", tags: ["ready"])
+    .AddCheck<DbContextHealthCheck<NotificationsDbContext>>("notifications-db", tags: ["ready"]);
 
 builder.Services.AddOpenMeterMetering(builder.Configuration);
 
@@ -149,6 +152,7 @@ builder.Services.AddModerationApplication();
 builder.Services.AddModerationInfrastructure(builder.Configuration);
 
 builder.Services.AddNotificationsApplication();
+builder.Services.AddNotificationsInfrastructure(builder.Configuration);
 builder.Services.AddCampaignUpdatesApplication();
 
 builder.Services.AddRosettaStoneSample(builder.Configuration);

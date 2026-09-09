@@ -935,7 +935,7 @@ public sealed class ContributionPaymentConfirmedApplicationEventHandlerTests
         var contributionId = Guid.NewGuid();
 
         await handler.Handle(
-            new ContributionPaymentConfirmedApplicationEvent(contributionId, campaignId, 100m, "usd"),
+            new ContributionPaymentConfirmedApplicationEvent(contributionId, campaignId, Guid.NewGuid(), 100m, "usd"),
             CancellationToken.None);
 
         var command = Assert.IsType<AddContributionToCampaignCommand>(commandDispatcher.LastCommand);

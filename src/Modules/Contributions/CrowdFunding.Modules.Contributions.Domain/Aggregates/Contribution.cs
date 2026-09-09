@@ -94,7 +94,7 @@ public sealed class Contribution : BaseEntity
         PaymentReference = paymentReference.Trim();
         FailureReason = null;
         ProcessedAtUtc = processedAtUtc;
-        AddDomainEvent(new ContributionPaymentConfirmedDomainEvent(Id, CampaignId, Money.Amount, Money.Currency));
+        AddDomainEvent(new ContributionPaymentConfirmedDomainEvent(Id, CampaignId, ContributorId, Money.Amount, Money.Currency));
     }
 
     /// <summary>

@@ -96,6 +96,7 @@ public sealed class ContributionTransactionExecutor : IContributionTransactionEx
                 new ContributionPaymentConfirmedApplicationEvent(
                     @event.ContributionId,
                     @event.CampaignId,
+                    @event.ContributorId,
                     @event.Amount,
                     @event.Currency),
                 DateTime.UtcNow),
