@@ -84,14 +84,30 @@ These tickets were identified during the comprehensive post-implementation audit
 
 | Ticket ID | Title | Severity | Focus Area | Status |
 | :--- | :--- | :---: | :--- | :---: |
-| [TICKET-041](./TICKET-041-TOCTOU-CAMPAIGN-PUBLICATION-MISSING-ADVISORY-LOCK.md) | TOCTOU Race Condition in `PublishCampaignCommandHandler`: Missing Advisory Locking & External Entity Loading | 🟠 P1 | Concurrency, PostgreSQL Advisory Locks & TOCTOU | Open |
-| [TICKET-042](./TICKET-042-CAMPAIGN-EXPIRATION-DEADLINE-INVARIANT-ABSENCE.md) | Campaign Expiration State Machine Invariants: Missing Past-Deadline Verification on `Complete` and `Fail` Commands | 🔴 P1 | Domain Aggregate Lifecycle & Business Invariants | Open |
-| [TICKET-043](./TICKET-043-REWARD-TIER-UNWIRED-CLAIM-CONFIRMATION-AND-EXPIRATION.md) | Disconnected Reward Tier Reservation Lifecycle: Dead Code in `ConfirmClaim`/`ReleaseReservation` & Indefinite Inventory Lockout | 🔴 P1 | Inventory Reservation Sagas & Dead Business Logic | Open |
-| [TICKET-044](./TICKET-044-CONTRIBUTIONS-REPLICATED-READ-MODEL-TERMINATION-DESYNC.md) | Replicated Campaign Read Model Desynchronization in `Contributions` on Campaign Success and Failure Events | 🔴 P0 | Event-Carried State Transfer & Outbox DLQ Resilience | Open |
-| [TICKET-045](./TICKET-045-REFRESH-TOKEN-ROTATION-CONCURRENCY-RACE-CONDITION.md) | Refresh Token Rotation Concurrency Hazard: Missing Optimistic Concurrency Token (`xmin`) Enables Parallel Token Desync | 🟠 P1 | Concurrency, Decentralized Security & Session Lifecycle | Open |
-| [TICKET-046](./TICKET-046-OUTBOUND-WEBHOOK-DISPATCHER-CONCURRENCY-HAZARD-MISSING-SKIP-LOCKED.md) | Outbound Webhook Dispatcher Concurrency Hazard: Missing `SKIP LOCKED` Enables Duplicate Webhook Dispatches Under Multi-Replica Deployments | 🟠 P1 | Concurrency, Multi-Instance Topologies & Background Worker Reliability | Open |
-| [TICKET-047](./TICKET-047-REST-CONTRACT-INCOMPLETENESS-BROKEN-LOCATION-HEADERS.md) | REST Contract Incompleteness: Missing GET/DELETE Endpoints & 404 Location Headers for Reward Tiers & Webhook Subscriptions | 🟡 P2 | API Contract Compliance & RESTful Semantics | Open |
-| [TICKET-048](./TICKET-048-SIGNALR-MULTI-REPLICA-SPLIT-BRAIN-MISSING-REDIS-BACKPLANE.md) | SignalR Real-Time Multi-Instance Split-Brain: Missing Distributed Redis Backplane Causes Missed Live Updates | 🟠 P1 | Real-Time Architecture, Multi-Instance Scale & High Availability | Open |
-| [TICKET-049](./TICKET-049-ADMINISTRATIVE-SECURITY-MISSING-USER-DEACTIVATION-API.md) | Administrative Security Defect: Missing User Deactivation API & Administrative Session Revocation Controls | 🟠 P1 | Application Security, Administrative Authorization & Session Invalidation | Open |
-| [TICKET-050](./TICKET-050-OUTBOUND-WEBHOOK-SSRF-REDIRECT-BYPASS-AND-DNS-REBINDING.md) | Outbound Webhook Security Vulnerability: HTTP 301/302 Redirect Bypass & DNS Rebinding Allow Internal Network SSRF | 🔴 P1 | Application Security, Penetration Testing & OWASP API Top 10 (SSRF) | Open |
+| [TICKET-041](./TICKET-041-TOCTOU-CAMPAIGN-PUBLICATION-MISSING-ADVISORY-LOCK.md) | TOCTOU Race Condition in `PublishCampaignCommandHandler`: Missing Advisory Locking & External Entity Loading | 🟠 P1 | Concurrency, PostgreSQL Advisory Locks & TOCTOU | Fixed |
+| [TICKET-042](./TICKET-042-CAMPAIGN-EXPIRATION-DEADLINE-INVARIANT-ABSENCE.md) | Campaign Expiration State Machine Invariants: Missing Past-Deadline Verification on `Complete` and `Fail` Commands | 🔴 P1 | Domain Aggregate Lifecycle & Business Invariants | Fixed |
+| [TICKET-043](./TICKET-043-REWARD-TIER-UNWIRED-CLAIM-CONFIRMATION-AND-EXPIRATION.md) | Disconnected Reward Tier Reservation Lifecycle: Dead Code in `ConfirmClaim`/`ReleaseReservation` & Indefinite Inventory Lockout | 🔴 P1 | Inventory Reservation Sagas & Dead Business Logic | Fixed |
+| [TICKET-044](./TICKET-044-CONTRIBUTIONS-REPLICATED-READ-MODEL-TERMINATION-DESYNC.md) | Replicated Campaign Read Model Desynchronization in `Contributions` on Campaign Success and Failure Events | 🔴 P0 | Event-Carried State Transfer & Outbox DLQ Resilience | Fixed |
+| [TICKET-045](./TICKET-045-REFRESH-TOKEN-ROTATION-CONCURRENCY-RACE-CONDITION.md) | Refresh Token Rotation Concurrency Hazard: Missing Optimistic Concurrency Token (`xmin`) Enables Parallel Token Desync | 🟠 P1 | Concurrency, Decentralized Security & Session Lifecycle | Fixed |
+| [TICKET-046](./TICKET-046-OUTBOUND-WEBHOOK-DISPATCHER-CONCURRENCY-HAZARD-MISSING-SKIP-LOCKED.md) | Outbound Webhook Dispatcher Concurrency Hazard: Missing `SKIP LOCKED` Enables Duplicate Webhook Dispatches Under Multi-Replica Deployments | 🟠 P1 | Concurrency, Multi-Instance Topologies & Background Worker Reliability | Fixed |
+| [TICKET-047](./TICKET-047-REST-CONTRACT-INCOMPLETENESS-BROKEN-LOCATION-HEADERS.md) | REST Contract Incompleteness: Missing GET/DELETE Endpoints & 404 Location Headers for Reward Tiers & Webhook Subscriptions | 🟡 P2 | API Contract Compliance & RESTful Semantics | Fixed |
+| [TICKET-048](./TICKET-048-SIGNALR-MULTI-REPLICA-SPLIT-BRAIN-MISSING-REDIS-BACKPLANE.md) | SignalR Real-Time Multi-Instance Split-Brain: Missing Distributed Redis Backplane Causes Missed Live Updates | 🟠 P1 | Real-Time Architecture, Multi-Instance Scale & High Availability | Fixed |
+| [TICKET-049](./TICKET-049-ADMINISTRATIVE-SECURITY-MISSING-USER-DEACTIVATION-API.md) | Administrative Security Defect: Missing User Deactivation API & Administrative Session Revocation Controls | 🟠 P1 | Application Security, Administrative Authorization & Session Invalidation | Fixed |
+| [TICKET-050](./TICKET-050-OUTBOUND-WEBHOOK-SSRF-REDIRECT-BYPASS-AND-DNS-REBINDING.md) | Outbound Webhook Security Vulnerability: HTTP 301/302 Redirect Bypass & DNS Rebinding Allow Internal Network SSRF | 🔴 P1 | Application Security, Penetration Testing & OWASP API Top 10 (SSRF) | Fixed |
+
+---
+
+## 6. Post-Remediation Deep QA & Architectural Audit Tickets (Multi-Module Sagas, Invariants & Scalability)
+
+These tickets were identified during the post-remediation audit of TICKET-041 through TICKET-050, evaluating cross-module compensation sagas, inventory holding locks, transaction boundary mechanics, anti-fraud domain invariants, and notification compliance:
+
+| Ticket ID | Title | Severity | Focus Area | Status |
+| :--- | :--- | :---: | :--- | :---: |
+| [TICKET-051](./TICKET-051-REWARD-TIER-CLAIM-ORPHANED-ON-REFUND.md) | Reward Tier Claim Orphaned on Campaign Failure or Cancellation: `ClaimedCount` Never Decremented and Confirmed Reservation Unreleasable | 🔴 P1 | Domain Aggregate Lifecycle, Distributed Sagas & Compensation Choreography | Open |
+| [TICKET-052](./TICKET-052-PAYMENT-FAILURE-FAILS-TO-RELEASE-RESERVATION.md) | Immediate Slot Lockout on Payment Failure: `Contribution.FailPayment` Emits Zero Domain Events Leaving Reward Reservation Locked for 15 Minutes | 🟠 P1 | Financial State Machine, Outbox Domain Events & Inventory Reservation Sagas | Open |
+| [TICKET-053](./TICKET-053-NESTED-TRANSACTION-DOMAIN-EVENT-CLEARING-HAZARD.md) | Nested Transaction Domain Event Clearing Hazard in `CampaignTransactionExecutor`: Inner Call Flushes and Clears Outer Entity Domain Events | 🔴 P1 | Clean Architecture Infrastructure, Transaction Management & Outbox Reliability | Open |
+| [TICKET-054](./TICKET-054-CREATOR-SELF-PLEDGE-FRAUD-INVARIANT-ABSENCE.md) | Missing Creator Self-Pledge Fraud Prevention Invariant: Creators Can Back Their Own Campaigns & Wash Funds | 🟠 P1 | Financial Domain Invariants, Fraud Prevention & Event-Carried State Transfer | Open |
+| [TICKET-055](./TICKET-055-UNBOUNDED-BATCH-LOADING-IN-REFUND-SAGA.md) | Unbounded Batch Loading in Campaign Refund Saga: Single-Transaction OOM, Lock Contention & Timeout Hazards | 🟠 P1 | Performance, Persistence Scalability & Distributed Sagas | Open |
+| [TICKET-056](./TICKET-056-BACKER-NOTIFICATION-PREFERENCES-AND-UNSUBSCRIBE-ABSENCE.md) | Missing Backer Notification Preferences & Unsubscribe Enforcement: Mandatory Transactional vs. Commercial Email Segregation | 🟡 P2 | Notifications Architecture, Compliance & Preference Enforcement | Open |
+
 
