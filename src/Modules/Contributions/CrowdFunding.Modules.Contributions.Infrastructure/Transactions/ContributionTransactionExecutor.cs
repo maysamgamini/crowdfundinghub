@@ -3,6 +3,7 @@ using CrowdFunding.BuildingBlocks.Domain.Common;
 using CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPaymentConfirmed;
+using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPaymentFailed;
 using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionRefunded;
 using CrowdFunding.Modules.Contributions.Domain.Events;
 using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.DbContexts;
@@ -108,6 +109,16 @@ public sealed class ContributionTransactionExecutor : IContributionTransactionEx
                     @event.ContributorId,
                     @event.Amount,
                     @event.Currency,
+                    @event.RewardTierReservationId),
+                DateTime.UtcNow),
+            ContributionPaymentFailedDomainEvent @event => OutboxMessage.Create(
+                new ContributionPaymentFailedApplicationEvent(
+                    @event.ContributionId,
+                    @event.CampaignId,
+                    @event.ContributorId,
+                    @event.Amount,
+                    @event.Currency,
+                    @event.FailureReason,
                     @event.RewardTierReservationId),
                 DateTime.UtcNow),
             // Fail loud instead of silently discarding (improvement.md §2.3): an unmapped domain

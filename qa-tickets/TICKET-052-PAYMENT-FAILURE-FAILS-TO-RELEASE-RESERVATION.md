@@ -4,7 +4,7 @@
 **Severity:** 🟠 P1 (High - Inventory Lockout & False Sold-Out State)  
 **QA Focus Area:** Financial State Machine, Outbox Domain Events & Inventory Reservation Sagas  
 **Found By:** `qa-concurrency-audit` & `qa-domain-verification`  
-**Status:** Open  
+**Status:** Fixed  
 **Project Mode:** Greenfield (Benchmark Educational Standard)  
 
 ---

@@ -2,6 +2,8 @@ using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Campaigns.Application.Features.RewardTiers.Events;
 using CrowdFunding.Modules.Campaigns.Domain.Aggregates;
 using CrowdFunding.Modules.Campaigns.Domain.Enums;
+using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPaymentConfirmed;
+using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPaymentFailed;
 using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionRefunded;
 
 namespace CrowdFunding.UnitTests;
@@ -239,6 +241,87 @@ public sealed class RewardTierTests
             Guid.NewGuid(),
             50m,
             "USD",
+            rewardTierReservationId: null);
+
+        await handler.Handle(@event, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ContributionPaymentFailedRewardTierHandler_ShouldReleaseReservationImmediately_WhenReservationIsReserved()
+    {
+        var tier = CreateTier(totalCapacity: 5);
+        tier.ReserveSlot();
+
+        var campaignId = Guid.NewGuid();
+        var reservation = RewardTierReservation.Create(tier.Id, campaignId, Guid.NewGuid(), DateTime.UtcNow);
+
+        var tierRepo = new FakeRewardTierRepository(tier);
+        var reservationRepo = new FakeRewardTierReservationRepository(reservation);
+        var txExecutor = new FakeCampaignTransactionExecutor();
+        var handler = new ContributionPaymentFailedRewardTierHandler(reservationRepo, tierRepo, txExecutor);
+
+        var @event = new ContributionPaymentFailedApplicationEvent(
+            Guid.NewGuid(),
+            campaignId,
+            Guid.NewGuid(),
+            199m,
+            "USD",
+            "Card declined",
+            reservation.Id);
+
+        await handler.Handle(@event, CancellationToken.None);
+
+        Assert.Equal(0, tier.ReservedCount);
+        Assert.Equal(5, tier.AvailableCount);
+        Assert.Equal(RewardTierReservationStatus.Released, reservation.Status);
+    }
+
+    [Fact]
+    public async Task ContributionPaymentFailedRewardTierHandler_ShouldBeIdempotent_WhenReservationAlreadyReleased()
+    {
+        var tier = CreateTier(totalCapacity: 5);
+        tier.ReserveSlot();
+
+        var campaignId = Guid.NewGuid();
+        var reservation = RewardTierReservation.Create(tier.Id, campaignId, Guid.NewGuid(), DateTime.UtcNow);
+        reservation.Release();
+        tier.ReleaseReservation();
+
+        var tierRepo = new FakeRewardTierRepository(tier);
+        var reservationRepo = new FakeRewardTierReservationRepository(reservation);
+        var txExecutor = new FakeCampaignTransactionExecutor();
+        var handler = new ContributionPaymentFailedRewardTierHandler(reservationRepo, tierRepo, txExecutor);
+
+        var @event = new ContributionPaymentFailedApplicationEvent(
+            Guid.NewGuid(),
+            campaignId,
+            Guid.NewGuid(),
+            199m,
+            "USD",
+            "Card declined",
+            reservation.Id);
+
+        await handler.Handle(@event, CancellationToken.None);
+
+        Assert.Equal(0, tier.ReservedCount);
+        Assert.Equal(5, tier.AvailableCount);
+    }
+
+    [Fact]
+    public async Task ContributionPaymentFailedRewardTierHandler_ShouldDoNothing_WhenReservationIdIsNull()
+    {
+        var tierRepo = new FakeRewardTierRepository();
+        var reservationRepo = new FakeRewardTierReservationRepository();
+        var txExecutor = new FakeCampaignTransactionExecutor();
+        var handler = new ContributionPaymentFailedRewardTierHandler(reservationRepo, tierRepo, txExecutor);
+
+        var @event = new ContributionPaymentFailedApplicationEvent(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            50m,
+            "USD",
+            "Card declined",
             rewardTierReservationId: null);
 
         await handler.Handle(@event, CancellationToken.None);

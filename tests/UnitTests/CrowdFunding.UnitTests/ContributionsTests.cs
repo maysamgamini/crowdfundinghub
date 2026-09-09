@@ -192,6 +192,28 @@ public sealed class ContributionDomainTests
     }
 
     [Fact]
+    public void FailPayment_ShouldMoveContributionToFailed_AndRaiseDomainEvent_WhenPending()
+    {
+        var reservationId = Guid.NewGuid();
+        var contribution = Contribution.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            50m,
+            "USD",
+            new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc),
+            rewardTierReservationId: reservationId);
+
+        contribution.FailPayment("Card declined by issuer.", new DateTime(2026, 4, 6, 12, 5, 0, DateTimeKind.Utc));
+
+        Assert.Equal(ContributionStatus.Failed, contribution.Status);
+        Assert.Equal("Card declined by issuer.", contribution.FailureReason);
+        var domainEvent = Assert.Single(contribution.DomainEvents.OfType<ContributionPaymentFailedDomainEvent>());
+        Assert.Equal(contribution.Id, domainEvent.ContributionId);
+        Assert.Equal(reservationId, domainEvent.RewardTierReservationId);
+        Assert.Equal("Card declined by issuer.", domainEvent.FailureReason);
+    }
+
+    [Fact]
     public void Refund_ShouldMoveContributionToRefunded_AndRaiseDomainEvent_WhenSucceeded()
     {
         var contribution = Contribution.Create(

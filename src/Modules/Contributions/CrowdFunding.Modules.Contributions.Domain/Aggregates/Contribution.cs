@@ -164,6 +164,15 @@ public sealed class Contribution : BaseEntity
         PaymentReference = null;
         FailureReason = failureReason.Trim();
         ProcessedAtUtc = processedAtUtc;
+
+        AddDomainEvent(new ContributionPaymentFailedDomainEvent(
+            Id,
+            CampaignId,
+            ContributorId,
+            Money.Amount,
+            Money.Currency,
+            FailureReason,
+            RewardTierReservationId));
     }
 
     /// <summary>
