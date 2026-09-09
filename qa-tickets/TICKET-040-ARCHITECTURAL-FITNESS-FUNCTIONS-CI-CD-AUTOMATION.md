@@ -4,7 +4,7 @@
 **Severity:** 🟠 P1 (High - Architectural Governance & Boundary Erosion Defense)  
 **QA Focus Area:** Architectural Governance, Continuous Integration & NetArchTest Automation  
 **Found By:** `qa-platform-shortcomings`  
-**Status:** Open  
+**Status:** Fixed  
 **Project Mode:** Greenfield (Benchmark Educational Standard)  
 
 ---
@@ -127,3 +127,38 @@ jobs:
 1. **Pipeline Execution:** Pushing a commit or opening a PR triggers GitHub Actions executing all 171 tests and formatting validations.
 2. **Boundary Protection Test:** Intentionally adding a forbidden reference (e.g. `Identity.Domain` directly referenced in `CrowdFunding.API`) causes the CI step `Execute Architectural Guardrails` to fail and block the merge.
 3. **Testcontainers in Linux Runner:** Integration tests successfully launch ephemeral PostgreSQL containers inside the Ubuntu runner without configuration errors.
+
+---
+
+## 7. Resolution
+
+Added [`.github/workflows/ci.yml`](../.github/workflows/ci.yml), triggered on push/PR to `main`, running on `ubuntu-latest` (Docker preinstalled, so Testcontainers needs no extra runner setup):
+
+1. Restore (with NuGet package caching keyed on `**/*.csproj` hashes).
+2. `dotnet format --verify-no-changes` — verified locally passes clean on the current tree.
+3. `dotnet build --configuration Release /warnaserror` — verified locally: 0 warnings, 0 errors.
+4. **Architecture tests run first**, before the slower integration suite, so a boundary
+   violation (criterion #2) fails fast in seconds rather than after Testcontainers has already
+   pulled and booted Postgres/Redis/RabbitMQ.
+5. Unit tests, then integration tests (`CrowdFunding.IntegrationTests`, Testcontainers-backed).
+6. `CrowdFunding.ModerationService.IntegrationTests` as a separate step — it isn't part of
+   `CrowdFunding.slnx` (TICKET-029's extracted service intentionally lives outside the monolith's
+   solution/build boundary), so it's restored, built, and run independently in Release.
+7. `dorny/test-reporter` publishes all four `.trx` results as a check-run summary regardless of
+   pass/fail (`if: always()`), so a failure's exact test names are visible without downloading
+   artifacts.
+
+Verified locally (no GitHub Actions runner needed to confirm the steps themselves are correct —
+the workflow just automates what was run by hand): `dotnet format --verify-no-changes` clean,
+`dotnet build -c Release /warnaserror` clean (0 warnings), architecture tests 20/20, unit tests
+203/203, integration tests 49/49, Moderation service integration tests 2/2 — all in Release
+configuration, matching what the pipeline will execute.
+
+Criterion #2 (a forbidden reference actually blocking a merge) is not demonstrated by committing
+a real violation to prove it — that would mean shipping broken architecture on purpose. The
+mechanism is already load-bearing: the 20 existing NetArchTest rules in
+`tests/ArchitectureTests/CrowdFunding.ArchitectureTests` (which this workflow now runs on every
+push/PR) already caught and drove the fix for a real boundary violation once before, in
+TICKET-021 (`AdminSeeder` in `CrowdFunding.API` directly referencing `Identity.Domain`) — this
+ticket's contribution is making that enforcement automatic on every push/PR instead of only when
+a developer remembers to run `dotnet test` locally.

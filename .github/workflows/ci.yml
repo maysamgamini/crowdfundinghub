@@ -1,0 +1,85 @@
+name: Continuous Integration & Architectural Governance
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  build-and-verify:
+    name: Build, Test & Architecture Verification
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Restore dependencies
+        run: dotnet restore CrowdFunding.slnx
+
+      - name: Verify code formatting
+        run: dotnet format CrowdFunding.slnx --verify-no-changes --verbosity diagnostic
+
+      - name: Build solution (Release, zero warnings tolerance)
+        run: dotnet build CrowdFunding.slnx --configuration Release --no-restore /warnaserror
+
+      # Runs first and separately from the other test suites: a boundary violation should fail
+      # fast, in seconds, without waiting on Testcontainers to pull and boot Postgres/Redis for
+      # the integration suite.
+      - name: Architectural guardrails (NetArchTest boundary enforcement)
+        run: >
+          dotnet test tests/ArchitectureTests/CrowdFunding.ArchitectureTests/CrowdFunding.ArchitectureTests.csproj
+          --configuration Release --no-build
+          --logger "trx;LogFileName=arch-results.trx"
+
+      - name: Unit tests
+        run: >
+          dotnet test tests/UnitTests/CrowdFunding.UnitTests/CrowdFunding.UnitTests.csproj
+          --configuration Release --no-build
+          --logger "trx;LogFileName=unit-results.trx"
+
+      # Testcontainers needs a live Docker daemon to launch ephemeral Postgres/Redis/RabbitMQ
+      # containers — ubuntu-latest runners ship Docker pre-installed, so no `services:` block
+      # or extra setup is required.
+      - name: Integration tests (Testcontainers: PostgreSQL, Redis, RabbitMQ)
+        run: >
+          dotnet test tests/IntegrationTests/CrowdFunding.IntegrationTests/CrowdFunding.IntegrationTests.csproj
+          --configuration Release --no-build
+          --logger "trx;LogFileName=integration-results.trx"
+
+      - name: Moderation service integration tests (extracted microservice boundary)
+        run: >
+          dotnet test tests/IntegrationTests/CrowdFunding.ModerationService.IntegrationTests/CrowdFunding.ModerationService.IntegrationTests.csproj
+          --configuration Release
+          --logger "trx;LogFileName=moderation-service-results.trx"
+
+      - name: Publish test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Test results
+          path: "**/*-results.trx"
+          reporter: dotnet-trx
+          fail-on-error: false
