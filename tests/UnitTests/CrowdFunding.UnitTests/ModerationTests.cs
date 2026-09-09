@@ -459,7 +459,9 @@ public sealed class CampaignCreatedApplicationEventHandlerTests
         var campaignId = Guid.NewGuid();
         var ownerId = Guid.NewGuid();
 
-        await handler.Handle(new CampaignCreatedApplicationEvent(campaignId, ownerId), CancellationToken.None);
+        await handler.Handle(
+            new CampaignCreatedApplicationEvent(campaignId, ownerId, "Title", "USD", DateTime.UtcNow.AddDays(30)),
+            CancellationToken.None);
 
         var command = Assert.IsType<CreateCampaignReviewCommand>(commandDispatcher.LastCommand);
         Assert.Equal(1, commandDispatcher.InvocationCount);

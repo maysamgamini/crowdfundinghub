@@ -1,6 +1,5 @@
 ﻿using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
-using CrowdFunding.Modules.Campaigns.Contracts.Queries.GetCampaignContributionAvailability;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Transactions;
@@ -14,20 +13,20 @@ namespace CrowdFunding.Modules.Contributions.Application.Features.Contributions.
 /// </summary>
 public sealed class MakeContributionCommandHandler : ICommandHandler<MakeContributionCommand, MakeContributionResult>
 {
-    private readonly ICampaignContributionAvailabilityReader _campaignContributionAvailabilityReader;
+    private readonly IActiveCampaignCacheRepository _activeCampaignCacheRepository;
     private readonly ICurrentUser _currentUser;
     private readonly IContributionDateTimeProvider _dateTimeProvider;
     private readonly IContributionRepository _contributionRepository;
     private readonly IContributionTransactionExecutor _transactionExecutor;
 
     public MakeContributionCommandHandler(
-        ICampaignContributionAvailabilityReader campaignContributionAvailabilityReader,
+        IActiveCampaignCacheRepository activeCampaignCacheRepository,
         ICurrentUser currentUser,
         IContributionDateTimeProvider dateTimeProvider,
         IContributionRepository contributionRepository,
         IContributionTransactionExecutor transactionExecutor)
     {
-        _campaignContributionAvailabilityReader = campaignContributionAvailabilityReader;
+        _activeCampaignCacheRepository = activeCampaignCacheRepository;
         _currentUser = currentUser;
         _dateTimeProvider = dateTimeProvider;
         _contributionRepository = contributionRepository;
@@ -39,19 +38,19 @@ public sealed class MakeContributionCommandHandler : ICommandHandler<MakeContrib
     {
         EnsureCanContribute();
 
-        var campaignAvailability = await _campaignContributionAvailabilityReader.GetCampaignContributionAvailabilityAsync(
-            new GetCampaignContributionAvailabilityQuery(command.CampaignId),
-            cancellationToken);
+        // Reads Contributions' own locally replicated campaign snapshot rather than calling back
+        // into Campaigns synchronously (TICKET-023) — see ReplicatedCampaignEventHandlers.
+        var campaign = await _activeCampaignCacheRepository.GetAsync(command.CampaignId, cancellationToken);
 
-        if (!campaignAvailability.Exists)
+        if (campaign is null)
         {
             throw new KeyNotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
         }
 
-        if (!campaignAvailability.CanAcceptContributions)
+        if (!campaign.IsActive || campaign.DeadlineUtc <= _dateTimeProvider.UtcNow)
         {
             throw new InvalidOperationException(
-                $"Campaign '{command.CampaignId}' cannot accept contributions while in '{campaignAvailability.Status}' status.");
+                $"Campaign '{command.CampaignId}' cannot accept contributions — it is not active or has passed its deadline.");
         }
 
         // Reject a currency mismatch here, before any Contribution/payment record exists.
@@ -59,10 +58,10 @@ public sealed class MakeContributionCommandHandler : ICommandHandler<MakeContrib
         // AddContributionToCampaignCommandHandler — after the payment was already confirmed —
         // permanently dead-lettering the outbox message with no way to credit the campaign
         // without manual intervention.
-        if (!string.Equals(campaignAvailability.Currency, command.Currency, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(campaign.Currency, command.Currency, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                $"Contribution currency '{command.Currency}' does not match campaign currency '{campaignAvailability.Currency}'.");
+                $"Contribution currency '{command.Currency}' does not match campaign currency '{campaign.Currency}'.");
         }
 
         var contribution = Contribution.Create(

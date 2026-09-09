@@ -1,5 +1,6 @@
 ﻿using CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
 using CrowdFunding.Modules.Contributions.Domain.Aggregates;
+using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.ReadModels;
 using Microsoft.EntityFrameworkCore;
 
 namespace CrowdFunding.Modules.Contributions.Infrastructure.Persistence.DbContexts;
@@ -15,6 +16,7 @@ public sealed class ContributionsDbContext : DbContext
     }
 
     public DbSet<Contribution> Contributions => Set<Contribution>();
+    public DbSet<ActiveCampaignCache> ActiveCampaignsCache => Set<ActiveCampaignCache>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<DeadLetterEvent> DeadLetterEvents => Set<DeadLetterEvent>();
 

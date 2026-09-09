@@ -59,6 +59,11 @@ public sealed class ContributionAndOutboxE2ETests
         var publishResponse = await client.PostAsync($"/api/campaigns/{campaignId}/publish", content: null);
         publishResponse.EnsureSuccessStatusCode();
 
+        // CampaignPublishedApplicationEvent must reach Contributions' replicated
+        // active_campaigns_cache (TICKET-023) before a pledge against this campaign can pass
+        // MakeContributionCommandHandler's local IsActive check.
+        await _factory.ProcessOutboxMessagesAsync();
+
         return (campaignId, creatorToken);
     }
 

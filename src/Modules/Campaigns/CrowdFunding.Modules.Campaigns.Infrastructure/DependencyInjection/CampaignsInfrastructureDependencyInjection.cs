@@ -2,7 +2,6 @@
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Transactions;
-using CrowdFunding.Modules.Campaigns.Contracts.Queries.GetCampaignContributionAvailability;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Caching;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Outbox;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.DbContexts;
@@ -40,7 +39,6 @@ public static class CampaignsInfrastructureDependencyInjection
             options.InstanceName = "crowdfunding:";
         });
 
-        services.AddScoped<ICampaignContributionAvailabilityReader, CampaignContributionAvailabilityReader>();
         services.AddScoped<ICampaignRepository, CampaignRepository>();
         services.AddScoped<IContributionLedger, ContributionLedger>();
         services.AddScoped<CampaignReadService>();

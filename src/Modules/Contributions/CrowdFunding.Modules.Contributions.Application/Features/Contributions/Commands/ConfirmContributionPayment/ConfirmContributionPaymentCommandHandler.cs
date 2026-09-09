@@ -1,7 +1,5 @@
 ﻿using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
-using CrowdFunding.Modules.Campaigns.Contracts.Enums;
-using CrowdFunding.Modules.Campaigns.Contracts.Queries.GetCampaignContributionAvailability;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Transactions;
@@ -14,20 +12,20 @@ namespace CrowdFunding.Modules.Contributions.Application.Features.Contributions.
 /// </summary>
 public sealed class ConfirmContributionPaymentCommandHandler : ICommandHandler<ConfirmContributionPaymentCommand, ConfirmContributionPaymentResult>
 {
-    private readonly ICampaignContributionAvailabilityReader _campaignContributionAvailabilityReader;
+    private readonly IActiveCampaignCacheRepository _activeCampaignCacheRepository;
     private readonly ICurrentUser _currentUser;
     private readonly IContributionDateTimeProvider _dateTimeProvider;
     private readonly IContributionRepository _contributionRepository;
     private readonly IContributionTransactionExecutor _transactionExecutor;
 
     public ConfirmContributionPaymentCommandHandler(
-        ICampaignContributionAvailabilityReader campaignContributionAvailabilityReader,
+        IActiveCampaignCacheRepository activeCampaignCacheRepository,
         ICurrentUser currentUser,
         IContributionDateTimeProvider dateTimeProvider,
         IContributionRepository contributionRepository,
         IContributionTransactionExecutor transactionExecutor)
     {
-        _campaignContributionAvailabilityReader = campaignContributionAvailabilityReader;
+        _activeCampaignCacheRepository = activeCampaignCacheRepository;
         _currentUser = currentUser;
         _dateTimeProvider = dateTimeProvider;
         _contributionRepository = contributionRepository;
@@ -45,16 +43,16 @@ public sealed class ConfirmContributionPaymentCommandHandler : ICommandHandler<C
             throw new KeyNotFoundException($"Contribution '{command.ContributionId}' was not found for campaign '{command.CampaignId}'.");
         }
 
-        var campaignAvailability = await _campaignContributionAvailabilityReader.GetCampaignContributionAvailabilityAsync(
-            new GetCampaignContributionAvailabilityQuery(command.CampaignId),
-            cancellationToken);
+        // Reads Contributions' own locally replicated campaign snapshot rather than calling back
+        // into Campaigns synchronously (TICKET-023) — see ReplicatedCampaignEventHandlers.
+        var campaign = await _activeCampaignCacheRepository.GetAsync(command.CampaignId, cancellationToken);
 
-        if (!campaignAvailability.Exists)
+        if (campaign is null)
         {
             throw new KeyNotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
         }
 
-        if (campaignAvailability.Status != CampaignStatusContract.Published)
+        if (!campaign.IsActive)
         {
             throw new InvalidOperationException("Contribution payments can only be confirmed while the campaign is published.");
         }

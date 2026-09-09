@@ -10,7 +10,6 @@ using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.Cre
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.PublishCampaign;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Events;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.GetCampaignById;
-using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.GetCampaignContributionAvailability;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.ListCampaigns;
 using CrowdFunding.Modules.Campaigns.Contracts.Commands.AddContributionToCampaign;
 using CrowdFunding.Modules.Campaigns.Contracts.Enums;
@@ -853,49 +852,6 @@ public sealed class GetCampaignByIdQueryHandlerTests
         var exception = await Assert.ThrowsAsync<KeyNotFoundException>(action);
 
         Assert.Equal($"Campaign with id '{campaignId}' was not found.", exception.Message);
-    }
-}
-
-public sealed class GetCampaignContributionAvailabilityQueryHandlerTests
-{
-    [Fact]
-    public async Task Handle_ShouldReturnAvailability_WhenCampaignExists()
-    {
-        var campaign = Campaign.Create(
-            Guid.NewGuid(),
-            "Launch a school robotics lab",
-            "This campaign funds tools and equipment for a new school robotics lab.",
-            "Education",
-            new Money(5000m, "USD"),
-            new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc),
-            new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
-        campaign.Publish(new DateTime(2026, 4, 7, 12, 0, 0, DateTimeKind.Utc));
-
-        var handler = new GetCampaignContributionAvailabilityQueryHandler(new FakeCampaignRepository(campaign));
-
-        var result = await handler.Handle(
-            new CrowdFunding.Modules.Campaigns.Contracts.Queries.GetCampaignContributionAvailability.GetCampaignContributionAvailabilityQuery(campaign.Id),
-            CancellationToken.None);
-
-        Assert.True(result.Exists);
-        Assert.True(result.CanAcceptContributions);
-        Assert.Equal(CampaignStatusContract.Published, result.Status);
-        Assert.Equal("USD", result.Currency);
-    }
-
-    [Fact]
-    public async Task Handle_ShouldReturnMissingAvailability_WhenCampaignDoesNotExist()
-    {
-        var campaignId = Guid.NewGuid();
-        var handler = new GetCampaignContributionAvailabilityQueryHandler(new FakeCampaignRepository());
-
-        var result = await handler.Handle(
-            new CrowdFunding.Modules.Campaigns.Contracts.Queries.GetCampaignContributionAvailability.GetCampaignContributionAvailabilityQuery(campaignId),
-            CancellationToken.None);
-
-        Assert.False(result.Exists);
-        Assert.False(result.CanAcceptContributions);
-        Assert.Null(result.Status);
     }
 }
 

@@ -73,7 +73,8 @@ public sealed class Campaign : BaseEntity
             deadlineUtc,
             createdAtUtc);
 
-        campaign.AddDomainEvent(new CampaignCreatedDomainEvent(campaign.Id, campaign.OwnerId));
+        campaign.AddDomainEvent(new CampaignCreatedDomainEvent(
+            campaign.Id, campaign.OwnerId, campaign.Title, campaign.GoalAmount.Currency, campaign.DeadlineUtc));
 
         return campaign;
     }

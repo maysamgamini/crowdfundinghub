@@ -117,7 +117,7 @@ public sealed class CampaignTransactionExecutor : ICampaignTransactionExecutor
         return domainEvent switch
         {
             CampaignCreatedDomainEvent @event => OutboxMessage.Create(
-                new CampaignCreatedApplicationEvent(@event.CampaignId, @event.OwnerId),
+                new CampaignCreatedApplicationEvent(@event.CampaignId, @event.OwnerId, @event.Title, @event.Currency, @event.DeadlineUtc),
                 DateTime.UtcNow),
             CampaignPublishedDomainEvent @event => OutboxMessage.Create(
                 new CampaignPublishedApplicationEvent(@event.CampaignId, @event.OwnerId),

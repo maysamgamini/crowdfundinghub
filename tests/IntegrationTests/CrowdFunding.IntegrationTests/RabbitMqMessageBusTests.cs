@@ -63,7 +63,7 @@ public sealed class RabbitMqMessageBusTests : IAsyncLifetime
 
         var campaignId = Guid.NewGuid();
         var ownerId = Guid.NewGuid();
-        await bus.PublishAsync(new CampaignCreatedApplicationEvent(campaignId, ownerId));
+        await bus.PublishAsync(new CampaignCreatedApplicationEvent(campaignId, ownerId, "Test Campaign", "USD", DateTime.UtcNow.AddDays(30)));
 
         var received = await messageReceived.Task.WaitAsync(TimeSpan.FromSeconds(10));
 

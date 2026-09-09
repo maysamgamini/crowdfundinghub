@@ -25,13 +25,13 @@ These tickets specifically target the architectural transformation required to m
 | Ticket ID | Title | Severity | Focus Area | Status |
 | :--- | :--- | :---: | :--- | :---: |
 | [TICKET-023](./TICKET-023-ASYNCHRONOUS-REPLICATED-READ-MODELS.md) | Asynchronous Replicated Read Models to Eliminate In-Process Synchronous Module Coupling | 🔴 P1 | Distributed Monolith Prevention & Data Replication | Open |
-| [TICKET-024](./TICKET-024-PLUGGABLE-MESSAGE-BUS-RABBITMQ-KAFKA.md) | Pluggable Message Bus Abstraction (`IMessageBus`) Supporting In-Process vs. Distributed Broker | 🔴 P1 | Event-Driven Architecture & Message Brokers | Open |
-| [TICKET-025](./TICKET-025-MODULAR-OUTBOX-PARTITIONING-AUTONOMOUS-WORKERS.md) | Modular Outbox Partitioning: Replace Monolithic Centralized Worker with Per-Module Processors | 🟠 P1 | Concurrency, Monolith Autonomy & Outbox Resilience | Open |
-| [TICKET-026](./TICKET-026-MULTI-DATABASE-CONNECTION-DECOUPLING.md) | Multi-Database Connection Decoupling: Enable Database-Per-Service via Fallback Strings | 🟡 P2 | Database Isolation & Deployment Topologies | Open |
+| [TICKET-024](./TICKET-024-PLUGGABLE-MESSAGE-BUS-RABBITMQ-KAFKA.md) | Pluggable Message Bus Abstraction (`IMessageBus`) Supporting In-Process vs. Distributed Broker | 🔴 P1 | Event-Driven Architecture & Message Brokers | Fixed |
+| [TICKET-025](./TICKET-025-MODULAR-OUTBOX-PARTITIONING-AUTONOMOUS-WORKERS.md) | Modular Outbox Partitioning: Replace Monolithic Centralized Worker with Per-Module Processors | 🟠 P1 | Concurrency, Monolith Autonomy & Outbox Resilience | Fixed |
+| [TICKET-026](./TICKET-026-MULTI-DATABASE-CONNECTION-DECOUPLING.md) | Multi-Database Connection Decoupling: Enable Database-Per-Service via Fallback Strings | 🟡 P2 | Database Isolation & Deployment Topologies | Fixed |
 | [TICKET-027](./TICKET-027-DISTRIBUTED-CROWDFUNDING-LIFECYCLE-REFUND-SAGA.md) | Distributed Crowdfunding Lifecycle: Deadline Expiration Worker & Event-Driven Refund Saga | 🔴 P1 | Domain Completeness & Compensation Sagas | Open |
 | [TICKET-028](./TICKET-028-PEDAGOGICAL-ROSETTA-STONE-POLY-PATTERNS.md) | The Pedagogical Rosetta Stone: Multi-Paradigm Slices (Minimal CRUD vs. CQRS vs. Rich DDD) | 🟡 P2 | Poly-Pattern Architecture & Educational Clarity | Open |
 | [TICKET-029](./TICKET-029-MICROSERVICE-EXTRACTION-POC-STANDALONE-SERVICE.md) | Microservice Extraction Proof-of-Concept: Standalone Host (`CrowdFunding.Moderation.Service`) | 🟠 P1 | Strangler Fig Pattern & Microservice Extraction | Open |
-| [TICKET-030](./TICKET-030-DISTRIBUTED-TRACING-OPENTELEMETRY-OUTBOX-PROPAGATION.md) | Distributed Tracing: OpenTelemetry W3C `traceparent` Propagation Across Outbox Boundaries | 🟡 P2 | Distributed Tracing & Cross-Boundary Observability | Open |
+| [TICKET-030](./TICKET-030-DISTRIBUTED-TRACING-OPENTELEMETRY-OUTBOX-PROPAGATION.md) | Distributed Tracing: OpenTelemetry W3C `traceparent` Propagation Across Outbox Boundaries | 🟡 P2 | Distributed Tracing & Cross-Boundary Observability | Fixed |
 
 ---
 

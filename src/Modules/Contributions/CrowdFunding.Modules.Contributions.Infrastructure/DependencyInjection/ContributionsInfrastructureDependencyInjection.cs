@@ -29,6 +29,7 @@ public static class ContributionsInfrastructureDependencyInjection
                 npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "contributions")));
 
         services.AddScoped<IContributionRepository, ContributionRepository>();
+        services.AddScoped<IActiveCampaignCacheRepository, ActiveCampaignCacheRepository>();
         services.AddScoped<IContributionReadService, ContributionReadService>();
         services.AddScoped<IContributionTransactionExecutor, ContributionTransactionExecutor>();
         services.AddSingleton<IContributionDateTimeProvider, SystemDateTimeProvider>();
