@@ -36,6 +36,7 @@
     <ProjectReference Include="..\..\..\src\Modules\Notifications\CrowdFunding.Modules.Notifications.Domain\CrowdFunding.Modules.Notifications.Domain.csproj" />
     <ProjectReference Include="..\..\..\src\Modules\CampaignUpdates\CrowdFunding.Modules.CampaignUpdates.Application\CrowdFunding.Modules.CampaignUpdates.Application.csproj" />
     <ProjectReference Include="..\..\..\src\Modules\CampaignUpdates\CrowdFunding.Modules.CampaignUpdates.Domain\CrowdFunding.Modules.CampaignUpdates.Domain.csproj" />
+    <ProjectReference Include="..\..\..\services\CrowdFunding.Moderation.Service\CrowdFunding.Moderation.Service.csproj" />
   </ItemGroup>
 
 </Project>

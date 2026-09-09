@@ -1,0 +1,86 @@
+# TICKET-029: the Strangler Fig demonstration. Boots the unified Modular Monolith
+# (crowdfunding-api, still running every module INCLUDING Moderation) side by side with the
+# independently extracted CrowdFunding.Moderation.Service — both processes read from the same
+# Postgres cluster (each module already owns its own schema/connection-string key, see
+# TICKET-026) and the same RabbitMQ broker, proving the extraction needed zero data-migration
+# and zero rewritten business logic. This file is additive: it does not replace docker-compose.yml.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: crowdfundingdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - crowdfunding_microservices_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  monolith-api:
+    build:
+      context: .
+      dockerfile: src/API/CrowdFunding.API/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=crowdfundingdb;Username=postgres;Password=postgres"
+      ConnectionStrings__Redis: "redis:6379"
+      Jwt__Issuer: "CrowdFunding.API"
+      Jwt__Audience: "CrowdFunding.Client"
+      Messaging__Provider: "RabbitMQ"
+      Messaging__RabbitMq__Host: "rabbitmq"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  moderation-service:
+    build:
+      context: .
+      dockerfile: services/CrowdFunding.Moderation.Service/Dockerfile
+    ports:
+      - "8082:8080"
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__ModerationDb: "Host=postgres;Port=5432;Database=crowdfundingdb;Username=postgres;Password=postgres"
+      Authentication__Issuer: "CrowdFunding.API"
+      # Fetches the monolith's public key set over the network — the two processes share no
+      # code, no secret, and no in-process call; only this JWKS URL couples them.
+      Authentication__JwksUri: "http://monolith-api:8080/.well-known/jwks.json"
+      Messaging__Provider: "RabbitMQ"
+      Messaging__RabbitMq__Host: "rabbitmq"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      monolith-api:
+        condition: service_started
+
+volumes:
+  crowdfunding_microservices_postgres_data:

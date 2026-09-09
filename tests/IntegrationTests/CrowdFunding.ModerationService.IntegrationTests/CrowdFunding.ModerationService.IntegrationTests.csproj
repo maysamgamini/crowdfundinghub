@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.1.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <!--
+    Both project references below define a top-level `Program` class in the global namespace
+    (WebApplicationFactory<Program>'s required entry point). Aliasing each avoids CS0104
+    ambiguity so this single test project can boot BOTH the monolith host and the extracted
+    Moderation.Service host side by side, exactly as TICKET-029's acceptance criteria require —
+    proving a token the monolith issued authenticates successfully against the independently
+    extracted service.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\API\CrowdFunding.API\CrowdFunding.API.csproj" Aliases="MonolithHost" />
+    <ProjectReference Include="..\..\..\services\CrowdFunding.Moderation.Service\CrowdFunding.Moderation.Service.csproj" Aliases="ModerationHost" />
+    <!--
+      extern alias does not propagate through transitive ProjectReferences — the compiler only
+      merges namespaces for assemblies given the SAME alias directly on THIS project's own
+      reference list. CampaignReview/ICampaignReviewRepository/etc. live in these two assemblies
+      (transitively pulled in by the Moderation.Service reference above), so they need their own
+      explicit, identically-aliased entries to be visible under `ModerationHost::`.
+    -->
+    <ProjectReference Include="..\..\..\src\Modules\Moderation\CrowdFunding.Modules.Moderation.Domain\CrowdFunding.Modules.Moderation.Domain.csproj" Aliases="ModerationHost" />
+    <ProjectReference Include="..\..\..\src\Modules\Moderation\CrowdFunding.Modules.Moderation.Application\CrowdFunding.Modules.Moderation.Application.csproj" Aliases="ModerationHost" />
+  </ItemGroup>
+
+</Project>
