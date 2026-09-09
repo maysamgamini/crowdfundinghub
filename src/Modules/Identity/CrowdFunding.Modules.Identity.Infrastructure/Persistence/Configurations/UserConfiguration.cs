@@ -52,6 +52,10 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
             .HasColumnName("created_at_utc")
             .IsRequired();
 
+        builder.Property(x => x.SecurityStamp)
+            .HasColumnName("security_stamp")
+            .IsRequired();
+
         builder.OwnsMany(x => x.Roles, roles =>
         {
             roles.ToTable("user_roles");

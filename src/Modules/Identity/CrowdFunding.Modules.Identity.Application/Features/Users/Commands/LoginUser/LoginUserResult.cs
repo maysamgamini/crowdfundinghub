@@ -5,4 +5,5 @@
 /// </summary>
 public sealed record LoginUserResult(
     string AccessToken,
-    DateTime ExpiresAtUtc);
+    DateTime ExpiresAtUtc,
+    string RefreshToken);

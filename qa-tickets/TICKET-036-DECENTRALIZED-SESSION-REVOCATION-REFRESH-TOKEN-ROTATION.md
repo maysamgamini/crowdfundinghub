@@ -4,7 +4,8 @@
 **Severity:** 🔴 P1 (Critical - Distributed Security & Stateless Token Revocation)  
 **QA Focus Area:** Security, Decentralized Authentication & Session Lifecycle  
 **Found By:** `qa-platform-shortcomings`  
-**Status:** Open  
+**Status:** Fixed  
+**Resolution:** Implemented Refresh Token Rotation (RTR), SHA-256 token hashing, security stamp revocation store, and logout/refresh endpoints under 15-minute access token TTLs.  
 **Project Mode:** Greenfield (Benchmark Educational Standard)  
 
 ---

@@ -41,7 +41,7 @@ These tickets bridge the critical distributed systems and infrastructure shortco
 
 | Ticket ID | Title | Severity | Focus Area | Status |
 | :--- | :--- | :---: | :--- | :---: |
-| [TICKET-036](./TICKET-036-DECENTRALIZED-SESSION-REVOCATION-REFRESH-TOKEN-ROTATION.md) | Decentralized Session Revocation & Refresh Token Rotation (RTR) under Asymmetric JWKS | 🔴 P1 | Security, Decentralized Auth & Revocation | Open |
+| [TICKET-036](./TICKET-036-DECENTRALIZED-SESSION-REVOCATION-REFRESH-TOKEN-ROTATION.md) | Decentralized Session Revocation & Refresh Token Rotation (RTR) under Asymmetric JWKS | 🔴 P1 | Security, Decentralized Auth & Revocation | Fixed |
 | [TICKET-037](./TICKET-037-MULTI-REPLICA-DISTRIBUTED-CACHE-INVALIDATION.md) | Multi-Replica Distributed Cache Invalidation via Redis Pub/Sub & Post-Commit Hooks | 🟠 P1 | High Availability, Caching & Split-Brain Defense | Open |
 | [TICKET-038](./TICKET-038-POSTGRESQL-OUTBOX-MVCC-PARTITIONING-DELETE-ON-SUCCESS.md) | PostgreSQL Outbox MVCC Optimization: Table Partitioning & Immediate Delete-on-Success | 🟠 P1 | Database Engine Internals & Autovacuum Defense | Fixed |
 | [TICKET-039](./TICKET-039-PIPELINE-BEHAVIORS-IMMUTABLE-AUDIT-LOGGING.md) | Architectural Pipeline Behaviors: Immutable Administrative Audit Logging via Dispatcher | 🔴 P1 | Clean Architecture Pipelines & Governance | Open |

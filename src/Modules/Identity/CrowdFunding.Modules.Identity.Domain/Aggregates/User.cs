@@ -14,6 +14,7 @@ public sealed class User
     public string PasswordHash { get; private set; } = string.Empty;
     public bool IsActive { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
+    public Guid SecurityStamp { get; private set; } = Guid.NewGuid();
     public List<UserRoleAssignment> Roles { get; private set; } = [];
     public List<UserPermissionGrant> Permissions { get; private set; } = [];
 
@@ -94,11 +95,26 @@ public sealed class User
     }
 
     /// <summary>
-    /// Deactivates the user account.
+    /// Deactivates the user account and rotates the security stamp, so that any access tokens
+    /// already issued to this user (which embed the old stamp) can be recognized as stale by
+    /// consumers even though the JWT signature itself remains valid until natural expiration.
     /// </summary>
     public void Deactivate()
     {
         IsActive = false;
+        RotateSecurityStamp();
+    }
+
+    /// <summary>
+    /// Rotates the security stamp, invalidating every access token issued before this call (they
+    /// carry the previous stamp value as a claim). Callers that need instant, sub-token-lifetime
+    /// revocation (see TICKET-036) must read <see cref="SecurityStamp"/> before calling this and
+    /// publish the old value to the distributed revocation blacklist themselves — the domain
+    /// model has no knowledge of Redis or any other infrastructure concern.
+    /// </summary>
+    public void RotateSecurityStamp()
+    {
+        SecurityStamp = Guid.NewGuid();
     }
 
     /// <summary>

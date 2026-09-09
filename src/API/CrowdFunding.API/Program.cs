@@ -119,6 +119,34 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateLifetime = true,
             ClockSkew = TimeSpan.Zero
         };
+
+        // TICKET-036: a JWT's signature/lifetime validation above is entirely stateless and
+        // cannot itself be revoked before natural expiration. This event adds the one additional
+        // check needed for instant global revocation across every module — a Redis lookup keyed
+        // by the token's own security_stamp claim, not a database read — so logout, refresh-token
+        // reuse detection, and (when wired up) account deactivation can invalidate an
+        // already-issued, not-yet-expired access token immediately.
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var userIdClaim = context.Principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                var stampClaim = context.Principal?.FindFirst(CustomClaimTypes.SecurityStamp)?.Value;
+
+                if (!Guid.TryParse(userIdClaim, out var userId) || !Guid.TryParse(stampClaim, out var stamp))
+                {
+                    context.Fail("Token is missing required claims.");
+                    return;
+                }
+
+                var revocationStore = context.HttpContext.RequestServices.GetRequiredService<ISecurityStampRevocationStore>();
+
+                if (await revocationStore.IsRevokedAsync(userId, stamp, context.HttpContext.RequestAborted))
+                {
+                    context.Fail("Token has been revoked.");
+                }
+            }
+        };
     });
 
 // Asymmetric ES256 verification (improvement.md §2.8/§3.8 #2): the resolver reads only the

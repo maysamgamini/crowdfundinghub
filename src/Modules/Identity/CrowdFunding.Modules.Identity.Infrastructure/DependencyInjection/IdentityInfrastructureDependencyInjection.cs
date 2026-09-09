@@ -1,4 +1,4 @@
-﻿using CrowdFunding.BuildingBlocks.Infrastructure.Configuration;
+using CrowdFunding.BuildingBlocks.Infrastructure.Configuration;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Services;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Transactions;
@@ -22,15 +22,30 @@ public static class IdentityInfrastructureDependencyInjection
         IConfiguration configuration)
     {
         var connectionString = configuration.GetRequiredModuleConnectionString("IdentityDb");
+        var redisConnectionString = configuration.GetConnectionString("Redis")
+                                    ?? throw new InvalidOperationException("Connection string 'Redis' was not found.");
 
         services.AddDbContext<IdentityDbContext>(options =>
             options.UseNpgsql(connectionString, npgsql =>
                 npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "identity")));
 
+        // TICKET-036: the distributed revocation blacklist (RedisSecurityStampRevocationStore)
+        // needs IDistributedCache. AddStackExchangeRedisCache is idempotent to call once per
+        // module (see CampaignsInfrastructureDependencyInjection) — the last registration's
+        // options win, but they all point at the same Redis instance/connection string.
+        services.AddStackExchangeRedisCache(options =>
+        {
+            options.Configuration = redisConnectionString;
+            options.InstanceName = "crowdfunding:";
+        });
+
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<IIdentityTransactionExecutor, IdentityTransactionExecutor>();
         services.AddScoped<IAccessTokenProvider, JwtAccessTokenProvider>();
         services.AddScoped<IPasswordHasher, Pbkdf2PasswordHasher>();
+        services.AddSingleton<IRefreshTokenService, RefreshTokenService>();
+        services.AddSingleton<ISecurityStampRevocationStore, RedisSecurityStampRevocationStore>();
         services.AddSingleton<IIdentityDateTimeProvider, SystemDateTimeProvider>();
         services.AddSingleton<ISigningKeyStore, EfSigningKeyStore>();
 

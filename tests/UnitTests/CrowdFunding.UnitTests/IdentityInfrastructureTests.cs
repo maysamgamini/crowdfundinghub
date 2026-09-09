@@ -161,7 +161,7 @@ public sealed class JwtAccessTokenProviderTests
     }
 
     [Fact]
-    public void Constructor_ShouldDefaultExpirationTo60Minutes_WhenNotConfigured()
+    public void Constructor_ShouldDefaultExpirationTo15Minutes_WhenNotConfigured()
     {
         using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         var signingKeyStore = new FakeSigningKeyStore(new SigningKeyMaterial("test-kid", ecdsa));
@@ -171,7 +171,7 @@ public sealed class JwtAccessTokenProviderTests
 
         var token = provider.Create(user, permissions);
 
-        Assert.Equal(dateTimeProvider.UtcNow.AddMinutes(60), token.ExpiresAtUtc);
+        Assert.Equal(dateTimeProvider.UtcNow.AddMinutes(15), token.ExpiresAtUtc);
     }
 }
 

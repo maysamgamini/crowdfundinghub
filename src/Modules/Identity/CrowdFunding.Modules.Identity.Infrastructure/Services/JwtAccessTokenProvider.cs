@@ -31,7 +31,7 @@ public sealed class JwtAccessTokenProvider : IAccessTokenProvider
             Audience = configuration[$"{JwtOptions.SectionName}:Audience"] ?? string.Empty,
             ExpirationMinutes = int.TryParse(configuration[$"{JwtOptions.SectionName}:ExpirationMinutes"], out var minutes)
                 ? minutes
-                : 60
+                : 15
         };
 
         if (string.IsNullOrWhiteSpace(_options.Issuer) || string.IsNullOrWhiteSpace(_options.Audience))
@@ -53,7 +53,8 @@ public sealed class JwtAccessTokenProvider : IAccessTokenProvider
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new(ClaimTypes.Email, user.Email),
-            new(CustomClaimTypes.DisplayName, user.DisplayName)
+            new(CustomClaimTypes.DisplayName, user.DisplayName),
+            new(CustomClaimTypes.SecurityStamp, user.SecurityStamp.ToString())
         };
 
         claims.AddRange(user.Roles.Select(role => new Claim(ClaimTypes.Role, role.Role)));

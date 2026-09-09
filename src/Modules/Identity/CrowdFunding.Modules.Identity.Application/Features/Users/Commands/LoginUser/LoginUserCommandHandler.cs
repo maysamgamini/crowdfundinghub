@@ -1,7 +1,9 @@
-﻿using CrowdFunding.BuildingBlocks.Application.Messaging;
+using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Services;
+using CrowdFunding.Modules.Identity.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Identity.Domain.Aggregates;
+using CrowdFunding.Modules.Identity.Domain.Entities;
 
 namespace CrowdFunding.Modules.Identity.Application.Features.Users.Commands.LoginUser;
 
@@ -13,15 +15,27 @@ public sealed class LoginUserCommandHandler : ICommandHandler<LoginUserCommand, 
     private readonly IAccessTokenProvider _accessTokenProvider;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IUserRepository _userRepository;
+    private readonly IRefreshTokenRepository _refreshTokenRepository;
+    private readonly IRefreshTokenService _refreshTokenService;
+    private readonly IIdentityDateTimeProvider _dateTimeProvider;
+    private readonly IIdentityTransactionExecutor _transactionExecutor;
 
     public LoginUserCommandHandler(
         IAccessTokenProvider accessTokenProvider,
         IPasswordHasher passwordHasher,
-        IUserRepository userRepository)
+        IUserRepository userRepository,
+        IRefreshTokenRepository refreshTokenRepository,
+        IRefreshTokenService refreshTokenService,
+        IIdentityDateTimeProvider dateTimeProvider,
+        IIdentityTransactionExecutor transactionExecutor)
     {
         _accessTokenProvider = accessTokenProvider;
         _passwordHasher = passwordHasher;
         _userRepository = userRepository;
+        _refreshTokenRepository = refreshTokenRepository;
+        _refreshTokenService = refreshTokenService;
+        _dateTimeProvider = dateTimeProvider;
+        _transactionExecutor = transactionExecutor;
     }
 
     public async Task<LoginUserResult> Handle(
@@ -46,6 +60,17 @@ public sealed class LoginUserCommandHandler : ICommandHandler<LoginUserCommand, 
 
         var accessToken = _accessTokenProvider.Create(user, UserAuthorizationProjection.GetEffectivePermissions(user));
 
-        return new LoginUserResult(accessToken.Value, accessToken.ExpiresAtUtc);
+        var rawRefreshToken = _refreshTokenService.GenerateToken();
+        var refreshToken = RefreshToken.Issue(
+            user.Id,
+            _refreshTokenService.Hash(rawRefreshToken),
+            _dateTimeProvider.UtcNow,
+            _refreshTokenService.Lifetime);
+
+        await _transactionExecutor.ExecuteAsync(
+            ct => _refreshTokenRepository.AddAsync(refreshToken, ct),
+            cancellationToken);
+
+        return new LoginUserResult(accessToken.Value, accessToken.ExpiresAtUtc, rawRefreshToken);
     }
 }

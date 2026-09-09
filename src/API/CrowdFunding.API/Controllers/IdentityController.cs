@@ -5,6 +5,8 @@ using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.AssignRoleToUser;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.GrantPermissionToUser;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.LoginUser;
+using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.Logout;
+using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.RefreshAccessToken;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.RegisterUser;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Queries.GetCurrentUser;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
@@ -31,6 +33,8 @@ public sealed class IdentityController : ControllerBase
     private readonly IValidator<GrantPermissionToUserCommand> _grantPermissionValidator;
     private readonly IValidator<LoginUserCommand> _loginValidator;
     private readonly IValidator<RegisterUserCommand> _registerValidator;
+    private readonly IValidator<RefreshAccessTokenCommand> _refreshValidator;
+    private readonly IValidator<LogoutCommand> _logoutValidator;
 
     public IdentityController(
         ICommandDispatcher commandDispatcher,
@@ -39,7 +43,9 @@ public sealed class IdentityController : ControllerBase
         IValidator<AssignRoleToUserCommand> assignRoleValidator,
         IValidator<GrantPermissionToUserCommand> grantPermissionValidator,
         IValidator<LoginUserCommand> loginValidator,
-        IValidator<RegisterUserCommand> registerValidator)
+        IValidator<RegisterUserCommand> registerValidator,
+        IValidator<RefreshAccessTokenCommand> refreshValidator,
+        IValidator<LogoutCommand> logoutValidator)
     {
         _commandDispatcher = commandDispatcher;
         _queryDispatcher = queryDispatcher;
@@ -48,6 +54,8 @@ public sealed class IdentityController : ControllerBase
         _grantPermissionValidator = grantPermissionValidator;
         _loginValidator = loginValidator;
         _registerValidator = registerValidator;
+        _refreshValidator = refreshValidator;
+        _logoutValidator = logoutValidator;
     }
 
     /// <summary>
@@ -114,6 +122,71 @@ public sealed class IdentityController : ControllerBase
 
         var result = await _commandDispatcher.SendAsync<LoginUserResult>(command, cancellationToken);
         return Ok(_mapper.Map<LoginUserResponse>(result));
+    }
+
+    /// <summary>
+    /// Exchanges a refresh token for a new access/refresh token pair (Refresh Token Rotation).
+    /// The presented refresh token is revoked as part of this call; presenting it again after a
+    /// successful refresh is treated as reuse and revokes every active session for the account.
+    /// </summary>
+    /// <param name="request">The refresh token payload.</param>
+    /// <param name="cancellationToken">Cancellation token for asynchronous operation.</param>
+    /// <response code="200">Returns a newly issued access token and refresh token.</response>
+    /// <response code="400">Malformed request payload.</response>
+    /// <response code="401">The refresh token is invalid, expired, or reuse was detected (all sessions were revoked).</response>
+    [AllowAnonymous]
+    [EnableRateLimiting(RateLimitingConfiguration.AuthPolicy)]
+    [HttpPost("refresh")]
+    [ProducesResponseType(typeof(RefreshAccessTokenResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<RefreshAccessTokenResponse>> Refresh(
+        [FromBody] RefreshAccessTokenRequest request,
+        CancellationToken cancellationToken)
+    {
+        var command = _mapper.Map<RefreshAccessTokenCommand>(request);
+        var validationResult = await _refreshValidator.ValidateAsync(command, cancellationToken);
+
+        if (!validationResult.IsValid)
+        {
+            validationResult.AddToModelState(ModelState);
+            return ValidationProblem(ModelState);
+        }
+
+        var result = await _commandDispatcher.SendAsync<RefreshAccessTokenResult>(command, cancellationToken);
+        return Ok(_mapper.Map<RefreshAccessTokenResponse>(result));
+    }
+
+    /// <summary>
+    /// Logs the current user out: revokes the presented refresh token and rotates the account's
+    /// security stamp, so the still-unexpired access token used to call this endpoint is rejected
+    /// by every module on its very next request.
+    /// </summary>
+    /// <param name="request">The refresh token to revoke.</param>
+    /// <param name="cancellationToken">Cancellation token for asynchronous operation.</param>
+    /// <response code="204">Logout succeeded; the session has been revoked.</response>
+    /// <response code="400">Malformed request payload.</response>
+    /// <response code="401">Unauthorized if the request lacks a valid Bearer token.</response>
+    [Authorize]
+    [HttpPost("logout")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> Logout(
+        [FromBody] LogoutRequest request,
+        CancellationToken cancellationToken)
+    {
+        var command = _mapper.Map<LogoutCommand>(request);
+        var validationResult = await _logoutValidator.ValidateAsync(command, cancellationToken);
+
+        if (!validationResult.IsValid)
+        {
+            validationResult.AddToModelState(ModelState);
+            return ValidationProblem(ModelState);
+        }
+
+        await _commandDispatcher.SendAsync<LogoutResult>(command, cancellationToken);
+        return NoContent();
     }
 
     /// <summary>

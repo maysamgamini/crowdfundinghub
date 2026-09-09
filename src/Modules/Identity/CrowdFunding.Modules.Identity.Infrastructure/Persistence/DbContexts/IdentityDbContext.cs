@@ -1,4 +1,5 @@
 ﻿using CrowdFunding.Modules.Identity.Domain.Aggregates;
+using CrowdFunding.Modules.Identity.Domain.Entities;
 using CrowdFunding.Modules.Identity.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -16,6 +17,7 @@ public sealed class IdentityDbContext : DbContext
 
     public DbSet<User> Users => Set<User>();
     public DbSet<SigningKeyRecord> SigningKeys => Set<SigningKeyRecord>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

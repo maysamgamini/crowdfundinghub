@@ -2,14 +2,19 @@ using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Services;
+using CrowdFunding.Modules.Identity.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.AssignRoleToUser;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.GrantPermissionToUser;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.LoginUser;
+using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.Logout;
+using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.RefreshAccessToken;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.RegisterUser;
+using CrowdFunding.Modules.Identity.Domain.Entities;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.SeedAdmin;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Queries.GetCurrentUser;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
 using CrowdFunding.Modules.Identity.Domain.Aggregates;
+using CrowdFunding.Modules.Identity.Domain.Entities;
 
 namespace CrowdFunding.UnitTests;
 
@@ -223,6 +228,25 @@ public sealed class SeedAdminCommandHandlerTests
 
 public sealed class LoginUserCommandHandlerTests
 {
+    private static LoginUserCommandHandler CreateHandler(
+        IAccessTokenProvider? accessTokenProvider = null,
+        IPasswordHasher? passwordHasher = null,
+        IUserRepository? userRepository = null,
+        IRefreshTokenRepository? refreshTokenRepository = null,
+        IRefreshTokenService? refreshTokenService = null,
+        IIdentityDateTimeProvider? dateTimeProvider = null,
+        IIdentityTransactionExecutor? transactionExecutor = null)
+    {
+        return new LoginUserCommandHandler(
+            accessTokenProvider ?? new FakeAccessTokenProvider(),
+            passwordHasher ?? new FakePasswordHasher(),
+            userRepository ?? new FakeUserRepository(),
+            refreshTokenRepository ?? new FakeRefreshTokenRepository(),
+            refreshTokenService ?? new FakeRefreshTokenService(),
+            dateTimeProvider ?? new FakeIdentityDateTimeProvider(DateTime.UtcNow),
+            transactionExecutor ?? new FakeIdentityTransactionExecutor());
+    }
+
     [Fact]
     public async Task Handle_ShouldReturnAccessToken()
     {
@@ -230,13 +254,19 @@ public sealed class LoginUserCommandHandlerTests
         user.AssignRole(RoleConstants.Creator);
         var repository = new FakeUserRepository(user);
         var tokenProvider = new FakeAccessTokenProvider();
-        var handler = new LoginUserCommandHandler(tokenProvider, new FakePasswordHasher(), repository);
+        var refreshTokenRepo = new FakeRefreshTokenRepository();
+        var handler = CreateHandler(
+            accessTokenProvider: tokenProvider,
+            userRepository: repository,
+            refreshTokenRepository: refreshTokenRepo);
 
         var result = await handler.Handle(
             new LoginUserCommand("creator@example.com", "supersecret"),
             CancellationToken.None);
 
         Assert.Equal("token-value", result.AccessToken);
+        Assert.Equal("fake-raw-refresh-token", result.RefreshToken);
+        Assert.Single(refreshTokenRepo.Tokens);
         Assert.Contains(PermissionConstants.CampaignsCreate, tokenProvider.LastPermissions);
     }
 
@@ -244,10 +274,7 @@ public sealed class LoginUserCommandHandlerTests
     public async Task Handle_ShouldThrow_WhenPasswordIsInvalid()
     {
         var user = User.Register("creator@example.com", "Creator", "hashed:supersecret", DateTime.UtcNow);
-        var handler = new LoginUserCommandHandler(
-            new FakeAccessTokenProvider(),
-            new FakePasswordHasher(),
-            new FakeUserRepository(user));
+        var handler = CreateHandler(userRepository: new FakeUserRepository(user));
 
         var action = async () => await handler.Handle(
             new LoginUserCommand("creator@example.com", "wrong-password"),
@@ -264,10 +291,7 @@ public sealed class LoginUserCommandHandlerTests
         var user = User.Register("creator@example.com", "Creator", "hashed:supersecret", DateTime.UtcNow);
         user.Deactivate();
 
-        var handler = new LoginUserCommandHandler(
-            new FakeAccessTokenProvider(),
-            new FakePasswordHasher(),
-            new FakeUserRepository(user));
+        var handler = CreateHandler(userRepository: new FakeUserRepository(user));
 
         var action = async () => await handler.Handle(
             new LoginUserCommand("creator@example.com", "supersecret"),
@@ -285,10 +309,7 @@ public sealed class LoginUserCommandHandlerTests
     public async Task Handle_ShouldVerifyAgainstDummyHash_WhenUserDoesNotExist()
     {
         var hasher = new RecordingPasswordHasher();
-        var handler = new LoginUserCommandHandler(
-            new FakeAccessTokenProvider(),
-            hasher,
-            new FakeUserRepository());
+        var handler = CreateHandler(passwordHasher: hasher);
 
         var action = async () => await handler.Handle(
             new LoginUserCommand("nobody@example.com", "whatever"),
@@ -654,4 +675,42 @@ internal sealed class FakeAccessTokenProvider : IAccessTokenProvider
         LastPermissions = permissions;
         return new AccessToken("token-value", new DateTime(2026, 4, 6, 13, 0, 0, DateTimeKind.Utc));
     }
+}
+
+internal sealed class FakeRefreshTokenRepository : IRefreshTokenRepository
+{
+    private readonly List<RefreshToken> _tokens = [];
+
+    public IReadOnlyList<RefreshToken> Tokens => _tokens;
+
+    public Task AddAsync(RefreshToken refreshToken, CancellationToken cancellationToken)
+    {
+        _tokens.Add(refreshToken);
+        return Task.CompletedTask;
+    }
+
+    public Task<RefreshToken?> GetByTokenHashAsync(string tokenHash, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(_tokens.SingleOrDefault(x => x.TokenHash == tokenHash));
+    }
+
+    public Task<List<RefreshToken>> GetActiveByUserIdAsync(Guid userId, DateTime now, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(_tokens.Where(x => x.UserId == userId && x.IsActive(now)).ToList());
+    }
+
+    public Task UpdateAsync(RefreshToken refreshToken, CancellationToken cancellationToken)
+    {
+        return Task.CompletedTask;
+    }
+}
+
+internal sealed class FakeRefreshTokenService : IRefreshTokenService
+{
+    public TimeSpan Lifetime { get; set; } = TimeSpan.FromDays(7);
+    public string NextToken { get; set; } = "fake-raw-refresh-token";
+
+    public string GenerateToken() => NextToken;
+
+    public string Hash(string rawToken) => $"hashed:{rawToken}";
 }
