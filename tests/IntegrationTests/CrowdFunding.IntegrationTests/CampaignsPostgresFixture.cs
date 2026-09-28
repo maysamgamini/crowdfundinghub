@@ -7,7 +7,7 @@ namespace CrowdFunding.IntegrationTests;
 /// <summary>
 /// Spins up a real PostgreSQL 16 container and applies the Campaigns module migrations,
 /// so concurrency behavior (xmin optimistic locking, pg_advisory_xact_lock, the
-/// campaign_contributions_ledger unique constraint) can be verified against actual Postgres
+/// campaign_ledger_entries unique key, CHECK constraint and append-only trigger) can be verified against actual Postgres
 /// semantics rather than the EF Core in-memory provider, which does not implement any of them.
 /// </summary>
 public sealed class CampaignsPostgresFixture : IAsyncLifetime

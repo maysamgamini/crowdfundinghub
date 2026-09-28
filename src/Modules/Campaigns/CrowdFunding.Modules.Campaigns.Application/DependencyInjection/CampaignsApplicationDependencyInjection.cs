@@ -4,6 +4,7 @@ using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.Com
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.CreateCampaign;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.FailCampaign;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.PublishCampaign;
+using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.RecordContributionRefund;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.GetCampaignById;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.ListCampaigns;
 using CrowdFunding.Modules.Campaigns.Application.Features.RewardTiers.Commands.CreateRewardTier;
@@ -39,6 +40,7 @@ public static class CampaignsApplicationDependencyInjection
         services.AddScoped<IValidator<CreateCampaignCommand>, CreateCampaignCommandValidator>();
         services.AddScoped<IValidator<PublishCampaignCommand>, PublishCampaignCommandValidator>();
         services.AddScoped<IValidator<CompleteCampaignCommand>, CompleteCampaignCommandValidator>();
+        services.AddScoped<IValidator<RecordContributionRefundCommand>, RecordContributionRefundCommandValidator>();
         services.AddScoped<IValidator<FailCampaignCommand>, FailCampaignCommandValidator>();
         services.AddScoped<IValidator<CreateRewardTierCommand>, CreateRewardTierCommandValidator>();
         services.AddScoped<IValidator<ReserveRewardTierSlotCommand>, ReserveRewardTierSlotCommandValidator>();

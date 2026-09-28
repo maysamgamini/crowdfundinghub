@@ -11,136 +11,98 @@ using CrowdFunding.Modules.Campaigns.Domain.Aggregates;
 namespace CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.AddContributionToCampaign;
 
 /// <summary>
-/// Handles Add Contribution To Campaign command requests.
+/// Credits a confirmed contribution to its campaign by appending a pledge entry to the campaign's
+/// append-only ledger.
 /// </summary>
+/// <remarks>
+/// <para>
+/// Before: the handler read <c>RaisedAmount</c>, added the contribution in code and saved it back,
+/// guarded by a dedupe table, an xmin concurrency token and a retry loop. Correctness depended on
+/// every code path doing all of that right.
+/// </para>
+/// <para>
+/// Now: the database enforces the invariants. The ledger's unique key on (ContributionId, Kind)
+/// makes a redelivered event a no-op, and the raised amount is recomputed as the SUM of the
+/// ledger in the same transaction (EF Core cannot write it at all). The per-campaign advisory
+/// lock remains the single serialization point: it orders this append against concurrent
+/// pledges, refunds, cancellation and completion, so a cancelled campaign is seen as cancelled
+/// here and the recomputed sum includes every committed entry.
+/// </para>
+/// </remarks>
 public sealed class AddContributionToCampaignCommandHandler : ICommandHandler<AddContributionToCampaignCommand, AddContributionToCampaignResult>
 {
-    private const int MaxConcurrencyRetries = 3;
-    private static readonly TimeSpan[] RetryDelays =
-    [
-        TimeSpan.FromMilliseconds(20),
-        TimeSpan.FromMilliseconds(50),
-        TimeSpan.FromMilliseconds(120),
-    ];
-
     private readonly ICampaignRepository _campaignRepository;
-    private readonly IContributionLedger _contributionLedger;
+    private readonly ICampaignLedger _ledger;
     private readonly IRewardTierRepository _rewardTierRepository;
     private readonly IRewardTierReservationRepository _rewardTierReservationRepository;
     private readonly ICampaignTransactionExecutor _transactionExecutor;
     private readonly ICampaignRealtimeNotifier _realtimeNotifier;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     public AddContributionToCampaignCommandHandler(
         ICampaignRepository campaignRepository,
-        IContributionLedger contributionLedger,
+        ICampaignLedger ledger,
         IRewardTierRepository rewardTierRepository,
         IRewardTierReservationRepository rewardTierReservationRepository,
         ICampaignTransactionExecutor transactionExecutor,
-        ICampaignRealtimeNotifier realtimeNotifier)
+        ICampaignRealtimeNotifier realtimeNotifier,
+        IDateTimeProvider dateTimeProvider)
     {
         _campaignRepository = campaignRepository;
-        _contributionLedger = contributionLedger;
+        _ledger = ledger;
         _rewardTierRepository = rewardTierRepository;
         _rewardTierReservationRepository = rewardTierReservationRepository;
         _transactionExecutor = transactionExecutor;
         _realtimeNotifier = realtimeNotifier;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     public async Task<AddContributionToCampaignResult> Handle(
         AddContributionToCampaignCommand command,
         CancellationToken cancellationToken)
     {
-        // Derive a deterministic 64-bit key from the campaign id so every writer targeting the
-        // same campaign contends for the same pg_advisory_xact_lock, serializing the
-        // read-modify-write below across concurrent instances/requests. Uses the GUID's full 128
-        // bits (not Guid.GetHashCode(), which only has 32 bits of entropy and collides between
-        // unrelated campaigns often enough to cause real cross-campaign lock contention).
-        var advisoryLockKey = AdvisoryLockKey.FromGuid(command.CampaignId);
-
-        for (var attempt = 1; ; attempt++)
+        var result = await _transactionExecutor.ExecuteAsync(AdvisoryLockKey.FromGuid(command.CampaignId), async ct =>
         {
-            try
+            // Loaded inside the lock, so the status seen here cannot change before commit.
+            var campaign = await _campaignRepository.GetByIdAsync(command.CampaignId, ct)
+                           ?? throw new NotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
+
+            if (!campaign.IsAcceptingContributions)
             {
-                var campaignId = Guid.Empty;
-                var raisedAmount = 0m;
-                var raisedCurrency = string.Empty;
-                var wasRecorded = false;
+                // Expected, not exceptional: the campaign was cancelled or completed while the
+                // payment was in flight. Contributions refunds such a payment itself, so crediting
+                // nothing is the correct outcome, and throwing would only retry the event into the
+                // dead-letter table. Credited = false reports it.
 
-                await _transactionExecutor.ExecuteAsync(advisoryLockKey, async ct =>
-                {
-                    // The campaign is (re-)loaded *inside* the locked critical section, not
-                    // before it. Loading it before waiting on pg_advisory_xact_lock would let a
-                    // queued writer hold a snapshot that is already stale by the time its turn
-                    // comes, defeating the lock's purpose and starving the xmin retry loop under
-                    // real contention (reproduced against real PostgreSQL: 20 concurrent writers
-                    // exhausted 3 retries when the read happened before the lock).
-                    var campaign = await _campaignRepository.GetByIdAsync(command.CampaignId, ct);
-
-                    if (campaign is null)
-                    {
-                        throw new NotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
-                    }
-
-                    // Idempotency guard: at-least-once delivery of the payment-confirmed event
-                    // must not double-credit the campaign. If this contribution was already
-                    // recorded, treat the retry as a no-op instead of re-applying the balance.
-                    var recorded = await _contributionLedger.TryRecordAsync(
-                        command.CampaignId,
-                        command.ContributionId,
-                        command.Amount,
-                        command.Currency,
-                        ct);
-
-                    if (recorded)
-                    {
-                        campaign.ApplyConfirmedContribution(new Money(command.Amount, command.Currency));
-                        await _campaignRepository.UpdateAsync(campaign, ct);
-
-                        if (command.RewardTierReservationId.HasValue)
-                        {
-                            await ConfirmRewardTierReservationAsync(command.RewardTierReservationId.Value, command.ContributionId, ct);
-                        }
-                    }
-
-                    campaignId = campaign.Id;
-                    raisedAmount = campaign.RaisedAmount.Amount;
-                    raisedCurrency = campaign.RaisedAmount.Currency;
-                    wasRecorded = recorded;
-
-                    return 0;
-                }, cancellationToken);
-
-                if (wasRecorded)
-                {
-                    // Only broadcast when the balance actually changed — redelivery of an
-                    // already-recorded contribution is a no-op and would otherwise push a
-                    // duplicate, stale-looking update to connected clients.
-                    await _realtimeNotifier.NotifyPledgeReceivedAsync(campaignId, raisedAmount, raisedCurrency, cancellationToken);
-                }
-
-                return new AddContributionToCampaignResult(campaignId, raisedAmount, raisedCurrency);
+                return new AddContributionToCampaignResult(campaign.Id, campaign.RaisedAmount.Amount, campaign.RaisedAmount.Currency, Credited: false);
             }
-            catch (ConcurrencyConflictException) when (attempt < MaxConcurrencyRetries)
+
+            var entry = campaign.RecordPledge(command.ContributionId, new Money(command.Amount, command.Currency), _dateTimeProvider.UtcNow);
+            var append = await _ledger.AppendAsync(entry, ct);
+
+            if (append.Appended && command.RewardTierReservationId.HasValue)
             {
-                // Defense-in-depth: should be rare now that the read happens inside the lock,
-                // but a writer that bypasses this executor (e.g. a future direct migration
-                // script) could still race the xmin token. Retry with jittered backoff rather
-                // than surfacing a transient conflict as a failure.
-                var delay = RetryDelays[Math.Min(attempt - 1, RetryDelays.Length - 1)];
-                var jitter = TimeSpan.FromMilliseconds(Random.Shared.Next(0, 25));
-                await Task.Delay(delay + jitter, cancellationToken);
+                await ConfirmRewardTierReservationAsync(command.RewardTierReservationId.Value, command.ContributionId, ct);
             }
+
+            return new AddContributionToCampaignResult(campaign.Id, append.LedgerTotal, campaign.GoalAmount.Currency, append.Appended);
+        }, cancellationToken);
+
+        if (result.Credited)
+        {
+            // After commit, and only when the balance changed: a redelivery pushes nothing.
+            await _realtimeNotifier.NotifyPledgeReceivedAsync(result.CampaignId, result.RaisedAmount, result.Currency, cancellationToken);
         }
+
+        return result;
     }
 
     /// <summary>
     /// Converts the reward tier hold this pledge was checked out against into a permanent claim
-    /// — the confirmation half of the Reserve -&gt; Confirm/Expire saga (TICKET-043). Runs
-    /// nested inside the campaign's already-open transaction/advisory lock above; taking a
-    /// second <c>pg_advisory_xact_lock</c> keyed by the tier id here is safe (PostgreSQL
-    /// transaction-scoped advisory locks stack within the same transaction) and serializes this
-    /// confirmation against a concurrent reservation, release, or another confirmation on the
-    /// same tier.
+    /// — the confirmation half of the Reserve -&gt; Confirm/Expire saga (TICKET-043). Runs nested
+    /// inside the campaign's transaction; taking a second <c>pg_advisory_xact_lock</c> keyed by the
+    /// tier id is safe (transaction-scoped advisory locks stack) and serializes this confirmation
+    /// against a concurrent reservation, release or confirmation on the same tier.
     /// </summary>
     private async Task ConfirmRewardTierReservationAsync(Guid reservationId, Guid contributionId, CancellationToken cancellationToken)
     {
@@ -148,10 +110,7 @@ public sealed class AddContributionToCampaignCommandHandler : ICommandHandler<Ad
 
         if (reservation is null || reservation.Status != RewardTierReservationStatus.Reserved)
         {
-            // Already confirmed (duplicate event redelivery — guarded by TryRecordAsync above in
-            // the normal case, but defense-in-depth here too) or already expired and released by
-            // the scavenger. Either way there is no reservation left to confirm; the pledge
-            // itself was still recorded and credited to the campaign above.
+            // Already expired and released by the scavenger: the pledge itself is still credited.
             return;
         }
 

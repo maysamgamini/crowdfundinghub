@@ -17,7 +17,7 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.5")
+                .HasAnnotation("ProductVersion", "10.0.11")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -161,7 +161,7 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Migrations
                     b.ToTable("campaigns", (string)null);
                 });
 
-            modelBuilder.Entity("CrowdFunding.Modules.Campaigns.Domain.Aggregates.ContributionLedgerEntry", b =>
+            modelBuilder.Entity("CrowdFunding.Modules.Campaigns.Domain.Aggregates.CampaignLedgerEntry", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
@@ -173,7 +173,7 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("CampaignId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("ContributionId")
+                    b.Property<Guid?>("ContributionId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("Currency")
@@ -181,18 +181,28 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Migrations
                         .HasMaxLength(3)
                         .HasColumnType("character varying(3)");
 
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("RecordedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CampaignId");
-
-                    b.HasIndex("ContributionId")
+                    b.HasIndex("ContributionId", "Kind")
                         .IsUnique()
-                        .HasDatabaseName("uq_campaign_contributions_ledger_contribution_id");
+                        .HasDatabaseName("uq_campaign_ledger_entries_contribution_kind");
 
-                    b.ToTable("campaign_contributions_ledger", (string)null);
+                    b.HasIndex(new[] { "CampaignId" }, "ix_campaign_ledger_entries_campaign_id");
+
+                    b.HasIndex(new[] { "CampaignId" }, "uq_campaign_ledger_entries_opening_balance")
+                        .IsUnique()
+                        .HasFilter("\"Kind\" = 2");
+
+                    b.ToTable("campaign_ledger_entries", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_campaign_ledger_entries_kind_sign", "(\"Kind\" = 0 AND \"Amount\" > 0 AND \"ContributionId\" IS NOT NULL) OR (\"Kind\" = 1 AND \"Amount\" < 0 AND \"ContributionId\" IS NOT NULL) OR (\"Kind\" = 2 AND \"ContributionId\" IS NULL)");
+                        });
                 });
 
             modelBuilder.Entity("CrowdFunding.Modules.Campaigns.Domain.Aggregates.RewardTier", b =>
@@ -338,7 +348,7 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("CrowdFunding.Modules.Campaigns.Domain.Aggregates.ContributionLedgerEntry", b =>
+            modelBuilder.Entity("CrowdFunding.Modules.Campaigns.Domain.Aggregates.CampaignLedgerEntry", b =>
                 {
                     b.HasOne("CrowdFunding.Modules.Campaigns.Domain.Aggregates.Campaign", null)
                         .WithMany()

@@ -9,7 +9,7 @@ namespace CrowdFunding.IntegrationTests;
 /// <summary>
 /// Drives Make Contribution -&gt; Confirm Payment -&gt; outbox-published RaisedAmount credit across real
 /// HTTP calls, proving the cross-module Contributions -&gt; Campaigns outbox event (verified at the
-/// module-internal level by <see cref="CampaignContributionConcurrencyTests"/>) also works through
+/// module-internal level by <see cref="CampaignLedgerTests"/>) also works through
 /// the full HTTP pipeline.
 /// </summary>
 [Collection(CrowdFundingApiCollection.Name)]

@@ -1,6 +1,7 @@
-﻿using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
+using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Campaigns.Domain.Aggregates;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Configurations;
@@ -60,23 +61,30 @@ public sealed class CampaignConfiguration : IEntityTypeConfiguration<Campaign>
                 .IsRequired();
         });
 
+        // RaisedAmount is a snapshot of SUM(campaign_ledger_entries.Amount), written only by
+        // CampaignLedger's recompute statement. EF inserts it once (zero) and never updates it
+        // (after-save behavior Ignore), so no code path that saves a Campaign can overwrite the
+        // ledger's total with a stale or hand-computed value.
         builder.OwnsOne(x => x.RaisedAmount, money =>
         {
             money.Property(x => x.Amount)
                 .HasColumnName("raised_amount")
                 .HasPrecision(18, 2)
-                .IsRequired();
+                .IsRequired()
+                .Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Ignore);
 
             money.Property(x => x.Currency)
                 .HasColumnName("raised_currency")
                 .HasMaxLength(3)
-                .IsRequired();
+                .IsRequired()
+                .Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Ignore);
         });
 
-        // PostgreSQL system column used as an optimistic concurrency token. Prevents lost
-        // updates when two concurrent confirmed contributions race to update RaisedAmount:
-        // EF issues WHERE id = @p0 AND xmin = @p1, and a stale write throws
-        // DbUpdateConcurrencyException instead of silently overwriting the other update.
+        // PostgreSQL system column used as the row version. Every campaign writer is serialized
+        // by the per-campaign advisory lock and reloads inside it, so this token is a safety net:
+        // a write that bypasses the lock with a stale row fails (DbUpdateConcurrencyException)
+        // instead of silently overwriting status or deadline changes. The ledger's snapshot
+        // update also bumps it, so a stale lifecycle write cannot race a pledge either.
         builder.Property<uint>("xmin")
             .HasColumnName("xmin")
             .HasColumnType("xid")
