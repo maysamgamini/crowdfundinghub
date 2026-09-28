@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using CrowdFunding.BuildingBlocks.Application.Events;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
+using CrowdFunding.BuildingBlocks.Infrastructure.Observability;
 using CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,7 +31,7 @@ namespace CrowdFunding.BuildingBlocks.Infrastructure.Outbox;
 public abstract class ModuleOutboxProcessor<TDbContext> : BackgroundService, IOutboxDispatcher
     where TDbContext : DbContext
 {
-    private static readonly ActivitySource ActivitySource = new("CrowdFunding.Outbox");
+    private static readonly ActivitySource ActivitySource = new(CrowdFundingTelemetry.OutboxActivitySourceName);
     private static readonly TimeSpan LockDuration = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(10);
     private const int BatchSize = 20;

@@ -37,6 +37,17 @@ services:
       timeout: 5s
       retries: 10
 
+  # Receives OTLP from both processes, so one trace shows a request crossing the extraction
+  # boundary. UI at http://localhost:18888 (anonymous, local development only).
+  aspire-dashboard:
+    image: mcr.microsoft.com/dotnet/aspire-dashboard:9.0
+    environment:
+      ASPNETCORE_URLS: http://+:18888
+      DOTNET_DASHBOARD_OTLP_ENDPOINT_URL: http://+:18889
+      DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: "true"
+    ports:
+      - "18888:18888"
+
   monolith-api:
     build:
       context: .
@@ -52,6 +63,7 @@ services:
       Jwt__Audience: "CrowdFunding.Client"
       Messaging__Provider: "RabbitMQ"
       Messaging__RabbitMq__Host: "rabbitmq"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://aspire-dashboard:18889"
     depends_on:
       postgres:
         condition: service_healthy
@@ -74,6 +86,7 @@ services:
       Authentication__JwksUri: "http://monolith-api:8080/.well-known/jwks.json"
       Messaging__Provider: "RabbitMQ"
       Messaging__RabbitMq__Host: "rabbitmq"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://aspire-dashboard:18889"
     depends_on:
       postgres:
         condition: service_healthy

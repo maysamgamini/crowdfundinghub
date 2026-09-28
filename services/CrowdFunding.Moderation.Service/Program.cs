@@ -19,6 +19,7 @@ var builder = WebApplication.CreateBuilder(args);
 var jwtIssuer = builder.Configuration["Authentication:Issuer"]
     ?? throw new InvalidOperationException("Authentication:Issuer was not configured.");
 
+builder.Services.AddServiceOpenTelemetry(builder.Configuration);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options => options.SwaggerDoc("v1", new() { Title = "CrowdFunding.Moderation.Service", Version = "v1" }));
