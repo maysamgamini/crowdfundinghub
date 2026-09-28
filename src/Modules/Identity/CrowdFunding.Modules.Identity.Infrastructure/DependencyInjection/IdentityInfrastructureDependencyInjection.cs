@@ -28,7 +28,7 @@ public static class IdentityInfrastructureDependencyInjection
 
         services.AddDbContext<IdentityDbContext>(options =>
             options.UseNpgsql(connectionString, npgsql =>
-                npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "identity")));
+                npgsql.MigrationsHistoryTable("__EFMigrationsHistory", IdentityDbContext.Schema)));
 
         // TICKET-036: the distributed revocation blacklist (RedisSecurityStampRevocationStore)
         // needs IDistributedCache. AddStackExchangeRedisCache is idempotent to call once per

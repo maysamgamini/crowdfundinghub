@@ -137,9 +137,9 @@ public sealed class CampaignLedgerTests
         await using var dbContext = _fixture.CreateDbContext();
 
         var update = () => dbContext.Database.ExecuteSqlInterpolatedAsync(
-            $"""UPDATE campaign_ledger_entries SET "Amount" = 5000 WHERE "CampaignId" = {campaignId}""");
+            $"""UPDATE campaigns.campaign_ledger_entries SET "Amount" = 5000 WHERE "CampaignId" = {campaignId}""");
         var delete = () => dbContext.Database.ExecuteSqlInterpolatedAsync(
-            $"""DELETE FROM campaign_ledger_entries WHERE "CampaignId" = {campaignId}""");
+            $"""DELETE FROM campaigns.campaign_ledger_entries WHERE "CampaignId" = {campaignId}""");
 
         Assert.Contains("append-only", (await Assert.ThrowsAsync<PostgresException>(update)).MessageText);
         Assert.Contains("append-only", (await Assert.ThrowsAsync<PostgresException>(delete)).MessageText);
@@ -166,7 +166,7 @@ public sealed class CampaignLedgerTests
         await using (var dbContext = _fixture.CreateDbContext())
         {
             var sqlWrite = () => dbContext.Database.ExecuteSqlInterpolatedAsync(
-                $"UPDATE campaigns SET raised_amount = 1 WHERE \"Id\" = {campaignId}");
+                $"UPDATE campaigns.campaigns SET raised_amount = 1 WHERE \"Id\" = {campaignId}");
             Assert.Equal(PostgresErrorCodes.CheckViolation, (await Assert.ThrowsAsync<PostgresException>(sqlWrite)).SqlState);
         }
 

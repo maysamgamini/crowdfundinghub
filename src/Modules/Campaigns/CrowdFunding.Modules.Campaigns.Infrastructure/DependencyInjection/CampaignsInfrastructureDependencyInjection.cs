@@ -37,7 +37,7 @@ public static class CampaignsInfrastructureDependencyInjection
         services.AddDbContext<CampaignsDbContext>((serviceProvider, options) =>
             options
                 .UseNpgsql(connectionString, npgsql =>
-                    npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "campaigns"))
+                    npgsql.MigrationsHistoryTable("__EFMigrationsHistory", CampaignsDbContext.Schema))
                 .AddOutboxSignalInterceptor<CampaignsDbContext>(serviceProvider));
 
         services.AddStackExchangeRedisCache(options =>

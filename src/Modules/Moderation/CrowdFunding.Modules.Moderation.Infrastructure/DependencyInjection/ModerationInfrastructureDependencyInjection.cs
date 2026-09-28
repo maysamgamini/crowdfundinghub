@@ -32,7 +32,7 @@ public static class ModerationInfrastructureDependencyInjection
         services.AddDbContext<ModerationDbContext>((serviceProvider, options) =>
             options
                 .UseNpgsql(connectionString, npgsql =>
-                    npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "moderation"))
+                    npgsql.MigrationsHistoryTable("__EFMigrationsHistory", ModerationDbContext.Schema))
                 .AddOutboxSignalInterceptor<ModerationDbContext>(serviceProvider));
 
         services.AddScoped<ICampaignReviewStatusReader, CampaignReviewStatusReader>();

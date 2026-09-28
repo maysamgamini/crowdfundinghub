@@ -26,7 +26,8 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Repositories
 /// the SUM sees every committed entry.
 /// </item>
 /// </list>
-/// Table and column names come from the EF configuration constants; values are parameters.
+/// Table names are schema-qualified (<c>campaigns.</c>, see <see cref="CampaignsDbContext.Schema"/>)
+/// so the statements never depend on <c>search_path</c>; values are parameters.
 /// </remarks>
 public sealed class CampaignLedger : ICampaignLedger
 {
@@ -73,7 +74,7 @@ public sealed class CampaignLedger : ICampaignLedger
     {
         var inserted = await _dbContext.Database.ExecuteSqlInterpolatedAsync(
             $"""
-             INSERT INTO campaign_ledger_entries ("Id", "CampaignId", "ContributionId", "Kind", "Amount", "Currency", "RecordedAtUtc")
+             INSERT INTO campaigns.campaign_ledger_entries ("Id", "CampaignId", "ContributionId", "Kind", "Amount", "Currency", "RecordedAtUtc")
              VALUES ({entry.Id}, {entry.CampaignId}, {entry.ContributionId}, {(int)entry.Kind}, {entry.Amount}, {entry.Currency}, {entry.RecordedAtUtc})
              ON CONFLICT ("ContributionId", "Kind") DO NOTHING
              """,
@@ -88,10 +89,10 @@ public sealed class CampaignLedger : ICampaignLedger
         // entry. Checked in the same statement as the insert, not in a separate SELECT.
         var inserted = await _dbContext.Database.ExecuteSqlInterpolatedAsync(
             $"""
-             INSERT INTO campaign_ledger_entries ("Id", "CampaignId", "ContributionId", "Kind", "Amount", "Currency", "RecordedAtUtc")
+             INSERT INTO campaigns.campaign_ledger_entries ("Id", "CampaignId", "ContributionId", "Kind", "Amount", "Currency", "RecordedAtUtc")
              SELECT {entry.Id}, {entry.CampaignId}, {entry.ContributionId}, {(int)entry.Kind}, {entry.Amount}, {entry.Currency}, {entry.RecordedAtUtc}
              WHERE EXISTS (
-                 SELECT 1 FROM campaign_ledger_entries
+                 SELECT 1 FROM campaigns.campaign_ledger_entries
                  WHERE "CampaignId" = {entry.CampaignId}
                    AND "ContributionId" = {entry.ContributionId}
                    AND "Kind" = {(int)CampaignLedgerEntryKind.Pledge})
@@ -106,8 +107,8 @@ public sealed class CampaignLedger : ICampaignLedger
     {
         var snapshot = (await _dbContext.Database.SqlQuery<SnapshotRow>(
                 $"""
-                 UPDATE campaigns
-                 SET raised_amount = (SELECT COALESCE(SUM("Amount"), 0) FROM campaign_ledger_entries WHERE "CampaignId" = {campaignId})
+                 UPDATE campaigns.campaigns
+                 SET raised_amount = (SELECT COALESCE(SUM("Amount"), 0) FROM campaigns.campaign_ledger_entries WHERE "CampaignId" = {campaignId})
                  WHERE "Id" = {campaignId}
                  RETURNING raised_amount AS "RaisedAmount", xmin::text::bigint AS "Xmin"
                  """)

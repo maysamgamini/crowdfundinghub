@@ -70,7 +70,7 @@ This is choreography: no coordinator, each module reacts to events it subscribes
 
 1. **No broker consumer.** Events are published to RabbitMQ but nothing consumes them. Until a consumer exists (with the inbox for deduplication), extraction cannot run over a broker.
 2. **One synchronous cross-module read left.** `PublishCampaignCommandHandler` in Campaigns calls `ICampaignReviewStatusReader` (defined in `Moderation.Contracts`) to check that a campaign was approved before publishing. It is the same pattern Roadblock 1 removed from the pledge path and needs the same fix before Moderation can be extracted: a review-status read model in Campaigns fed by `CampaignReviewApproved` and `CampaignReviewRejected` events.
-3. **Shared schema.** Module tables live in the `public` schema, separated by ownership and naming; only the EF migration history table is in a per-module schema. Moving tables into module schemas would make a `pg_dump --schema` split possible.
+3. **One database role.** Each module now owns its own schema, which makes a `pg_dump --schema` split possible, but every module connects with the same role; per-module roles would let PostgreSQL refuse cross-module queries ([`docs/data-ownership.md`](../../docs/data-ownership.md)).
 4. **Per-instance signal and rate limits.** The outbox wake-up signal and the rate limiter live in memory; other replicas fall back to the 5-second sweep, and limits apply per instance.
 5. **Side effects outside the inbox.** E-mail and metering depend on provider idempotency keys; a crash between the external call and the commit can repeat them. Outbound webhooks are at-least-once.
 6. **Unsigned unsubscribe link.** One-click unsubscribe trusts a bare user id instead of a signed, expiring token.

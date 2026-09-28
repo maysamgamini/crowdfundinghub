@@ -28,6 +28,7 @@ Contains the EF Core migration history for the Contributions module. These files
 - `20260909180000_AddActiveCampaignCacheOwnerId.cs`: Migration: Add Active Campaign Cache Owner Id.
 - `20260928164036_AddInboxProcessedEvents.Designer.cs`: Generated model snapshot for the migration above.
 - `20260928164036_AddInboxProcessedEvents.cs`: Migration: Add Inbox Processed Events.
+- `20260928204405_MoveTablesToModuleSchema.cs` (+ `.Designer.cs`): Moves every Contributions table from `public` into the `contributions` schema.
 - `ContributionsDbContextModelSnapshot.cs`: Generated snapshot of the current model, used to compute the next migration.
 
 ## Child Folders

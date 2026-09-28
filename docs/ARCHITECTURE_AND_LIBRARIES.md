@@ -275,13 +275,14 @@ sequenceDiagram
 and Notifications each have their own DbContext, migrations and repositories; audit has
 `AuditDbContext`. There are no foreign keys between modules and no cross-context joins.
 
-**Tables live in the `public` schema.** Module tables are distinguished by ownership and naming
-(`campaigns`, `campaign_ledger_entries`, `campaigns_outbox_messages`, `contributions`,
-`contributions_processed_events`, `users`, `refresh_tokens`, `campaign_reviews`, and so on). Only
-each module's EF migrations history table is in a per-module schema (`identity`, `campaigns`,
-`contributions`, `moderation`, `campaignupdates`, `notifications`; audit uses `system`). This is
-not strict schema-per-module isolation; moving the tables into per-module schemas is a
-remaining limitation.
+**One schema per module.** Each module DbContext declares `Schema` and calls
+`HasDefaultSchema(Schema)`, so all of a module's tables (aggregates, read models, outbox, dead
+letters, inbox) and its EF migrations history live in its own PostgreSQL schema: `campaigns`,
+`contributions`, `identity`, `moderation`, `notifications`, `campaignupdates`; the audit trail is
+`system.audit_records`, owned by `AuditDbContext`. Nothing lives in `public`. Hand-written SQL is
+schema-qualified (the outbox and inbox claims read the name from the EF model through
+`QualifiedTableName`). `ModuleSchemaOwnershipTests` fails the build if a module maps a table
+outside its schema. See [data-ownership.md](data-ownership.md).
 
 **Per-module connection strings.** Each module resolves `ConnectionStrings:{Module}Db` and falls
 back to `ConnectionStrings:DefaultConnection`
@@ -472,8 +473,9 @@ Extracting a module into its own service is the upcoming step of the course; it 
 implemented on this branch. A working proof of concept (a standalone Moderation host,
 JWKS-validated authentication, a Strangler Fig deployment topology and extraction boundary tests)
 is preserved on the branch `future/microservices-extraction`. On this branch, two gaps would
-have to close for a real extraction: the RabbitMQ bus has no consumer, and module tables share
-the `public` schema.
+have to close for a real extraction: the RabbitMQ bus has no consumer, and Campaigns still reads
+Moderation's review status synchronously. Moderation's data is already isolated in the
+`moderation` schema, so moving it is `pg_dump --schema=moderation`.
 
 ---
 
@@ -553,7 +555,7 @@ which sends usage events as CloudEvents over HTTP.
 These are current, known gaps; [`PLATFORM_SHORTCOMINGS.md`](PLATFORM_SHORTCOMINGS.md) and
 [`TRADE_OFFS_AND_LIMITATIONS.md`](TRADE_OFFS_AND_LIMITATIONS.md) discuss them in depth.
 
-1. Module tables share the `public` schema; only migration history is per schema.
+1. Every module has its own schema, but all modules connect with the same database role; per-module roles are not provisioned.
 2. The RabbitMQ bus publishes only; cross-process event delivery (and so extraction) is not
    implemented on this branch.
 3. The outbox wake-up signal is in-process; other replicas rely on the 5-second sweep. A CDC

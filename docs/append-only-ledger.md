@@ -27,8 +27,8 @@ confirmed event ──▶ AddContributionToCampaignCommandHandler
                      ├─ campaign.IsAcceptingContributions?        cancelled/completed ⇒ Credited = false
                      ├─ entry = campaign.RecordPledge(...)        domain rules: status, amount > 0, currency
                      └─ CampaignLedger.AppendAsync(entry)
-                          ├─ INSERT campaign_ledger_entries ... ON CONFLICT (ContributionId, Kind) DO NOTHING
-                          └─ UPDATE campaigns SET raised_amount = SUM(entries) RETURNING raised_amount, xmin
+                          ├─ INSERT campaigns.campaign_ledger_entries ... ON CONFLICT (ContributionId, Kind) DO NOTHING
+                          └─ UPDATE campaigns.campaigns SET raised_amount = SUM(entries) RETURNING raised_amount, xmin
 
 refunded event ──▶ RecordContributionRefundCommandHandler
                      └─ same path with campaign.RecordRefund(...): a negative entry, inserted only

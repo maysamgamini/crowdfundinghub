@@ -17,6 +17,7 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
+                .HasDefaultSchema("campaigns")
                 .HasAnnotation("ProductVersion", "10.0.11")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
@@ -55,7 +56,7 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("SourceEventId");
 
-                    b.ToTable("campaigns_dead_letter_events", (string)null);
+                    b.ToTable("campaigns_dead_letter_events", "campaigns");
                 });
 
             modelBuilder.Entity("CrowdFunding.BuildingBlocks.Infrastructure.Persistence.OutboxMessage", b =>
@@ -116,7 +117,7 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_campaigns_outbox_messages_pending")
                         .HasFilter("\"Status\" = 0");
 
-                    b.ToTable("campaigns_outbox_messages", (string)null);
+                    b.ToTable("campaigns_outbox_messages", "campaigns");
                 });
 
             modelBuilder.Entity("CrowdFunding.Modules.Campaigns.Domain.Aggregates.Campaign", b =>
@@ -158,7 +159,7 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("campaigns", (string)null);
+                    b.ToTable("campaigns", "campaigns");
                 });
 
             modelBuilder.Entity("CrowdFunding.Modules.Campaigns.Domain.Aggregates.CampaignLedgerEntry", b =>
@@ -199,7 +200,7 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasFilter("\"Kind\" = 2");
 
-                    b.ToTable("campaign_ledger_entries", null, t =>
+                    b.ToTable("campaign_ledger_entries", "campaigns", t =>
                         {
                             t.HasCheckConstraint("ck_campaign_ledger_entries_kind_sign", "(\"Kind\" = 0 AND \"Amount\" > 0 AND \"ContributionId\" IS NOT NULL) OR (\"Kind\" = 1 AND \"Amount\" < 0 AND \"ContributionId\" IS NOT NULL) OR (\"Kind\" = 2 AND \"ContributionId\" IS NULL)");
                         });
@@ -245,7 +246,7 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("CampaignId");
 
-                    b.ToTable("reward_tiers", (string)null);
+                    b.ToTable("reward_tiers", "campaigns");
                 });
 
             modelBuilder.Entity("CrowdFunding.Modules.Campaigns.Domain.Aggregates.RewardTierReservation", b =>
@@ -288,7 +289,7 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Status", "ExpiresAtUtc");
 
-                    b.ToTable("reward_tier_reservations", (string)null);
+                    b.ToTable("reward_tier_reservations", "campaigns");
                 });
 
             modelBuilder.Entity("CrowdFunding.Modules.Campaigns.Domain.Aggregates.Campaign", b =>
@@ -311,7 +312,7 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Migrations
 
                             b1.HasKey("CampaignId");
 
-                            b1.ToTable("campaigns");
+                            b1.ToTable("campaigns", "campaigns");
 
                             b1.WithOwner()
                                 .HasForeignKey("CampaignId");
@@ -335,7 +336,7 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Migrations
 
                             b1.HasKey("CampaignId");
 
-                            b1.ToTable("campaigns");
+                            b1.ToTable("campaigns", "campaigns");
 
                             b1.WithOwner()
                                 .HasForeignKey("CampaignId");
@@ -377,7 +378,7 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Migrations
 
                             b1.HasKey("RewardTierId");
 
-                            b1.ToTable("reward_tiers");
+                            b1.ToTable("reward_tiers", "campaigns");
 
                             b1.WithOwner()
                                 .HasForeignKey("RewardTierId");

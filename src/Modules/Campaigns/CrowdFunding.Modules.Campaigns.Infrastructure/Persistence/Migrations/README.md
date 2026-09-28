@@ -22,6 +22,8 @@ Contains the EF Core migration history for the Campaigns module. These files are
 - `20260909154404_AddRewardTierReservations.cs`: Migration that applies: add reward tier reservations.
 - `20260928174424_AppendOnlyCampaignLedger.Designer.cs`: Generated model metadata for the `AppendOnlyCampaignLedger` migration.
 - `20260928174424_AppendOnlyCampaignLedger.cs`: Migration that applies: append only campaign ledger.
+- `20260928204404_MoveTablesToModuleSchema.Designer.cs`: Generated model metadata for the `MoveTablesToModuleSchema` migration.
+- `20260928204404_MoveTablesToModuleSchema.cs`: Moves every Campaigns table from `public` into the `campaigns` schema, moves the two ledger trigger functions with them and recreates the snapshot check with schema-qualified table names (PL/pgSQL resolves names at run time).
 - `CampaignsDbContextModelSnapshot.cs`: EF Core model snapshot of the current `CampaignsDbContext` schema, used to compute the next migration.
 
 ## Child Folders

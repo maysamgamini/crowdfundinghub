@@ -89,7 +89,7 @@ The sample is its own runnable host (`dotnet run --project src/Samples/RosettaSt
 
 **What was built.**
 
-1. A Contributions-owned table `active_campaigns_cache` (entity `ActiveCampaignCache`: campaign id, owner id, title, currency, `IsActive`, deadline, updated-at). Like all module tables it lives in the `public` schema; the owning module and the name separate it.
+1. A Contributions-owned table `active_campaigns_cache` (entity `ActiveCampaignCache`: campaign id, owner id, title, currency, `IsActive`, deadline, updated-at). Like all Contributions tables it lives in the `contributions` schema.
 2. `ReplicatedCampaignEventHandlers` in Contributions handles `CampaignCreated`, `CampaignPublished`, `CampaignCancelled`, `CampaignSucceeded` and `CampaignFailed` application events and keeps the table current.
 3. [`MakeContributionCommandHandler.cs`](../../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs) reads the local table through `IActiveCampaignCacheRepository`. `ICampaignContributionAvailabilityReader` has been deleted.
 4. The same pattern serves Notifications (`CampaignTitleCache`) and CampaignUpdates (`CampaignOwnerCache`). `ReplicatedReadModelBoundaryTests` guard it.

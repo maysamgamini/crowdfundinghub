@@ -14,6 +14,7 @@ Contains the EF Core migration history for the Moderation module. These files ar
 - `20260909001056_AddOutboxHeaders.cs`: Migration that applies: add outbox headers.
 - `20260909025308_AddCampaignReviewAutomatedAnalysisScores.Designer.cs`: Generated model metadata for the `AddCampaignReviewAutomatedAnalysisScores` migration.
 - `20260909025308_AddCampaignReviewAutomatedAnalysisScores.cs`: Migration that applies: add campaign review automated analysis scores.
+- `20260928204408_MoveTablesToModuleSchema.cs` (+ `.Designer.cs`): Moves every Moderation table from `public` into the `moderation` schema.
 - `ModerationDbContextModelSnapshot.cs`: EF Core model snapshot of the current `ModerationDbContext` schema, used to compute the next migration.
 
 ## Child Folders

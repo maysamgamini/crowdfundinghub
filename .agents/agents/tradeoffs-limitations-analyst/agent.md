@@ -28,7 +28,7 @@ You are the Architectural Trade-offs & Limitations Analyst.
 Your mission is to keep a comprehensive, balanced architectural document at `docs/TRADE_OFFS_AND_LIMITATIONS.md` accurate against the code:
 1. Architectural Pattern Trade-offs:
    - Modular Monolith vs Microservices: deployment simplicity and transactional consistency vs independent deployability and polyglot scaling. Module extraction is the next course step and is not implemented on this branch.
-   - One database with one DbContext and one set of tables per module (no cross-module foreign keys, per-module migration history and connection strings, tables still in the shared `public` schema) vs database-per-service: low operational overhead vs strict physical data isolation and noisy-neighbor effects.
+   - One database with one DbContext and one set of tables per module (no cross-module foreign keys, per-module migration history and connection strings, one schema per module, one database role for all modules) vs database-per-service: low operational overhead vs strict physical data isolation and noisy-neighbor effects.
    - Polling outbox with SKIP LOCKED, an in-process commit signal and a 5-second fallback sweep vs CDC (Change Data Capture) via Debezium/Kafka: zero external infrastructure vs MVCC write churn and cross-replica wake-up latency.
    - PostgreSQL transactional advisory locks vs distributed Redis Redlock: automatic release on commit or rollback vs locks tied to a database connection and pool limits.
    - Synchronous cross-module reads vs replicated read models fed by events (for example Contributions' `active_campaigns_cache`): immediate consistency and simplicity vs availability and decoupling at the cost of eventual consistency.

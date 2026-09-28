@@ -23,7 +23,7 @@ public static class NotificationsInfrastructureDependencyInjection
 
         services.AddDbContext<NotificationsDbContext>(options =>
             options.UseNpgsql(connectionString, npgsql =>
-                npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "notifications")));
+                npgsql.MigrationsHistoryTable("__EFMigrationsHistory", NotificationsDbContext.Schema)));
 
         services.AddScoped<ICampaignTitleCacheRepository, CampaignTitleCacheRepository>();
         services.AddScoped<INotificationPreferenceRepository, NotificationPreferenceRepository>();

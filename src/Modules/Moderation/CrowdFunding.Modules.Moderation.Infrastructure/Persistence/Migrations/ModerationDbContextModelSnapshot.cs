@@ -17,7 +17,8 @@ namespace CrowdFunding.Modules.Moderation.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.5")
+                .HasDefaultSchema("moderation")
+                .HasAnnotation("ProductVersion", "10.0.11")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -55,7 +56,7 @@ namespace CrowdFunding.Modules.Moderation.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("SourceEventId");
 
-                    b.ToTable("moderation_dead_letter_events", (string)null);
+                    b.ToTable("moderation_dead_letter_events", "moderation");
                 });
 
             modelBuilder.Entity("CrowdFunding.BuildingBlocks.Infrastructure.Persistence.OutboxMessage", b =>
@@ -116,7 +117,7 @@ namespace CrowdFunding.Modules.Moderation.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_moderation_outbox_messages_pending")
                         .HasFilter("\"Status\" = 0");
 
-                    b.ToTable("moderation_outbox_messages", (string)null);
+                    b.ToTable("moderation_outbox_messages", "moderation");
                 });
 
             modelBuilder.Entity("CrowdFunding.Modules.Moderation.Domain.Aggregates.CampaignReview", b =>
@@ -158,7 +159,7 @@ namespace CrowdFunding.Modules.Moderation.Infrastructure.Persistence.Migrations
                     b.HasIndex("CampaignId")
                         .IsUnique();
 
-                    b.ToTable("campaign_reviews", (string)null);
+                    b.ToTable("campaign_reviews", "moderation");
                 });
 #pragma warning restore 612, 618
         }

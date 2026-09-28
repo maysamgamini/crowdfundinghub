@@ -13,6 +13,13 @@ namespace CrowdFunding.Modules.CampaignUpdates.Infrastructure.Persistence.DbCont
 /// </summary>
 public sealed class CampaignUpdatesDbContext : DbContext
 {
+    /// <summary>
+    /// The PostgreSQL schema this module owns. Every table of the module (aggregates, read models,
+    /// outbox, dead letters, inbox) and its migrations history live here; no other module maps a
+    /// table into it. See docs/data-ownership.md.
+    /// </summary>
+    public const string Schema = "campaignupdates";
+
     public CampaignUpdatesDbContext(DbContextOptions<CampaignUpdatesDbContext> options) : base(options) { }
 
     public DbSet<CampaignOwnerCache> CampaignOwnerCache => Set<CampaignOwnerCache>();
@@ -21,6 +28,7 @@ public sealed class CampaignUpdatesDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.HasDefaultSchema(Schema);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(CampaignUpdatesDbContext).Assembly);
         modelBuilder.ConfigureInbox("campaign_updates_processed_events");
         base.OnModelCreating(modelBuilder);

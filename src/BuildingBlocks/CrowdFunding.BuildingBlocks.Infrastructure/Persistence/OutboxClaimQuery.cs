@@ -13,15 +13,15 @@ public static class OutboxClaimQuery
 {
     public static Task<List<OutboxMessage>> ClaimPendingBatchAsync(
         this DbContext dbContext,
-        string tableName,
         string workerId,
         int batchSize,
         TimeSpan lockDuration,
         CancellationToken cancellationToken)
     {
-        // tableName is always one of this project's hardcoded "*_outbox_messages" constants
-        // (never user input), so splicing it into the SQL text is safe — it cannot be passed as
-        // a normal query parameter because parameters bind values, not identifiers. The claim
+        // The table name is read from the EF model, schema-qualified (each module's outbox lives
+        // in that module's schema), so it can never drift from the mapping and never comes from
+        // user input; splicing it into the SQL text is therefore safe. It cannot be passed as a
+        // normal query parameter because parameters bind values, not identifiers. The claim
         // and the Pending -> Processing transition happen in one statement (CTE + UPDATE ...
         // RETURNING) so there is no window between "select candidate rows" and "mark them
         // claimed" for a second worker to slip into.
@@ -31,6 +31,8 @@ public static class OutboxClaimQuery
         // rows are claimable again and the abandoned pass counts as an attempt (so a message that
         // crashes the process every time still reaches MaxAttempts and the dead-letter table).
         // Consumers tolerate the resulting redelivery through IIdempotentConsumer.
+        var tableName = QualifiedTableName.Of<OutboxMessage>(dbContext);
+
         var sql = $$"""
             WITH claimable AS (
                 SELECT "Id"

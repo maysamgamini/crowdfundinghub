@@ -24,7 +24,7 @@ graph TD
         end
         Outbox["Per-module transactional outbox<br/>+ inbox (idempotent consumers)"]
     end
-    PG[("PostgreSQL 16<br/>one DbContext and table set per module")]
+    PG[("PostgreSQL 16<br/>one DbContext and one schema per module")]
     Redis[("Redis<br/>cache, token revocation, SignalR backplane")]
     Endpoints --> Modules
     Modules --> Outbox
@@ -40,7 +40,7 @@ Moderation runs as an in-process module on this branch. **Extracting a module in
 ## 2. The Rules the Codebase Follows
 
 1. **Contracts only across modules.** A module references another module's `Contracts` project (events, queries, a cross-module command), never its Application, Domain or Infrastructure. [`ModuleBoundaryConventionTests`](tests/ArchitectureTests/CrowdFunding.ArchitectureTests/ModuleBoundaryConventionTests.cs) enforces this for every module by convention.
-2. **Each module owns its data.** One DbContext, one set of tables and its own migration history per module, no cross-module foreign keys, and a per-module connection string (`ConnectionStrings:{Module}Db`, falling back to `DefaultConnection`) so a module can move to its own database. Tables currently share PostgreSQL's `public` schema; see [`docs/PLATFORM_SHORTCOMINGS.md`](docs/PLATFORM_SHORTCOMINGS.md).
+2. **Each module owns its data.** One DbContext, one set of tables and its own migration history per module, no cross-module foreign keys, and a per-module connection string (`ConnectionStrings:{Module}Db`, falling back to `DefaultConnection`) so a module can move to its own database. Every module owns one PostgreSQL schema (`campaigns`, `contributions`, `identity`, `moderation`, `notifications`, `campaignupdates`) holding all its tables, its outbox, inbox and migration history; an architecture test fails if a module maps a table outside it. See [`docs/data-ownership.md`](docs/data-ownership.md).
 3. **Asynchronous integration through a transactional outbox.** Domain events become application events written in the same transaction as the state change, delivered at least once, and consumed idempotently. See [`docs/outbox-architecture.md`](docs/outbox-architecture.md).
 4. **Offline token validation.** Identity signs ES256 JWTs and publishes public keys at `/.well-known/jwks.json`; private keys are encrypted at rest.
 5. **Invariants where they cannot be bypassed.** Business rules live in aggregates; money invariants are also enforced by PostgreSQL. See [`docs/append-only-ledger.md`](docs/append-only-ledger.md).
@@ -54,6 +54,7 @@ Moderation runs as an in-process module on this branch. **Extracting a module in
 | :--- | :--- |
 | Architecture, layers, pipelines, libraries | [`docs/ARCHITECTURE_AND_LIBRARIES.md`](docs/ARCHITECTURE_AND_LIBRARIES.md) |
 | Outbox, wake-up signal, inbox, tracing across the outbox | [`docs/outbox-architecture.md`](docs/outbox-architecture.md) |
+| Data ownership: schema per module, cross-module reads, database roles, database per service | [`docs/data-ownership.md`](docs/data-ownership.md) |
 | Append-only funding ledger: database-enforced vs. code-enforced invariants | [`docs/append-only-ledger.md`](docs/append-only-ledger.md) |
 | Minimal APIs vs. controllers, side by side | [`docs/minimal-apis-vs-controllers.md`](docs/minimal-apis-vs-controllers.md) |
 | Design trade-offs | [`docs/TRADE_OFFS_AND_LIMITATIONS.md`](docs/TRADE_OFFS_AND_LIMITATIONS.md) |
@@ -142,7 +143,7 @@ dotnet test CrowdFunding.slnx
 | Project | Scope | Tests |
 | :--- | :--- | :---: |
 | `CrowdFunding.UnitTests` | Aggregates, value objects, handlers, pipeline behaviors, exception mapping, signing-key encryption. | 321 |
-| `CrowdFunding.ArchitectureTests` | Module boundaries by convention, per-module dependency rules, API host rules. | 26 |
-| `CrowdFunding.IntegrationTests` | End-to-end HTTP flows, outbox and inbox, the funding ledger and its migration, edge hardening, OpenAPI, telemetry, against PostgreSQL and Redis in Testcontainers. | 105 |
+| `CrowdFunding.ArchitectureTests` | Module boundaries by convention, one schema per module, per-module dependency rules, API host rules. | 29 |
+| `CrowdFunding.IntegrationTests` | End-to-end HTTP flows, outbox and inbox, the funding ledger and its migration, the schema-per-module upgrade, edge hardening, OpenAPI, telemetry, against PostgreSQL and Redis in Testcontainers. | 106 |
 
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) verifies formatting, builds in Release with warnings as errors, then runs architecture, unit and integration tests.

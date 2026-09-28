@@ -10,6 +10,13 @@ namespace CrowdFunding.Modules.Contributions.Infrastructure.Persistence.DbContex
 /// </summary>
 public sealed class ContributionsDbContext : DbContext
 {
+    /// <summary>
+    /// The PostgreSQL schema this module owns. Every table of the module (aggregates, read models,
+    /// outbox, dead letters, inbox) and its migrations history live here; no other module maps a
+    /// table into it. See docs/data-ownership.md.
+    /// </summary>
+    public const string Schema = "contributions";
+
     public ContributionsDbContext(DbContextOptions<ContributionsDbContext> options)
         : base(options)
     {
@@ -22,6 +29,7 @@ public sealed class ContributionsDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.HasDefaultSchema(Schema);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(ContributionsDbContext).Assembly);
         modelBuilder.ConfigureOutbox("contributions_outbox_messages");
         modelBuilder.ConfigureDeadLetter("contributions_dead_letter_events");

@@ -1,4 +1,5 @@
 using CrowdFunding.BuildingBlocks.Application.Inbox;
+using CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
@@ -95,16 +96,11 @@ public abstract class EfIdempotentConsumer<TDbContext> : IIdempotentConsumer
 
     private async Task<bool> TryClaimAsync(string eventId, string consumerName, CancellationToken cancellationToken)
     {
-        var entityType = _dbContext.Model.FindEntityType(typeof(ProcessedEvent))
-                         ?? throw new InvalidOperationException(
-                             $"{typeof(TDbContext).Name} does not map {nameof(ProcessedEvent)}; call ConfigureInbox in OnModelCreating.");
+        // The schema-qualified table name comes from the EF model (ConfigureInbox inside the
+        // module's own schema), never from input, so interpolating the identifier is safe; the
+        // values are bound as parameters.
+        var qualifiedTable = QualifiedTableName.Of<ProcessedEvent>(_dbContext);
 
-        var schema = entityType.GetSchema();
-        var table = entityType.GetTableName();
-        var qualifiedTable = schema is null ? $"\"{table}\"" : $"\"{schema}\".\"{table}\"";
-
-        // The table name comes from the EF model (a compile-time constant per module), never from
-        // input, so interpolating the identifier is safe; the values are bound as parameters.
         var sql = $$"""
             INSERT INTO {{qualifiedTable}} ("{{nameof(ProcessedEvent.EventId)}}", "{{nameof(ProcessedEvent.ConsumerName)}}", "{{nameof(ProcessedEvent.ProcessedAtUtc)}}")
             VALUES ({0}, {1}, now())

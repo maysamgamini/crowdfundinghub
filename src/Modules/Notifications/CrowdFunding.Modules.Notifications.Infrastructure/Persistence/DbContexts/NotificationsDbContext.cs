@@ -11,6 +11,13 @@ namespace CrowdFunding.Modules.Notifications.Infrastructure.Persistence.DbContex
 /// </summary>
 public sealed class NotificationsDbContext : DbContext
 {
+    /// <summary>
+    /// The PostgreSQL schema this module owns. Every table of the module (aggregates, read models,
+    /// outbox, dead letters, inbox) and its migrations history live here; no other module maps a
+    /// table into it. See docs/data-ownership.md.
+    /// </summary>
+    public const string Schema = "notifications";
+
     public NotificationsDbContext(DbContextOptions<NotificationsDbContext> options) : base(options) { }
 
     public DbSet<CampaignTitleCache> CampaignTitleCache => Set<CampaignTitleCache>();
@@ -18,6 +25,7 @@ public sealed class NotificationsDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.HasDefaultSchema(Schema);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(NotificationsDbContext).Assembly);
         base.OnModelCreating(modelBuilder);
     }

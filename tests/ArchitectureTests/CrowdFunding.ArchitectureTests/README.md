@@ -10,6 +10,12 @@ Executable architecture tests that inspect compiled assembly references (`Assemb
   - A Domain assembly references no CrowdFunding assembly other than `BuildingBlocks.Domain`.
   - A Contracts assembly references no module's internals.
   These rules are what keep any module extractable into its own service later.
+- `ModuleSchemaOwnershipTests.cs` (convention-based, builds each module DbContext's EF model without a database):
+  - Every module has exactly one DbContext.
+  - Every module DbContext has a default schema named after the module.
+  - No two modules share a schema.
+  - Every table of a module maps into that module's schema, and no module maps a table into another module's schema.
+  See `docs/data-ownership.md`.
 - `CampaignsModuleDependencyTests.cs`:
   - Enforces that `API` does not directly reference `Campaigns.Domain`.
   - Asserts that `Campaigns.Domain` has no dependencies on `Campaigns.Infrastructure` or `API`.

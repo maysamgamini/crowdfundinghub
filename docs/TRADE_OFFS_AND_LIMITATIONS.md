@@ -51,7 +51,7 @@ graph TB
         Modules --> Hub
     end
 
-    subgraph PG["PostgreSQL: one database, public schema"]
+    subgraph PG["PostgreSQL: one database, one schema per module"]
         Tables["Per-module tables (campaigns, contributions, users, ...)<br/>per-module outbox, dead-letter, processed-events tables<br/>campaign_ledger_entries (append-only)"]
     end
 
@@ -88,19 +88,19 @@ The design favours one deployable, one database and strong consistency where mon
 
 ### 2.2 One database, one DbContext per module
 
-**Decision.** All modules use one PostgreSQL database. Each module has its own DbContext and its own tables, with no foreign keys across modules. Tables live in the `public` schema and are distinguished by ownership and naming (`campaigns`, `contributions`, `users`, `campaign_reviews`, `campaigns_outbox_messages`, `contributions_processed_events`, ...). Only each module's EF migrations history table sits in a per-module schema (`campaigns`, `contributions`, `identity`, `moderation`, `notifications`, `campaignupdates`; audit uses `system`). Each module reads `ConnectionStrings:{Module}Db` and falls back to `DefaultConnection`, so one module can be pointed at its own database by configuration.
+**Decision.** All modules use one PostgreSQL database. Each module has its own DbContext and its own tables, with no foreign keys across modules. Each module owns one schema (`campaigns`, `contributions`, `identity`, `moderation`, `notifications`, `campaignupdates`; audit uses `system`) holding all its tables, its outbox, inbox and migration history; nothing lives in `public` ([data-ownership.md](data-ownership.md)). Each module reads `ConnectionStrings:{Module}Db` and falls back to `DefaultConnection`, so one module can be pointed at its own database by configuration.
 
-| Dimension | One database, per-module contexts (this repo) | Schema per module | Database per module |
+| Dimension | One database, shared schema (before 2026-09-28) | Schema per module (this repo) | Database per module |
 | :--- | :--- | :--- | :--- |
 | Operations | One instance to back up, patch and fail over | Same | N instances |
-| Boundary enforcement | Convention plus architecture tests; raw SQL could still join across modules | Schema permissions can block cross-module access | Physically impossible to join |
+| Boundary enforcement | Convention plus architecture tests; raw SQL could still join across modules | Ownership visible in the database and checked by `ModuleSchemaOwnershipTests`; per-module roles (not yet provisioned) can block cross-module access | Physically impossible to join |
 | Noisy neighbour | Shared I/O, WAL and connections | Same | Isolated |
 | Point-in-time restore | All modules together | All modules together | Per module |
-| Extraction effort | Move tables by name; migrations already separate | `pg_dump -n <schema>` | None |
+| Extraction effort | Move tables by name; migrations already separate | `pg_dump -n <schema>` (this repo) | None |
 
-**Cost.** The database is a shared failure domain and I/O budget. Module ownership of tables is a convention, not something PostgreSQL enforces; the table list must be known to move a module out.
+**Cost.** The database is a shared failure domain and I/O budget. Every module connects with the same role, so PostgreSQL does not yet refuse a cross-schema query.
 
-**Choose otherwise.** Moving tables into per-module schemas with per-module database roles is the cheap next step for enforcement. Separate databases make sense when a module is extracted or its load starts hurting the others.
+**Choose otherwise.** Per-module database roles are the cheap next step for enforcement (section 5 of [data-ownership.md](data-ownership.md)). Separate databases make sense when a module is extracted or its load starts hurting the others.
 
 ### 2.3 Polling outbox with a wake-up signal vs. CDC
 
@@ -283,7 +283,7 @@ The numbers below are defaults from the code, not load-test results. Measure bef
 
 ## 4. Remaining limitations
 
-1. Module tables share the `public` schema; only migration history is per schema. See [2.2](#22-one-database-one-dbcontext-per-module).
+1. Schemas are per module, but database roles are not: every module can still read every schema. See [2.2](#22-one-database-one-dbcontext-per-module).
 2. No broker consumer: RabbitMQ publishing works, cross-process delivery and module extraction are not implemented on this branch. See [2.5](#25-in-process-bus-with-publish-only-rabbitmq).
 3. The outbox wake-up signal is in-process; other replicas rely on the 5-second sweep. CDC was considered and not implemented.
 4. Rate limiting and the outbox signal are per instance; there is no distributed rate limiter.
@@ -302,7 +302,7 @@ The numbers below are defaults from the code, not load-test results. Measure bef
 
 Move when a measurement says so, not on a schedule.
 
-1. **Harden the monolith.** Per-module schemas and database roles; retention jobs for processed-events and dead-letter tables; alerts on due-outbox-row count, dead-letter inserts and connection-pool usage; a distributed rate limiter or gateway limits once there are several replicas; KEK rotation or KMS wrapping.
+1. **Harden the monolith.** Per-module database roles (schemas are done); retention jobs for processed-events and dead-letter tables; alerts on due-outbox-row count, dead-letter inserts and connection-pool usage; a distributed rate limiter or gateway limits once there are several replicas; KEK rotation or KMS wrapping.
 2. **Extract a module (the next course step).** Add a broker consumer with the inbox on the receiving side, give Moderation its own host and database via `ConnectionStrings:ModerationDb`, and route traffic with the Strangler Fig pattern. The proof of concept is on branch `future/microservices-extraction`.
 3. **Stream events.** Replace the polling workers with CDC when event volume or the number of independent consumers justifies a broker. Outbox rows, `EventId` identity and inbox stay the same.
 4. **Relieve hot campaigns.** If one campaign's lock becomes the bottleneck, batch credits or shard the snapshot while keeping the append-only ledger as the source of truth.
@@ -314,7 +314,7 @@ Move when a measurement says so, not on a schedule.
 | Area | Chosen | Main alternative | Why | Accepted cost |
 | :--- | :--- | :--- | :--- | :--- |
 | System boundary | Modular monolith | Microservices | One deployable; boundaries enforced by architecture tests | No failure or resource isolation |
-| Persistence | One database, per-module DbContexts, `public` schema | Schema or database per module | Simple operations; per-module connection strings allow a later split | Ownership by convention; shared I/O |
+| Persistence | One database, per-module DbContexts and schemas | Database per module | Simple operations; a module's data leaves with `pg_dump --schema` | One role for all modules; shared I/O |
 | Event dispatch | SKIP LOCKED outbox, commit signal, 5 s sweep | CDC | PostgreSQL only; immediate in-process dispatch | Three writes per event; cross-replica latency up to 5 s |
 | Delivery semantics | At least once + inbox and idempotent consumers | Exactly-once transport | Correctness where the side effect happens | Every consumer needs an idempotency key |
 | Transport | In-process bus; RabbitMQ publish-only | Full broker with consumers | Works with no broker | No cross-process delivery yet |

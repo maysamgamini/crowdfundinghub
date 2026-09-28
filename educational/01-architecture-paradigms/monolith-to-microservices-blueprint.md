@@ -44,8 +44,8 @@ graph LR
 
 ### 2.2 One DbContext and one set of tables per module
 - **Rule:** each module owns its tables and is the only code that touches them.
-- **Here:** one DbContext per module, each with its own migrations and its own migration history table in a per-module schema (`campaigns`, `contributions`, `identity`, `moderation`, `notifications`, `campaignupdates`). Each module resolves its own connection string, `ConnectionStrings:{Module}Db`, falling back to `DefaultConnection` (see `MultiDatabaseConnectionDecouplingTests`).
-- **Limitation:** the module tables themselves live in PostgreSQL's `public` schema, distinguished by ownership and naming (`campaigns`, `contributions`, `campaign_reviews`, `campaigns_outbox_messages`, ...). This is not strict schema-per-module isolation. Moving a module's data to its own database is a data migration of its named tables, plus a configuration change.
+- **Here:** one DbContext and one PostgreSQL schema per module (`campaigns`, `contributions`, `identity`, `moderation`, `notifications`, `campaignupdates`), holding all of the module's tables, its outbox, inbox and migration history. `ModuleSchemaOwnershipTests` fails the build if a module maps a table outside its schema. Each module resolves its own connection string, `ConnectionStrings:{Module}Db`, falling back to `DefaultConnection` (see `MultiDatabaseConnectionDecouplingTests`).
+- **Limitation:** all modules connect with the same database role, so PostgreSQL does not yet refuse a cross-schema query; per-module roles are the next step. Moving a module's data to its own database is `pg_dump --schema=<module>` plus a configuration change. See [`docs/data-ownership.md`](../../docs/data-ownership.md).
 
 ### 2.3 No foreign keys across modules
 - **Rule:** a table never has a foreign key to another module's table.

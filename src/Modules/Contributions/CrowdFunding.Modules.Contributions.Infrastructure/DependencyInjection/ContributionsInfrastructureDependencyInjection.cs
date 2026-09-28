@@ -33,7 +33,7 @@ public static class ContributionsInfrastructureDependencyInjection
         services.AddDbContext<ContributionsDbContext>((serviceProvider, options) =>
             options
                 .UseNpgsql(connectionString, npgsql =>
-                    npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "contributions"))
+                    npgsql.MigrationsHistoryTable("__EFMigrationsHistory", ContributionsDbContext.Schema))
                 .AddOutboxSignalInterceptor<ContributionsDbContext>(serviceProvider));
 
         services.AddScoped<IContributionRepository, ContributionRepository>();

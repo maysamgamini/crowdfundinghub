@@ -9,7 +9,7 @@ namespace CrowdFunding.Modules.Moderation.Infrastructure.Outbox;
 public sealed class ModerationOutboxBackgroundService : ModuleOutboxProcessor<ModerationDbContext>
 {
     public ModerationOutboxBackgroundService(IServiceProvider serviceProvider)
-        : base(serviceProvider, "moderation_outbox_messages", TimeSpan.FromSeconds(5))
+        : base(serviceProvider, TimeSpan.FromSeconds(5))
     {
     }
 }

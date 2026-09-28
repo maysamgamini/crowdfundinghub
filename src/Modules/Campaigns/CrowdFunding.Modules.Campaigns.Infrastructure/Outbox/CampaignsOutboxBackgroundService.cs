@@ -9,7 +9,7 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Outbox;
 public sealed class CampaignsOutboxBackgroundService : ModuleOutboxProcessor<CampaignsDbContext>
 {
     public CampaignsOutboxBackgroundService(IServiceProvider serviceProvider)
-        : base(serviceProvider, "campaigns_outbox_messages", TimeSpan.FromSeconds(5))
+        : base(serviceProvider, TimeSpan.FromSeconds(5))
     {
     }
 }

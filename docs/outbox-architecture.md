@@ -14,8 +14,8 @@ Three modules produce events: Campaigns, Contributions and Moderation. Each owns
 
 | Piece | Campaigns | Contributions | Moderation |
 | :--- | :--- | :--- | :--- |
-| Outbox table | `campaigns_outbox_messages` | `contributions_outbox_messages` | `moderation_outbox_messages` |
-| Dead-letter table | `campaigns_dead_letter_events` | `contributions_dead_letter_events` | `moderation_dead_letter_events` |
+| Outbox table | `campaigns.campaigns_outbox_messages` | `contributions.contributions_outbox_messages` | `moderation.moderation_outbox_messages` |
+| Dead-letter table | `campaigns.campaigns_dead_letter_events` | `contributions.contributions_dead_letter_events` | `moderation.moderation_dead_letter_events` |
 | Worker | `CampaignsOutboxBackgroundService` | `ContributionsOutboxBackgroundService` | `ModerationOutboxBackgroundService` |
 | Signal | `OutboxSignal<CampaignsDbContext>` | `OutboxSignal<ContributionsDbContext>` | `OutboxSignal<ModerationDbContext>` |
 
@@ -48,18 +48,18 @@ The worker is therefore woken only after the rows are visible to its claim query
 
 ## 3. Claim
 
-[`OutboxClaimQuery.ClaimPendingBatchAsync`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxClaimQuery.cs) claims up to 20 rows in one statement:
+[`OutboxClaimQuery.ClaimPendingBatchAsync`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxClaimQuery.cs) claims up to 20 rows in one statement. The table name is read from the EF model, schema-qualified (`QualifiedTableName.Of<OutboxMessage>`), so it always matches the module's mapping:
 
 ```sql
 WITH claimable AS (
-    SELECT "Id" FROM <module>_outbox_messages
+    SELECT "Id" FROM <module>.<module>_outbox_messages
     WHERE ("Status" = Pending    AND "ScheduledAtUtc" <= now())
        OR ("Status" = Processing AND "LockedUntilUtc" <  now())
     ORDER BY "ScheduledAtUtc", "Id"
     FOR UPDATE SKIP LOCKED
     LIMIT 20
 )
-UPDATE <module>_outbox_messages m
+UPDATE <module>.<module>_outbox_messages m
 SET "Attempts" = m."Attempts" + CASE WHEN m."Status" = Processing THEN 1 ELSE 0 END,
     "Status" = Processing,
     "LockedBy" = <machine:pid:DbContext>,

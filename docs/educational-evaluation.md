@@ -129,7 +129,7 @@ Tier 1 of the Rosetta Stone does the same create in one file of about fifty line
 
 | Dimension | Score | Notes |
 |---|:---:|---|
-| Boundary discipline | 9 / 10 | Enforced by architecture tests over assembly references. Tables still share the `public` schema. |
+| Boundary discipline | 9 / 10 | Enforced by architecture tests over assembly references and EF models; one schema per module. Database roles are not per module yet. |
 | Production realism | 9 / 10 | Outbox with leases and dead-lettering, inbox, append-only ledger, RFC 9457 errors, rate limiting, OpenTelemetry. |
 | Test engineering | 9 / 10 | Unit, architecture and Testcontainers integration suites run in CI. |
 | Domain completeness | 8 / 10 | Full lifecycle including expiry and refunds. Refunds are recorded in the domain; no outbound call to a payment provider is made. |
@@ -143,7 +143,7 @@ Tier 1 of the Rosetta Stone does the same create in one file of about fifty line
 
 These are the genuine limitations of the current code. [PLATFORM_SHORTCOMINGS.md](PLATFORM_SHORTCOMINGS.md) and [TRADE_OFFS_AND_LIMITATIONS.md](TRADE_OFFS_AND_LIMITATIONS.md) cover them in more depth.
 
-1. **Shared schema.** Module tables live in PostgreSQL's `public` schema, separated by ownership and naming; only each module's migration history table is in a per-module schema. There are no cross-module foreign keys, and each module has its own `DbContext`, migrations and connection string.
+1. **One database role.** Each module owns its own schema ([data-ownership.md](data-ownership.md)), but every module connects with the same role, so PostgreSQL does not yet refuse a cross-module query. There are no cross-module foreign keys, and each module has its own `DbContext`, migrations and connection string.
 2. **No broker consumer.** `RabbitMqMessageBus` publishes CloudEvents but nothing consumes them. Cross-process event delivery is not implemented; the in-process bus is the working mode.
 3. **Per-instance mechanisms.** The outbox wake-up signal and the rate limiter are in memory. Other replicas rely on the 5-second outbox sweep; there is no distributed rate limiter.
 4. **Unsubscribe link.** One-click unsubscribe trusts a bare user id; it needs a signed, expiring token.
@@ -195,10 +195,11 @@ On this branch Moderation is an in-process module. Microservice extraction is th
 - [x] Asymmetric ES256 tokens with a JWKS endpoint.
 - [x] Pluggable message bus abstraction (`IMessageBus`).
 - [ ] The same for campaign publishing, which still reads Moderation's review status synchronously.
-- [ ] Tables moved into per-module schemas.
+- [x] Tables moved into per-module schemas.
+- [ ] Per-module database roles.
 - [ ] A broker consumer, so events can cross a process boundary.
 - [ ] An extracted module on the main line of the course (proof of concept on `future/microservices-extraction`).
 
 ### 8.5 Verdict for this intent
 
-For teaching how to build a monolith that can be decomposed, the codebase is a strong reference. The structure that looks heavy in an introductory course is what makes the extraction plan mostly a hosting and messaging task rather than a rewrite. The work that remains (a broker consumer, a replicated review status in Campaigns, per-module schemas, an edge gateway) is exactly the content of the next course step.
+For teaching how to build a monolith that can be decomposed, the codebase is a strong reference. The structure that looks heavy in an introductory course is what makes the extraction plan mostly a hosting and messaging task rather than a rewrite. The work that remains (a broker consumer, a replicated review status in Campaigns, per-module database roles, an edge gateway) is exactly the content of the next course step.

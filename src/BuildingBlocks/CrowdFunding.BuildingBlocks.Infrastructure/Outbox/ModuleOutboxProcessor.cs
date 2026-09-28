@@ -38,14 +38,12 @@ public abstract class ModuleOutboxProcessor<TDbContext> : BackgroundService, IOu
     private const int MaxAttempts = 5;
 
     private readonly IServiceProvider _serviceProvider;
-    private readonly string _tableName;
     private readonly TimeSpan _pollInterval;
     private readonly string _workerId = $"{Environment.MachineName}:{Environment.ProcessId}:{typeof(TDbContext).Name}";
 
-    protected ModuleOutboxProcessor(IServiceProvider serviceProvider, string tableName, TimeSpan pollInterval)
+    protected ModuleOutboxProcessor(IServiceProvider serviceProvider, TimeSpan pollInterval)
     {
         _serviceProvider = serviceProvider;
-        _tableName = tableName;
         _pollInterval = pollInterval;
     }
 
@@ -139,7 +137,7 @@ public abstract class ModuleOutboxProcessor<TDbContext> : BackgroundService, IOu
         var eventTypeRegistry = services.GetRequiredService<EventTypeRegistry>();
         var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger(GetType());
 
-        var messages = await dbContext.ClaimPendingBatchAsync(_tableName, _workerId, BatchSize, LockDuration, cancellationToken);
+        var messages = await dbContext.ClaimPendingBatchAsync(_workerId, BatchSize, LockDuration, cancellationToken);
 
         if (messages.Count == 0)
         {

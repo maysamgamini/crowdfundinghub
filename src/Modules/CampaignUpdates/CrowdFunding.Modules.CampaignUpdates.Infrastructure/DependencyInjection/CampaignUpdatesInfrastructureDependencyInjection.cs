@@ -25,7 +25,7 @@ public static class CampaignUpdatesInfrastructureDependencyInjection
 
         services.AddDbContext<CampaignUpdatesDbContext>(options =>
             options.UseNpgsql(connectionString, npgsql =>
-                npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "campaignupdates")));
+                npgsql.MigrationsHistoryTable("__EFMigrationsHistory", CampaignUpdatesDbContext.Schema)));
 
         services.AddScoped<ICampaignOwnerCacheRepository, CampaignOwnerCacheRepository>();
         services.AddScoped<IWebhookSubscriptionRepository, WebhookSubscriptionRepository>();

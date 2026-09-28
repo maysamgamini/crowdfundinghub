@@ -15,7 +15,7 @@ The first version of this document (2026-09-08) listed 14 shortcomings. Most are
 | 5 | Security | Anonymous unsubscribe trusts a bare user id | High |
 | 6 | Security | No rotation of the signing-key encryption key (KEK) | Medium |
 | 7 | Scale | Rate limiting is per instance | Medium |
-| 8 | Persistence | Module tables share the `public` schema | Medium |
+| 8 | Persistence | Schemas are per module, database roles are not | Low |
 | 9 | Payments | Refunds are recorded, not executed at the gateway; no dispute handling | High |
 | 10 | Domain | Ledger edge cases: early refund, hot-campaign serialization | Low |
 | 11 | Domain | Single currency per campaign | Low (scope choice) |
@@ -85,13 +85,13 @@ The first version of this document (2026-09-08) listed 14 shortcomings. Most are
 
 **Fix path.** Move the strict policies to a shared store (a Redis token bucket, or limits at the gateway/WAF). Keep the in-memory global limiter as a cheap first line.
 
-### 8. Module tables share the `public` schema
+### 8. Schemas are per module, database roles are not
 
-**What.** Each module has its own DbContext and its own tables, with no cross-module foreign keys and a per-module connection string (`ConnectionStrings:{Module}Db`, falling back to `DefaultConnection`). Only each module's EF migrations history table lives in a per-module schema (`campaigns`, `contributions`, `identity`, `moderation`, `notifications`, `campaignupdates`; audit uses `system`). The tables themselves are in `public`, separated by naming convention (for example `campaigns`, `campaign_reviews`, `contributions_processed_events`).
+**What.** Every module owns one PostgreSQL schema (`campaigns`, `contributions`, `identity`, `moderation`, `notifications`, `campaignupdates`; audit uses `system`) holding all its tables, its outbox, inbox, dead letters and migration history, and [`ModuleSchemaOwnershipTests`](../tests/ArchitectureTests/CrowdFunding.ArchitectureTests/ModuleSchemaOwnershipTests.cs) fails the build if a module maps a table outside it. But every module still connects with the same database role, which can read and write every schema.
 
-**Why it matters.** Ownership is enforced by code and review, not by the database. Nothing stops one module's connection from reading another module's tables, and moving a module to its own database requires knowing which tables it owns.
+**Why it matters.** The schema makes ownership visible and testable in the model, but PostgreSQL does not yet refuse a cross-module query: a raw SQL statement in Campaigns that reads `moderation.campaign_reviews` would succeed.
 
-**Fix path.** Call `HasDefaultSchema("<module>")` in each module's DbContext, add a migration that moves the tables (`ALTER TABLE ... SET SCHEMA`), and give each module its own database role with `USAGE` on its schema only. Start with [`CampaignsDbContext`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Persistence/DbContexts/CampaignsDbContext.cs).
+**Fix path.** One login role per module with `USAGE` on its own schema and DML on its tables only (`ALTER DEFAULT PRIVILEGES` for tables added later), a separate owner role for migrations, and the module's credentials in its existing `ConnectionStrings:{Module}Db`. No code change is needed. See section 5 of [data-ownership.md](data-ownership.md).
 
 ### 9. Refunds are recorded, not executed at the gateway; no dispute handling
 
@@ -142,7 +142,7 @@ The first version of this document (2026-09-08) listed 14 shortcomings. Most are
 
 **Why it matters.** It is the same synchronous cross-module read that was removed from the pledge path (Contributions now uses its replicated `active_campaigns_cache`). Once Moderation runs as its own service, publishing would need a network call to Moderation and would fail whenever Moderation is down.
 
-**Fix path.** Replicate the review decision into Campaigns: handle `CampaignReviewApprovedApplicationEvent` and `CampaignReviewRejectedApplicationEvent` in Campaigns (idempotently) and store the status on the campaign or in a small local read model; `PublishCampaignCommandHandler` then checks local state. Add an architecture test that forbids Campaigns.Application from depending on Moderation.Contracts query types, as `ReplicatedReadModelBoundaryTests` does for Contributions.
+**Fix path.** Replicate the review decision into Campaigns (the worked example in section 4 of [data-ownership.md](data-ownership.md)): handle `CampaignReviewApprovedApplicationEvent` and `CampaignReviewRejectedApplicationEvent` in Campaigns (idempotently) and store the status on the campaign or in a small local read model; `PublishCampaignCommandHandler` then checks local state. Add an architecture test that forbids Campaigns.Application from depending on Moderation.Contracts query types, as `ReplicatedReadModelBoundaryTests` does for Contributions.
 
 ## Resolved
 
@@ -163,6 +163,7 @@ Fixed since the 2026-09-08 review. One line each; the code is the reference.
 | No CI | [`.github/workflows/ci.yml`](../.github/workflows/ci.yml): format check, Release build with warnings as errors, architecture, unit and integration tests |
 | No OpenTelemetry | Traces and metrics over OTLP; `docker-compose.yml` runs the Aspire dashboard |
 | Stub notifications, no preferences | [`NotificationPreference`](../src/Modules/Notifications/CrowdFunding.Modules.Notifications.Domain/Aggregates/NotificationPreference.cs), RFC 8058 unsubscribe headers, preference-aware e-mail (anonymous unsubscribe still weak, item 5) |
+| Module tables in the shared `public` schema | Schema per module: `HasDefaultSchema` in every module DbContext, `MoveTablesToModuleSchema` migrations, schema-qualified raw SQL, [`ModuleSchemaOwnershipTests`](../tests/ArchitectureTests/CrowdFunding.ArchitectureTests/ModuleSchemaOwnershipTests.cs) ([data-ownership.md](data-ownership.md); database roles still open, item 8) |
 | Increment-based campaign totals | Append-only ledger with database-enforced sum ([append-only-ledger.md](append-only-ledger.md)) |
 
 Not addressed and out of scope for the course: backer profiles (avatar, biography, public backing history).

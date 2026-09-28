@@ -10,6 +10,13 @@ namespace CrowdFunding.Modules.Identity.Infrastructure.Persistence.DbContexts;
 /// </summary>
 public sealed class IdentityDbContext : DbContext
 {
+    /// <summary>
+    /// The PostgreSQL schema this module owns. Every table of the module (aggregates, read models,
+    /// outbox, dead letters, inbox) and its migrations history live here; no other module maps a
+    /// table into it. See docs/data-ownership.md.
+    /// </summary>
+    public const string Schema = "identity";
+
     public IdentityDbContext(DbContextOptions<IdentityDbContext> options)
         : base(options)
     {
@@ -21,6 +28,7 @@ public sealed class IdentityDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.HasDefaultSchema(Schema);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(IdentityDbContext).Assembly);
         base.OnModelCreating(modelBuilder);
     }

@@ -102,7 +102,7 @@ The limit is equally important to teach: in-process modules never experience rea
 ### Lesson 10: Per-module connection strings
 
 - **Trap:** one hard-coded connection string for the whole application, discovered only when someone tries to move a module's data.
-- **In this codebase:** each module resolves `ConnectionStrings:{Module}Db` (for example `CampaignsDb`) and falls back to `DefaultConnection`. All modules can share one PostgreSQL instance today, and a module can be pointed at another database by configuration alone. Moving its existing data is a separate migration, and because module tables share the `public` schema, that means moving named tables rather than dumping a schema.
+- **In this codebase:** each module resolves `ConnectionStrings:{Module}Db` (for example `CampaignsDb`) and falls back to `DefaultConnection`. All modules can share one PostgreSQL instance today, and a module can be pointed at another database by configuration alone. Moving its existing data is a separate step, and because each module's tables, outbox, inbox and migration history live in its own schema, that step is `pg_dump --schema=<module>` (see [`docs/data-ownership.md`](../../docs/data-ownership.md)).
 - **Read:** [`ConfigurationExtensions.cs`](../../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Configuration/ConfigurationExtensions.cs), [`MultiDatabaseConnectionDecouplingTests.cs`](../../tests/IntegrationTests/CrowdFunding.IntegrationTests/MultiDatabaseConnectionDecouplingTests.cs).
 - **Takeaway:** decouple deployment topology from code through configuration, and be honest about the data migration that remains.
 

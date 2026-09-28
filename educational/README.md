@@ -20,7 +20,7 @@ This folder explains how the reference codebase addresses each of these while st
 ### Where the codebase stands today (branch `feature/clean-arch-course`)
 
 - Six in-process modules: Identity, Campaigns, Contributions, Moderation, CampaignUpdates, Notifications. Each has exactly four projects (Contracts, Domain, Application, Infrastructure), and other modules may reference only its Contracts project.
-- One DbContext per module, no cross-module foreign keys, a per-module migration history schema, and a per-module connection string (`ConnectionStrings:{Module}Db`, falling back to `DefaultConnection`). Module tables themselves still live in PostgreSQL's `public` schema; moving them into per-module schemas is a remaining limitation.
+- One DbContext and one PostgreSQL schema per module (all its tables, outbox, inbox and migration history), no cross-module foreign keys, and a per-module connection string (`ConnectionStrings:{Module}Db`, falling back to `DefaultConnection`). Per-module database roles are the remaining step; see [`docs/data-ownership.md`](../docs/data-ownership.md).
 - Transactional outbox per module (Campaigns, Contributions, Moderation) with a post-commit wake-up signal, plus an inbox (`IIdempotentConsumer`) for idempotent consumers. The in-process message bus is the working mode; a RabbitMQ bus can publish but there is no broker consumer.
 - ES256 JWTs with a JWKS endpoint, so a future service could verify tokens without the private key.
 - Architecture tests that inspect compiled assembly references by reflection and fail the build on boundary violations.
@@ -39,7 +39,7 @@ graph TD
             UpdM["CampaignUpdates"]
             NotM["Notifications"]
         end
-        PG[("One PostgreSQL database<br/>one DbContext and table set per module,<br/>no cross-module FKs")]
+        PG[("One PostgreSQL database<br/>one DbContext and schema per module,<br/>no cross-module FKs")]
     end
 
     subgraph Next["Next course step (planned, PoC on future/microservices-extraction)"]
@@ -73,6 +73,7 @@ graph TD
 - [`pedagogical-benefits-and-learning-matrix.md`](./04-architect-gold-notes/pedagogical-benefits-and-learning-matrix.md): eleven lessons the codebase teaches, each linked to the code and tests that embody it, and what each role should take away.
 
 ### Related documents outside this folder
+- [`docs/data-ownership.md`](../docs/data-ownership.md): schema per module, why code-only separation is not enough, per-module database roles (next step), the Campaigns to Moderation review-status read as the cross-module worked example, and how it maps to database per service.
 - [`docs/minimal-apis-vs-controllers.md`](../docs/minimal-apis-vs-controllers.md): the API uses Minimal APIs, with one controller (`ModerationController`) kept for comparison.
 - [`docs/append-only-ledger.md`](../docs/append-only-ledger.md): the campaign funding ledger and its database-enforced invariants.
 - [`docs/outbox-architecture.md`](../docs/outbox-architecture.md): the outbox claim query, signal, retries and dead-lettering.

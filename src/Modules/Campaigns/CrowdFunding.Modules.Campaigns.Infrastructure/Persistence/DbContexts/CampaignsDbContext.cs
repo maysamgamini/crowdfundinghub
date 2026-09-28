@@ -9,6 +9,13 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.DbContexts;
 /// </summary>
 public sealed class CampaignsDbContext : DbContext
 {
+    /// <summary>
+    /// The PostgreSQL schema this module owns. Every table of the module (aggregates, read models,
+    /// outbox, dead letters, inbox) and its migrations history live here; no other module maps a
+    /// table into it. See docs/data-ownership.md.
+    /// </summary>
+    public const string Schema = "campaigns";
+
     public CampaignsDbContext(DbContextOptions<CampaignsDbContext> options)
         : base(options)
     {
@@ -23,6 +30,7 @@ public sealed class CampaignsDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.HasDefaultSchema(Schema);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(CampaignsDbContext).Assembly);
         modelBuilder.ConfigureOutbox("campaigns_outbox_messages");
         modelBuilder.ConfigureDeadLetter("campaigns_dead_letter_events");

@@ -94,19 +94,14 @@ The review endpoints (`GET/POST /api/moderation/reviews...`) move to the service
 
 ## 4. Step 3: give Moderation its own database
 
-Module tables currently live in the shared `public` schema, so the split copies Moderation's tables by name rather than by schema:
+Every Moderation table (`campaign_reviews`, the outbox and dead-letter tables) and its EF migration history already live in the `moderation` schema ([`docs/data-ownership.md`](../../docs/data-ownership.md)), so the split is one schema:
 
 ```bash
-pg_dump -h monolith-db -U postgres -d crowdfundingdb -F c \
-  -t public.campaign_reviews \
-  -t public.moderation_outbox_messages \
-  -t public.moderation_dead_letter_events \
-  -n moderation \
-  -f moderation.dump
+pg_dump -h monolith-db -U postgres -d crowdfundingdb -F c --schema=moderation -f moderation.dump
 pg_restore -h moderation-db -U postgres -d moderation_db moderation.dump
 ```
 
-(`-n moderation` carries the EF migration history table.) Then point the service at the new database:
+The migration history travels with the schema, so the service's EF migrations continue from where the monolith left off. Then point the service at the new database:
 
 ```json
 {
@@ -116,7 +111,7 @@ pg_restore -h moderation-db -U postgres -d moderation_db moderation.dump
 }
 ```
 
-Moving each module's tables into its own schema first would reduce this step to `pg_dump --schema=moderation`. That move is still open on this branch.
+For a cut-over without downtime, replicate the schema's tables with PostgreSQL logical replication instead of a dump.
 
 ---
 

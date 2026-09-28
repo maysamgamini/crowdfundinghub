@@ -18,5 +18,5 @@ Subscribes to system events via the handlers in `Events/CampaignActivityEventHan
 ## Projects & Layers
 - `CrowdFunding.Modules.CampaignUpdates.Domain`: The `WebhookSubscription` and `WebhookDeliveryTask` aggregates.
 - `CrowdFunding.Modules.CampaignUpdates.Application`: Subscription commands and queries, the event handlers, SSRF URL validation, and ports.
-- `CrowdFunding.Modules.CampaignUpdates.Infrastructure`: EF Core `CampaignUpdatesDbContext` (tables in the `public` schema, migration history in the `campaignupdates` schema), repositories, the inbox, the payload signer, and the dispatcher.
+- `CrowdFunding.Modules.CampaignUpdates.Infrastructure`: EF Core `CampaignUpdatesDbContext` (tables and migration history in the `campaignupdates` schema), repositories, the inbox, the payload signer, and the dispatcher.
 - `CrowdFunding.Modules.CampaignUpdates.Contracts`: The outbound webhook contract (`WebhookEventTypes`, `PledgeConfirmedWebhookPayload`, `WebhookSignature`).

@@ -20,7 +20,7 @@ This skill guides the QA engineer/agent in reviewing database schemas, indexing 
 
 ### 2. Multi-Module Migration Isolation
 - **History Table Separation**:
-  - In a modular monolith sharing a single PostgreSQL database with multiple `DbContext`s, each context must keep its own migration history. Here each module uses `MigrationsHistoryTable("__EFMigrationsHistory", "<module schema>")` (`campaigns`, `contributions`, `identity`, `moderation`, `notifications`, `campaignupdates`; the audit context uses `system`). Module tables themselves share the `public` schema, so also check for table-name collisions between modules.
+  - In a modular monolith sharing a single PostgreSQL database with multiple `DbContext`s, each context must keep its own migration history. Here each module uses `MigrationsHistoryTable("__EFMigrationsHistory", "<module schema>")` (`campaigns`, `contributions`, `identity`, `moderation`, `notifications`, `campaignupdates`; the audit context uses `system`). Module tables live in the same per-module schema (`HasDefaultSchema`), so check that hand-written SQL and PL/pgSQL functions schema-qualify table names.
 - **CLI Migration Runner**:
   - Verify that database migrations can be executed independently via CLI (`dotnet run -- migrate`) rather than during application startup on production replicas.
 

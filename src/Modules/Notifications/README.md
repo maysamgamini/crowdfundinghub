@@ -14,7 +14,7 @@ Event handlers live in `Application/Events/NotificationEventHandlers.cs` (one cl
 `GetNotificationPreferencesQuery` (public contract in `Notifications.Contracts`), `UpdateNotificationPreferencesCommand`, and `UnsubscribeCommand` (one-click, anonymous; it currently trusts a bare user id, a known limitation). Transactional email (receipts, refund notices) ignores preferences.
 
 ## Persistence
-One `NotificationsDbContext` owning `notification_preferences` and `campaign_title_cache`, in PostgreSQL's `public` schema; only its EF migrations history table is in the `notifications` schema. `ConnectionStrings:NotificationsDb` falls back to `DefaultConnection`.
+One `NotificationsDbContext` owning `notification_preferences` and `campaign_title_cache`, together with its EF migrations history, in the `notifications` schema. `ConnectionStrings:NotificationsDb` falls back to `DefaultConnection`.
 
 ## Projects & Layers
 - `CrowdFunding.Modules.Notifications.Contracts`: `GetNotificationPreferencesQuery` and its result.

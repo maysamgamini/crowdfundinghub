@@ -14,5 +14,5 @@ The Identity module manages user registration, password hashing, credential auth
 ## Projects & Layers
 - `CrowdFunding.Modules.Identity.Domain`: Contains the `User` aggregate root (derives from `BaseEntity`) and its child entities `UserRoleAssignment`, `UserPermissionGrant`, and `RefreshToken`. The module raises no domain events.
 - `CrowdFunding.Modules.Identity.Application`: Implements registration, login, refresh, logout, role/permission administration, deactivation, admin seeding, and the current-user query.
-- `CrowdFunding.Modules.Identity.Infrastructure`: EF Core `IdentityDbContext`, the PBKDF2 password hasher, `EfSigningKeyStore`, `SigningKeyProtector`, `JwtAccessTokenProvider`, the refresh-token service, and the Redis revocation store. Tables live in the `public` schema; only the migration history is in the `identity` schema.
+- `CrowdFunding.Modules.Identity.Infrastructure`: EF Core `IdentityDbContext`, the PBKDF2 password hasher, `EfSigningKeyStore`, `SigningKeyProtector`, `JwtAccessTokenProvider`, the refresh-token service, and the Redis revocation store. Every table and the migration history live in the `identity` schema.
 - `CrowdFunding.Modules.Identity.Contracts`: Authorization constants (`RoleConstants`, `PermissionConstants`, `CustomClaimTypes`, `RolePermissionCatalog`).

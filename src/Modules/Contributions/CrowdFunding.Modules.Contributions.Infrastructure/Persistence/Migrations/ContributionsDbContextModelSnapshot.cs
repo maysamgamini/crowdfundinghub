@@ -17,7 +17,8 @@ namespace CrowdFunding.Modules.Contributions.Infrastructure.Persistence.Migratio
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.5")
+                .HasDefaultSchema("contributions")
+                .HasAnnotation("ProductVersion", "10.0.11")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -37,7 +38,7 @@ namespace CrowdFunding.Modules.Contributions.Infrastructure.Persistence.Migratio
 
                     b.HasKey("EventId", "ConsumerName");
 
-                    b.ToTable("contributions_processed_events", (string)null);
+                    b.ToTable("contributions_processed_events", "contributions");
                 });
 
             modelBuilder.Entity("CrowdFunding.BuildingBlocks.Infrastructure.Persistence.DeadLetterEvent", b =>
@@ -73,7 +74,7 @@ namespace CrowdFunding.Modules.Contributions.Infrastructure.Persistence.Migratio
 
                     b.HasIndex("SourceEventId");
 
-                    b.ToTable("contributions_dead_letter_events", (string)null);
+                    b.ToTable("contributions_dead_letter_events", "contributions");
                 });
 
             modelBuilder.Entity("CrowdFunding.BuildingBlocks.Infrastructure.Persistence.OutboxMessage", b =>
@@ -134,7 +135,7 @@ namespace CrowdFunding.Modules.Contributions.Infrastructure.Persistence.Migratio
                         .HasDatabaseName("ix_contributions_outbox_messages_pending")
                         .HasFilter("\"Status\" = 0");
 
-                    b.ToTable("contributions_outbox_messages", (string)null);
+                    b.ToTable("contributions_outbox_messages", "contributions");
                 });
 
             modelBuilder.Entity("CrowdFunding.Modules.Contributions.Domain.Aggregates.Contribution", b =>
@@ -194,7 +195,7 @@ namespace CrowdFunding.Modules.Contributions.Infrastructure.Persistence.Migratio
 
                     b.HasIndex("CampaignId", "CreatedAtUtc");
 
-                    b.ToTable("contributions", (string)null);
+                    b.ToTable("contributions", "contributions");
                 });
 
             modelBuilder.Entity("CrowdFunding.Modules.Contributions.Infrastructure.Persistence.ReadModels.ActiveCampaignCache", b =>
@@ -229,7 +230,7 @@ namespace CrowdFunding.Modules.Contributions.Infrastructure.Persistence.Migratio
                     b.HasIndex("CampaignId", "IsActive")
                         .HasDatabaseName("ix_active_campaigns_cache_lookup");
 
-                    b.ToTable("active_campaigns_cache", (string)null);
+                    b.ToTable("active_campaigns_cache", "contributions");
                 });
 
             modelBuilder.Entity("CrowdFunding.Modules.Contributions.Domain.Aggregates.Contribution", b =>
@@ -252,7 +253,7 @@ namespace CrowdFunding.Modules.Contributions.Infrastructure.Persistence.Migratio
 
                             b1.HasKey("ContributionId");
 
-                            b1.ToTable("contributions");
+                            b1.ToTable("contributions", "contributions");
 
                             b1.WithOwner()
                                 .HasForeignKey("ContributionId");

@@ -14,7 +14,7 @@ The Contributions module manages the financial lifecycle of backer pledges: pled
 - **Monetization & Metering**: Confirmed pledges trigger `PledgeConfirmedMeteringEventHandler`, which calculates platform fees and emits normalized CloudEvents to OpenMeter.
 
 ## Persistence
-One `ContributionsDbContext` owning the tables `contributions`, `active_campaigns_cache`, `contributions_outbox_messages`, `contributions_dead_letter_events`, and `contributions_processed_events`. The tables live in PostgreSQL's `public` schema; only the EF migrations history table is in the `contributions` schema. There are no foreign keys to other modules' tables, and `ConnectionStrings:ContributionsDb` (falling back to `DefaultConnection`) lets the module move to its own database.
+One `ContributionsDbContext` owning the tables `contributions`, `active_campaigns_cache`, `contributions_outbox_messages`, `contributions_dead_letter_events`, and `contributions_processed_events`. The tables and the EF migrations history live in the `contributions` schema. There are no foreign keys to other modules' tables, and `ConnectionStrings:ContributionsDb` (falling back to `DefaultConnection`) lets the module move to its own database.
 
 ## Projects & Layers
 - `CrowdFunding.Modules.Contributions.Domain`: Contains the `Contribution` aggregate root, `ContributionStatus` enum (`Pending`, `Succeeded`, `Failed`, `Refunded`), and domain events.

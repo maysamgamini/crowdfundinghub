@@ -47,9 +47,9 @@ public sealed class CampaignLedgerMigrationTests : IAsyncLifetime
         var rows = await dbContext.Database.SqlQuery<SnapshotRow>(
                 $"""
                  SELECT c."Id" AS "CampaignId", c.raised_amount AS "RaisedAmount",
-                        COALESCE((SELECT SUM(e."Amount") FROM campaign_ledger_entries e WHERE e."CampaignId" = c."Id"), 0) AS "LedgerSum",
-                        (SELECT COUNT(*) FROM campaign_ledger_entries e WHERE e."CampaignId" = c."Id" AND e."Kind" = 2)::int AS "OpeningBalances"
-                 FROM campaigns c
+                        COALESCE((SELECT SUM(e."Amount") FROM campaigns.campaign_ledger_entries e WHERE e."CampaignId" = c."Id"), 0) AS "LedgerSum",
+                        (SELECT COUNT(*) FROM campaigns.campaign_ledger_entries e WHERE e."CampaignId" = c."Id" AND e."Kind" = 2)::int AS "OpeningBalances"
+                 FROM campaigns.campaigns c
                  """)
             .ToListAsync();
 

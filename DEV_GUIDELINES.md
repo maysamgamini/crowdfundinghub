@@ -50,7 +50,8 @@ Versions live only in `Directory.Packages.props` (central package management). R
 - Treat migration designer files as generated artifacts.
 - Keep outbox mapping enabled for aggregates that emit domain events.
 - Prefer invariants the database enforces (unique keys, CHECK constraints, triggers) for money and other state that must never drift; see `docs/append-only-ledger.md`. Hand-write the SQL parts of such migrations and cover them with integration tests against PostgreSQL.
-- Module tables currently share the `public` schema; name new tables with the module prefix convention used by the module (for example `contributions_processed_events`).
+- Every module owns one PostgreSQL schema, declared as `{Module}DbContext.Schema` and applied with `HasDefaultSchema`; new tables land there automatically. Never map a table into another module's schema or into `public` (`ModuleSchemaOwnershipTests` fails the build).
+- Schema-qualify every table in hand-written SQL (`campaigns.campaign_ledger_entries`), or read the name from the EF model with `QualifiedTableName.Of<TEntity>(dbContext)`. Do not rely on `search_path`. PL/pgSQL functions resolve names at run time, so qualify tables inside them too. See `docs/data-ownership.md`.
 
 ## Security
 - Register new permissions in `PermissionConstants` and, when relevant, map them through `RolePermissionCatalog`.

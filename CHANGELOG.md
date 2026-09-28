@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-09-28: Data ownership, one schema per module
+
+Every module now owns one PostgreSQL schema instead of sharing `public`. The course material for the change is [`docs/data-ownership.md`](docs/data-ownership.md): why code-only separation is not enough, the Campaigns to Moderation review-status read as the cross-module worked example, per-module database roles as the next step, and how a schema per module becomes a database per service.
+
+### Changed
+
+- **Schema per module.** Each module DbContext declares `Schema` and calls `HasDefaultSchema(Schema)`; the migrations history table uses the same constant. Schemas: `campaigns`, `contributions`, `identity`, `moderation`, `notifications`, `campaignupdates` (the name the CampaignUpdates history table already used). Outbox, dead-letter and inbox tables move with their module. `system.audit_records` stays in the shared `system` schema with one owner (`AuditDbContext`) and no readers.
+- **Raw SQL is schema-qualified.** The outbox claim reads its table from the EF model through the new [`QualifiedTableName`](src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/QualifiedTableName.cs) (module outbox processors no longer pass a table name), the inbox claim uses the same helper, and the ledger and webhook-claim statements name `campaigns.` and `campaignupdates.` explicitly.
+- **Tests.** [`ModuleSchemaOwnershipTests`](tests/ArchitectureTests/CrowdFunding.ArchitectureTests/ModuleSchemaOwnershipTests.cs) fails the build when a module has no schema of its own, shares one, or maps a table outside it. [`ModuleSchemaMigrationTests`](tests/IntegrationTests/CrowdFunding.IntegrationTests/ModuleSchemaMigrationTests.cs) upgrades a database holding data in `public` and proves rows, ledger triggers and outbox delivery survive.
+
+### Database migrations
+
+- `MoveTablesToModuleSchema` in each of the six modules: `ALTER TABLE public.x SET SCHEMA <module>` for every table the module owns. A catalog change: no rows are copied; indexes, constraints and triggers move with their tables. Each statement briefly takes an exclusive lock, so run it while the application is idle.
+- The Campaigns migration also moves the ledger trigger functions into `campaigns` and recreates `campaigns_raised_amount_matches_ledger()` with a schema-qualified table name, because PL/pgSQL resolves table names through `search_path` at run time.
+
 ## 2026-09-28: Production hardening for the Clean Architecture course
 
 This release prepares the codebase to be the reference for a C# Clean Architecture course for senior engineers. Several techniques were ported from the sibling HiSpeedAlgo backend (`apps/backend` in the parent repository) where it was ahead; others fix gaps specific to this codebase. Each item links to the code and the document that explains it.

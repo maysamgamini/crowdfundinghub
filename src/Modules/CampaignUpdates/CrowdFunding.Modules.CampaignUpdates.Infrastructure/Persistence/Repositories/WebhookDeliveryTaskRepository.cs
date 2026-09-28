@@ -33,19 +33,21 @@ public sealed class WebhookDeliveryTaskRepository : IWebhookDeliveryTaskReposito
         // claimed" for a second dispatcher replica to slip into and pick up the same rows. Also
         // reclaims Processing rows whose lock has expired (e.g. the worker that claimed them
         // crashed mid-delivery), mirroring OutboxClaimQuery's lock-lease pattern.
+        // The table is schema-qualified (CampaignUpdatesDbContext.Schema) so the statement never
+        // depends on search_path.
         var lockedUntilUtc = nowUtc.Add(lockDuration);
 
         const string sql = """
             WITH claimable AS (
                 SELECT "Id"
-                FROM webhook_delivery_tasks
+                FROM campaignupdates.webhook_delivery_tasks
                 WHERE ("Status" = 'Pending' AND "ScheduledAtUtc" <= {0})
                    OR ("Status" = 'Processing' AND "LockedUntilUtc" IS NOT NULL AND "LockedUntilUtc" <= {0})
                 ORDER BY "ScheduledAtUtc"
                 FOR UPDATE SKIP LOCKED
                 LIMIT {1}
             )
-            UPDATE webhook_delivery_tasks t
+            UPDATE campaignupdates.webhook_delivery_tasks t
             SET "Status" = 'Processing',
                 "WorkerId" = {2},
                 "LockedUntilUtc" = {3}
