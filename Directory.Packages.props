@@ -28,10 +28,8 @@
     <PackageVersion Include="StackExchange.Redis" Version="3.1.31" />
   </ItemGroup>
 
-  <ItemGroup Label="Messaging, security, mapping, validation">
+  <ItemGroup Label="Messaging, security, validation">
     <PackageVersion Include="FluentValidation" Version="12.1.1" />
-    <PackageVersion Include="Mapster" Version="10.0.6" />
-    <PackageVersion Include="Mapster.DependencyInjection" Version="10.0.6" />
     <PackageVersion Include="MessagePack" Version="3.1.8" />
     <PackageVersion Include="RabbitMQ.Client" Version="7.1.2" />
     <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.22.0" />

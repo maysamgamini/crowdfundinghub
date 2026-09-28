@@ -15,3 +15,20 @@ public sealed record PagedResponse<T>(
     int PageSize,
     int TotalCount,
     int TotalPages);
+
+/// <summary>
+/// Builds <see cref="PagedResponse{T}"/> from an application-layer page.
+/// </summary>
+public static class PagedResponse
+{
+    /// <summary>
+    /// Maps every item of <paramref name="page"/> and copies its paging metadata.
+    /// </summary>
+    /// <typeparam name="TSource">The application result item type.</typeparam>
+    /// <typeparam name="T">The HTTP response item type.</typeparam>
+    /// <param name="page">The application-layer page.</param>
+    /// <param name="map">Maps one item.</param>
+    /// <returns>The HTTP response page.</returns>
+    public static PagedResponse<T> From<TSource, T>(CrowdFunding.BuildingBlocks.Application.Pagination.PagedResult<TSource> page, Func<TSource, T> map)
+        => new(page.Items.Select(map).ToArray(), page.PageNumber, page.PageSize, page.TotalCount, page.TotalPages);
+}

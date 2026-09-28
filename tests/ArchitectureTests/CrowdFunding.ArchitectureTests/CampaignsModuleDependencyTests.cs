@@ -1,5 +1,5 @@
 using System.Reflection;
-using CrowdFunding.API.Controllers;
+using CrowdFunding.API.Endpoints;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.CreateCampaign;
 using CrowdFunding.Modules.Campaigns.Domain.Aggregates;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Repositories;
@@ -29,7 +29,7 @@ public sealed class CampaignsModuleDependencyTests
     [Fact]
     public void Api_ShouldNotReference_DomainDirectly()
     {
-        var referencedAssemblyNames = GetReferencedAssemblyNames(typeof(CampaignsController).Assembly);
+        var referencedAssemblyNames = GetReferencedAssemblyNames(typeof(EndpointRegistration).Assembly);
 
         Assert.DoesNotContain(typeof(Campaign).Assembly.GetName().Name, referencedAssemblyNames);
     }

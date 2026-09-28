@@ -56,7 +56,8 @@ graph today.
 | **Concurrency defense** | None needed — single-writer insert, no shared mutable state | None needed — same reason | `xmin` optimistic concurrency + `pg_advisory_xact_lock` on later commands (`AddContribution`, `Publish`, `Cancel`) that mutate this same row |
 | **When to choose this tier** | Config, lookups, prototypes, anything with no downstream consumers | Standard CRUD with validation but no cross-module consequences | Financial ledgers, multi-step lifecycles, anything another module's outbox subscriber depends on |
 
-**Note on the 960-line Tier 3 total**: the controller, the `Campaign` aggregate, the repository,
+**Note on the 960-line Tier 3 total** (measured when Tier 3's entry point was an MVC controller;
+it is now a Minimal API, see `03-RichDomainModel/README.md`): the endpoint, the `Campaign` aggregate, the repository,
 and the transaction executor are *shared* across every Campaigns write use case (Publish,
 Cancel, AddContribution, ...), not exclusive to `CreateCampaign`. The 14-file, 960-line total is
 what a reader has to open and understand to trace one request end to end — that cognitive cost

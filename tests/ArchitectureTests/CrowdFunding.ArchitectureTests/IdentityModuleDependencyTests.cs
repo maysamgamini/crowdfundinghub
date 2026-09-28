@@ -1,5 +1,5 @@
 using System.Reflection;
-using CrowdFunding.API.Controllers;
+using CrowdFunding.API.Endpoints;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.RegisterUser;
 using CrowdFunding.Modules.Identity.Domain.Aggregates;
 using CrowdFunding.Modules.Identity.Infrastructure.Persistence.Repositories;
@@ -29,7 +29,7 @@ public sealed class IdentityModuleDependencyTests
     [Fact]
     public void Api_ShouldNotReference_IdentityDomainDirectly()
     {
-        var referencedAssemblyNames = GetReferencedAssemblyNames(typeof(IdentityController).Assembly);
+        var referencedAssemblyNames = GetReferencedAssemblyNames(typeof(EndpointRegistration).Assembly);
 
         Assert.DoesNotContain(typeof(User).Assembly.GetName().Name, referencedAssemblyNames);
     }

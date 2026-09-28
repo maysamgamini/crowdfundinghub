@@ -6,7 +6,7 @@ second, drifting source of truth. Read the real pipeline instead:
 
 | Step | File |
 | :--- | :--- |
-| HTTP entry point | [`CampaignsController.Create`](../../../API/CrowdFunding.API/Controllers/CampaignsController.cs) |
+| HTTP entry point | [`CampaignEndpoints.CreateAsync`](../../../API/CrowdFunding.API/Endpoints/CampaignEndpoints.cs) (a Minimal API) |
 | Request contract | [`CreateCampaignRequest`](../../../API/CrowdFunding.API/Contracts/Campaigns/CreateCampaignRequest.cs) |
 | Command | [`CreateCampaignCommand`](../../../Modules/Campaigns/CrowdFunding.Modules.Campaigns.Application/Features/Campaigns/Commands/CreateCampaign/CreateCampaignCommand.cs) |
 | Validator | [`CreateCampaignCommandValidator`](../../../Modules/Campaigns/CrowdFunding.Modules.Campaigns.Application/Features/Campaigns/Commands/CreateCampaign/CreateCampaignCommandValidator.cs) |
@@ -18,7 +18,8 @@ second, drifting source of truth. Read the real pipeline instead:
 | Transaction + outbox executor | [`CampaignTransactionExecutor`](../../../Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Transactions/CampaignTransactionExecutor.cs) |
 | Response contract | [`CreateCampaignResponse`](../../../API/CrowdFunding.API/Contracts/Campaigns/CreateCampaignResponse.cs) |
 
-That's 14 files. Several of them (the controller, the aggregate, the repository, the
+That's 14 files (the counts below were measured when the entry point was an MVC controller; the
+Minimal API handler is shorter, the rest is unchanged). Several of them (the endpoint, the aggregate, the repository, the
 transaction executor) are *shared* across every Campaigns write use case — Publish, Cancel,
 AddContribution, etc. — so the marginal cost of one more command on top of an already-justified
 Tier 3 module is smaller than the raw count suggests. It's the *first* command that pays for the

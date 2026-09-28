@@ -13,8 +13,8 @@ namespace CrowdFunding.IntegrationTests;
 /// Drives the TICKET-028 Rosetta Stone sample end to end against real HTTP + Postgres: all
 /// three tiers accept the same valid payload and persist a record, and all three return the
 /// same RFC 9457 <c>application/problem+json</c> validation shape for the same invalid payload,
-/// despite Tier 1 (Minimal API) and Tier 2 (Pragmatic CQRS) bypassing MVC's controller pipeline
-/// entirely. Tiers 1 and 2 run in the sample's own standalone host (the production API does not
+/// despite each tier producing it differently (Tier 1 and 2 call Results.ValidationProblem; Tier 3's
+/// command pipeline throws RequestValidationException, mapped by GlobalExceptionHandler). Tiers 1 and 2 run in the sample's own standalone host (the production API does not
 /// reference the sample); Tier 3 is the production API. Both hosts share the fixture's Postgres.
 /// </summary>
 [Collection(CrowdFundingApiCollection.Name)]

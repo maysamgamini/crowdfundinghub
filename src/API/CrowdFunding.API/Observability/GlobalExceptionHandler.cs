@@ -35,7 +35,11 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
         var traceId = Activity.Current?.TraceId.ToHexString() ?? httpContext.TraceIdentifier;
-        var outcome = ExceptionClassifier.Classify(exception);
+        // A request the framework could not bind (malformed JSON, missing body, unparsable route or
+        // query value) is a client error; its message names framework internals, so it is not echoed.
+        var outcome = exception is BadHttpRequestException badRequest
+            ? new ExceptionClassification(badRequest.StatusCode, "Bad Request", "The request could not be read: malformed JSON, a missing body or an invalid parameter.")
+            : ExceptionClassifier.Classify(exception);
 
         if (outcome.IsServerFault)
         {

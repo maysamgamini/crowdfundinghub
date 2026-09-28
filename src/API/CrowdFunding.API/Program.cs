@@ -1,5 +1,5 @@
 using CrowdFunding.API.Documentation;
-using CrowdFunding.API.Mapping;
+using CrowdFunding.API.Endpoints;
 using CrowdFunding.API.Migrations;
 using CrowdFunding.API.Observability;
 using CrowdFunding.API.RateLimiting;
@@ -36,8 +36,6 @@ using CrowdFunding.Modules.Notifications.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignCreated;
 using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPaymentConfirmed;
 using CrowdFunding.Modules.Moderation.Contracts.Events.CampaignReviewApproved;
-using Mapster;
-using MapsterMapper;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
@@ -51,7 +49,12 @@ builder.Services.AddCrowdFundingOpenTelemetry(builder.Configuration);
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? throw new InvalidOperationException("Jwt:Issuer was not configured.");
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? throw new InvalidOperationException("Jwt:Audience was not configured.");
 
+// Minimal APIs (Endpoints/) serve the API; MVC is registered only for the one controller kept
+// for comparison (Controllers/ModerationController).
 builder.Services.AddControllers();
+// Malformed JSON or unbindable parameters throw BadHttpRequestException in every environment, so
+// GlobalExceptionHandler answers them with the same RFC 9457 400 as any other client error.
+builder.Services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = true);
 builder.Services.AddCrowdFundingOpenApi();
 
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
@@ -221,15 +224,6 @@ builder.Services.AddNotificationsInfrastructure(builder.Configuration);
 builder.Services.AddCampaignUpdatesApplication();
 builder.Services.AddCampaignUpdatesInfrastructure(builder.Configuration);
 
-var typeAdapterConfig = new TypeAdapterConfig();
-CampaignsMappingConfig.Register(typeAdapterConfig);
-ContributionsMappingConfig.Register(typeAdapterConfig);
-IdentityMappingConfig.Register(typeAdapterConfig);
-ModerationMappingConfig.Register(typeAdapterConfig);
-CampaignUpdatesMappingConfig.Register(typeAdapterConfig);
-
-builder.Services.AddSingleton(typeAdapterConfig);
-builder.Services.AddScoped<IMapper, ServiceMapper>();
 
 var app = builder.Build();
 
@@ -300,6 +294,7 @@ app.MapGet("/.well-known/jwks.json", JwksEndpoint.Get)
 app.UseAuthentication();
 app.UseRateLimiter();
 app.UseAuthorization();
+app.MapCrowdFundingEndpoints();
 app.MapControllers();
 app.MapHub<CampaignHub>("/hubs/campaigns");
 app.Run();

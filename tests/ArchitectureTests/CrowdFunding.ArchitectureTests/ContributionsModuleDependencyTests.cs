@@ -1,5 +1,5 @@
 using System.Reflection;
-using CrowdFunding.API.Controllers;
+using CrowdFunding.API.Endpoints;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.MakeContribution;
 using CrowdFunding.Modules.Contributions.Domain.Aggregates;
 using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.Repositories;
@@ -29,7 +29,7 @@ public sealed class ContributionsModuleDependencyTests
     [Fact]
     public void Api_ShouldNotReference_ContributionDomainDirectly()
     {
-        var referencedAssemblyNames = GetReferencedAssemblyNames(typeof(ContributionsController).Assembly);
+        var referencedAssemblyNames = GetReferencedAssemblyNames(typeof(EndpointRegistration).Assembly);
 
         Assert.DoesNotContain(typeof(Contribution).Assembly.GetName().Name, referencedAssemblyNames);
     }
