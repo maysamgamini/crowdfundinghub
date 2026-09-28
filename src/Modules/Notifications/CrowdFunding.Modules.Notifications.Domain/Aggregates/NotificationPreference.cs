@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Domain.Common;
 using CrowdFunding.BuildingBlocks.Domain.Exceptions;
 
 namespace CrowdFunding.Modules.Notifications.Domain.Aggregates;
@@ -7,7 +8,7 @@ namespace CrowdFunding.Modules.Notifications.Domain.Aggregates;
 /// enforcing GDPR consent and CAN-SPAM opt-out standards (TICKET-056).
 /// Transactional notifications (pledge receipts, refund notices) bypass these preferences.
 /// </summary>
-public sealed class NotificationPreference
+public sealed class NotificationPreference : BaseEntity
 {
     public Guid UserId { get; private set; }
     public bool CampaignUpdatesEnabled { get; private set; }

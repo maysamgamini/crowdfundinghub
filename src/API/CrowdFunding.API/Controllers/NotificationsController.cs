@@ -3,7 +3,7 @@ using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.Notifications.Application.Features.Preferences.Commands.Unsubscribe;
 using CrowdFunding.Modules.Notifications.Application.Features.Preferences.Commands.UpdateNotificationPreferences;
-using CrowdFunding.Modules.Notifications.Application.Features.Preferences.Queries.GetNotificationPreferences;
+using CrowdFunding.Modules.Notifications.Contracts.Queries.GetNotificationPreferences;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 

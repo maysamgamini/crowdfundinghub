@@ -1,4 +1,5 @@
 using System.Reflection;
+using CrowdFunding.Modules.CampaignUpdates.Domain.Aggregates;
 using CrowdFunding.Modules.CampaignUpdates.Application.Events;
 
 namespace CrowdFunding.ArchitectureTests;
@@ -8,11 +9,7 @@ public sealed class CampaignUpdatesModuleDependencyTests
     [Fact]
     public void Domain_ShouldNotReference_ApplicationOrInfrastructure()
     {
-        // CampaignUpdates.Domain currently has no public types of its own to anchor a typeof()
-        // lookup (it's an empty shell module, per improvement.md §2.9), so it's loaded by name
-        // instead — the ProjectReference guarantees it's on disk next to the test binary.
-        var domainAssembly = Assembly.Load("CrowdFunding.Modules.CampaignUpdates.Domain");
-        var referencedAssemblyNames = GetReferencedAssemblyNames(domainAssembly);
+        var referencedAssemblyNames = GetReferencedAssemblyNames(typeof(WebhookSubscription).Assembly);
 
         Assert.DoesNotContain(typeof(CampaignCreatedActivityHandler).Assembly.GetName().Name, referencedAssemblyNames);
     }

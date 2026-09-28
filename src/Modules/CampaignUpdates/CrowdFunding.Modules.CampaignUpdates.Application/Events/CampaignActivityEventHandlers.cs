@@ -5,6 +5,7 @@ using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignPublished;
 using CrowdFunding.Modules.CampaignUpdates.Application.Abstractions.Inbox;
 using CrowdFunding.Modules.CampaignUpdates.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.CampaignUpdates.Application.Abstractions.Services;
+using CrowdFunding.Modules.CampaignUpdates.Contracts.Webhooks;
 using CrowdFunding.Modules.CampaignUpdates.Domain.Aggregates;
 using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPaymentConfirmed;
 using CrowdFunding.Modules.Moderation.Contracts.Events.CampaignReviewApproved;
@@ -66,7 +67,9 @@ public sealed class CampaignCancelledActivityHandler : IEventHandler<CampaignCan
 /// </remarks>
 public sealed class ContributionPaymentConfirmedActivityHandler : IEventHandler<ContributionPaymentConfirmedApplicationEvent>
 {
-    private const string PledgeConfirmedEventType = "pledge.confirmed";
+    // The payload is the public webhook contract (camelCase JSON), serialized once here and
+    // signed and sent verbatim by the dispatcher.
+    private static readonly JsonSerializerOptions PayloadSerializerOptions = new(JsonSerializerDefaults.Web);
 
     private readonly IWebhookSubscriptionRepository _subscriptionRepository;
     private readonly IWebhookDeliveryTaskRepository _deliveryTaskRepository;
@@ -101,18 +104,18 @@ public sealed class ContributionPaymentConfirmedActivityHandler : IEventHandler<
             return;
         }
 
-        var payload = JsonSerializer.Serialize(new
-        {
-            eventType = PledgeConfirmedEventType,
-            contributionId = notification.ContributionId,
-            campaignId = notification.CampaignId,
-            amount = notification.Amount,
-            currency = notification.Currency,
-        });
+        var payload = JsonSerializer.Serialize(
+            new PledgeConfirmedWebhookPayload(
+                WebhookEventTypes.PledgeConfirmed,
+                notification.ContributionId,
+                notification.CampaignId,
+                notification.Amount,
+                notification.Currency),
+            PayloadSerializerOptions);
 
         foreach (var subscription in subscriptions)
         {
-            var task = WebhookDeliveryTask.Create(subscription.Id, PledgeConfirmedEventType, payload, _dateTimeProvider.UtcNow);
+            var task = WebhookDeliveryTask.Create(subscription.Id, WebhookEventTypes.PledgeConfirmed, payload, _dateTimeProvider.UtcNow);
             await _deliveryTaskRepository.AddAsync(task, cancellationToken);
         }
     }

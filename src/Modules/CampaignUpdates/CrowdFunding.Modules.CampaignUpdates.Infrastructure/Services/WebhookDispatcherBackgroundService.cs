@@ -1,5 +1,6 @@
 using System.Text;
 using CrowdFunding.Modules.CampaignUpdates.Application.Abstractions.Persistence;
+using CrowdFunding.Modules.CampaignUpdates.Contracts.Webhooks;
 using CrowdFunding.Modules.CampaignUpdates.Infrastructure.Security;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -84,7 +85,7 @@ public sealed class WebhookDispatcherBackgroundService : BackgroundService
                     Content = new StringContent(task.PayloadJson, Encoding.UTF8, "application/json"),
                 };
                 request.Headers.Add(
-                    "X-CrowdFunding-Signature",
+                    WebhookSignature.HeaderName,
                     WebhookPayloadSigner.Sign(task.PayloadJson, subscription.SecretKey, DateTimeOffset.UtcNow));
 
                 using var response = await httpClient.SendAsync(request, cancellationToken);

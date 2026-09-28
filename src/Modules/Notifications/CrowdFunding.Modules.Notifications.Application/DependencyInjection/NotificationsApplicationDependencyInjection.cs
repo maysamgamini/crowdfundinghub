@@ -1,3 +1,4 @@
+using CrowdFunding.Modules.Notifications.Contracts.Queries.GetNotificationPreferences;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CrowdFunding.Modules.Notifications.Application.DependencyInjection;

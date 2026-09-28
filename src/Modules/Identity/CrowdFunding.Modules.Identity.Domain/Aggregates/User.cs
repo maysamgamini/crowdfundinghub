@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Domain.Common;
 using CrowdFunding.BuildingBlocks.Domain.Exceptions;
 using CrowdFunding.Modules.Identity.Domain.Entities;
 
@@ -6,7 +7,7 @@ namespace CrowdFunding.Modules.Identity.Domain.Aggregates;
 /// <summary>
 /// Represents an application user together with assigned roles and direct permissions.
 /// </summary>
-public sealed class User
+public sealed class User : BaseEntity
 {
     public Guid Id { get; private set; }
     public string Email { get; private set; } = string.Empty;

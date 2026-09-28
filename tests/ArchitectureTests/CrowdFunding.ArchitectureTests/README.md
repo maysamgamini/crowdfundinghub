@@ -1,9 +1,15 @@
 # CrowdFunding Architecture Tests
 
 ## Purpose
-Executable architecture tests using `NetArchTest.Rules` to enforce dependency boundaries, clean architecture invariants, and prevent layer coupling or improper cross-module references.
+Executable architecture tests that inspect compiled assembly references (`Assembly.GetReferencedAssemblies()`, no third-party rules library) to enforce dependency boundaries, clean architecture invariants, and prevent layer coupling or improper cross-module references.
 
 ## Test Suites & Boundary Rules
+- `ModuleBoundaryConventionTests.cs` (convention-based, covers every module automatically, including ones added later):
+  - Every module has exactly the four layers: Contracts, Domain, Application, Infrastructure.
+  - A module references another module only through that module's `Contracts`.
+  - A Domain assembly references no CrowdFunding assembly other than `BuildingBlocks.Domain`.
+  - A Contracts assembly references no module's internals.
+  These rules are what keep any module extractable into its own service later.
 - `CampaignsModuleDependencyTests.cs`:
   - Enforces that `API` does not directly reference `Campaigns.Domain`.
   - Asserts that `Campaigns.Domain` has no dependencies on `Campaigns.Infrastructure` or `API`.
@@ -16,6 +22,10 @@ Executable architecture tests using `NetArchTest.Rules` to enforce dependency bo
   - Enforces that `API` does not directly reference `Identity.Domain`.
   - Guarantees `Identity.Domain` contains no external framework dependencies.
   - Ensures other business modules interact solely via `Identity.Contracts`.
+- `CampaignUpdatesModuleDependencyTests.cs` / `NotificationsModuleDependencyTests.cs`:
+  - Domain does not reference Application or Infrastructure; Application does not reference other modules' internals.
+- `ReplicatedReadModelBoundaryTests.cs`:
+  - Contributions validates pledges against its own replicated campaign snapshot, never a synchronous query into Campaigns.
 - `ModerationModuleDependencyTests.cs`:
   - Enforces that `API` does not directly reference `Moderation.Domain`.
   - Verifies module boundary isolation between `Moderation` and peer business modules.

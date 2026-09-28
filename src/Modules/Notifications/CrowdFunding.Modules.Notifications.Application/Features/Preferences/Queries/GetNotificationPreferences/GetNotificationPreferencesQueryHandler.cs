@@ -1,6 +1,7 @@
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Notifications.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Notifications.Application.Abstractions.Services;
+using CrowdFunding.Modules.Notifications.Contracts.Queries.GetNotificationPreferences;
 using CrowdFunding.Modules.Notifications.Domain.Aggregates;
 
 namespace CrowdFunding.Modules.Notifications.Application.Features.Preferences.Queries.GetNotificationPreferences;

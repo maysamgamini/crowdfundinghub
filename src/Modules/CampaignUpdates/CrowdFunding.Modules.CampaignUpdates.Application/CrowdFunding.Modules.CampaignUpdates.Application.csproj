@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <ProjectReference Include="..\CrowdFunding.Modules.CampaignUpdates.Contracts\CrowdFunding.Modules.CampaignUpdates.Contracts.csproj" />
     <ProjectReference Include="..\CrowdFunding.Modules.CampaignUpdates.Domain\CrowdFunding.Modules.CampaignUpdates.Domain.csproj" />
     <ProjectReference Include="..\..\Campaigns\CrowdFunding.Modules.Campaigns.Contracts\CrowdFunding.Modules.Campaigns.Contracts.csproj" />
     <ProjectReference Include="..\..\Contributions\CrowdFunding.Modules.Contributions.Contracts\CrowdFunding.Modules.Contributions.Contracts.csproj" />

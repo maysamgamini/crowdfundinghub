@@ -17,6 +17,7 @@
   </Folder>
   <Folder Name="/src/Modules/CampaignUpdates/">
     <Project Path="src/Modules/CampaignUpdates/CrowdFunding.Modules.CampaignUpdates.Application/CrowdFunding.Modules.CampaignUpdates.Application.csproj" />
+    <Project Path="src/Modules/CampaignUpdates/CrowdFunding.Modules.CampaignUpdates.Contracts/CrowdFunding.Modules.CampaignUpdates.Contracts.csproj" />
     <Project Path="src/Modules/CampaignUpdates/CrowdFunding.Modules.CampaignUpdates.Domain/CrowdFunding.Modules.CampaignUpdates.Domain.csproj" />
     <Project Path="src/Modules/CampaignUpdates/CrowdFunding.Modules.CampaignUpdates.Infrastructure/CrowdFunding.Modules.CampaignUpdates.Infrastructure.csproj" />
   </Folder>
@@ -40,6 +41,7 @@
   </Folder>
   <Folder Name="/src/Modules/Notifications/">
     <Project Path="src/Modules/Notifications/CrowdFunding.Modules.Notifications.Application/CrowdFunding.Modules.Notifications.Application.csproj" />
+    <Project Path="src/Modules/Notifications/CrowdFunding.Modules.Notifications.Contracts/CrowdFunding.Modules.Notifications.Contracts.csproj" />
     <Project Path="src/Modules/Notifications/CrowdFunding.Modules.Notifications.Domain/CrowdFunding.Modules.Notifications.Domain.csproj" />
     <Project Path="src/Modules/Notifications/CrowdFunding.Modules.Notifications.Infrastructure/CrowdFunding.Modules.Notifications.Infrastructure.csproj" />
   </Folder>

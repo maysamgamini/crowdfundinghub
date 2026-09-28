@@ -1,4 +1,5 @@
 using System.Reflection;
+using CrowdFunding.Modules.Notifications.Domain.Aggregates;
 using CrowdFunding.Modules.Notifications.Application.Events;
 
 namespace CrowdFunding.ArchitectureTests;
@@ -8,11 +9,7 @@ public sealed class NotificationsModuleDependencyTests
     [Fact]
     public void Domain_ShouldNotReference_ApplicationOrInfrastructure()
     {
-        // Notifications.Domain currently has no public types of its own to anchor a typeof()
-        // lookup (it's an empty shell module, per improvement.md §2.9), so it's loaded by name
-        // instead — the ProjectReference guarantees it's on disk next to the test binary.
-        var domainAssembly = Assembly.Load("CrowdFunding.Modules.Notifications.Domain");
-        var referencedAssemblyNames = GetReferencedAssemblyNames(domainAssembly);
+        var referencedAssemblyNames = GetReferencedAssemblyNames(typeof(NotificationPreference).Assembly);
 
         Assert.DoesNotContain(typeof(CampaignPublishedNotificationHandler).Assembly.GetName().Name, referencedAssemblyNames);
     }

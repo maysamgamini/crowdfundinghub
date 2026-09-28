@@ -3,6 +3,7 @@ using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPaymentCon
 using CrowdFunding.Modules.Notifications.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Notifications.Application.Abstractions.Services;
 using CrowdFunding.Modules.Notifications.Application.Events;
+using CrowdFunding.Modules.Notifications.Contracts.Queries.GetNotificationPreferences;
 using CrowdFunding.Modules.Notifications.Infrastructure.Services;
 
 namespace CrowdFunding.UnitTests;
@@ -157,7 +158,7 @@ public sealed class NotificationsTests
         var userId = Guid.NewGuid();
 
         // 1. Defaults when not yet saved (campaign updates default true, marketing announcements default false per GDPR)
-        var initial = await getHandler.Handle(new CrowdFunding.Modules.Notifications.Application.Features.Preferences.Queries.GetNotificationPreferences.GetNotificationPreferencesQuery(userId), CancellationToken.None);
+        var initial = await getHandler.Handle(new GetNotificationPreferencesQuery(userId), CancellationToken.None);
         Assert.True(initial.CampaignUpdatesEnabled);
         Assert.False(initial.MarketingAnnouncementsEnabled);
 
@@ -170,7 +171,7 @@ public sealed class NotificationsTests
         var unsub = await unsubHandler.Handle(new CrowdFunding.Modules.Notifications.Application.Features.Preferences.Commands.Unsubscribe.UnsubscribeCommand(userId), CancellationToken.None);
         Assert.True(unsub.Unsubscribed);
 
-        var finalState = await getHandler.Handle(new CrowdFunding.Modules.Notifications.Application.Features.Preferences.Queries.GetNotificationPreferences.GetNotificationPreferencesQuery(userId), CancellationToken.None);
+        var finalState = await getHandler.Handle(new GetNotificationPreferencesQuery(userId), CancellationToken.None);
         Assert.False(finalState.CampaignUpdatesEnabled);
         Assert.False(finalState.MarketingAnnouncementsEnabled);
     }
