@@ -17,8 +17,7 @@ namespace CrowdFunding.IntegrationTests;
 /// </summary>
 public sealed class RabbitMqMessageBusTests : IAsyncLifetime
 {
-    private readonly RabbitMqContainer _rabbitMq = new RabbitMqBuilder()
-        .WithImage("rabbitmq:3.13-management-alpine")
+    private readonly RabbitMqContainer _rabbitMq = new RabbitMqBuilder("rabbitmq:3.13-management-alpine")
         .WithUsername("guest")
         .WithPassword("guest")
         .Build();

@@ -37,8 +37,7 @@ namespace CrowdFunding.ModerationService.IntegrationTests;
 /// </summary>
 public sealed class ModerationServiceExtractionSmokeTests : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
-        .WithImage("postgres:16-alpine")
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")
         .WithDatabase("crowdfunding_extraction_smoke")
         .WithUsername("postgres")
         .WithPassword("postgres")

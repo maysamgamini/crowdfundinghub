@@ -20,21 +20,19 @@ namespace CrowdFunding.IntegrationTests;
 /// </summary>
 public sealed class MultiDatabaseConnectionDecouplingTests : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _primaryDb = new PostgreSqlBuilder()
-        .WithImage("postgres:16-alpine")
+    private readonly PostgreSqlContainer _primaryDb = new PostgreSqlBuilder("postgres:16-alpine")
         .WithDatabase("crowdfunding_primary")
         .WithUsername("postgres")
         .WithPassword("postgres")
         .Build();
 
-    private readonly PostgreSqlContainer _campaignsDb = new PostgreSqlBuilder()
-        .WithImage("postgres:16-alpine")
+    private readonly PostgreSqlContainer _campaignsDb = new PostgreSqlBuilder("postgres:16-alpine")
         .WithDatabase("crowdfunding_campaigns_isolated")
         .WithUsername("postgres")
         .WithPassword("postgres")
         .Build();
 
-    private readonly RedisContainer _redis = new RedisBuilder().WithImage("redis:7-alpine").Build();
+    private readonly RedisContainer _redis = new RedisBuilder("redis:7-alpine").Build();
 
     private WebApplicationFactory<Program>? _factory;
 

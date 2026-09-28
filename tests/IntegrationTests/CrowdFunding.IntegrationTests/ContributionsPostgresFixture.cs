@@ -11,8 +11,7 @@ namespace CrowdFunding.IntegrationTests;
 /// </summary>
 public sealed class ContributionsPostgresFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder()
-        .WithImage("postgres:16-alpine")
+    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:16-alpine")
         .WithDatabase("crowdfunding_integration_tests")
         .WithUsername("postgres")
         .WithPassword("postgres")
