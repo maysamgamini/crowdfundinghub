@@ -87,7 +87,11 @@ public sealed class OutboxMessage
                 },
                 SerializerOptions);
 
-        return new OutboxMessage(Guid.NewGuid(), discriminator, version, payload, headers, occurredOnUtc);
+        // An application event's own EventId becomes the row id, so the outbox row, the CloudEvents
+        // id and the consumers' processed-event keys all name the same message.
+        var id = applicationEvent is BaseApplicationEvent integrationEvent ? integrationEvent.EventId : Guid.NewGuid();
+
+        return new OutboxMessage(id, discriminator, version, payload, headers, occurredOnUtc);
     }
 
     /// <summary>

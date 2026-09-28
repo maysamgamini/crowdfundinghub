@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
 using CrowdFunding.Modules.CampaignUpdates.Domain.Aggregates;
 using CrowdFunding.Modules.CampaignUpdates.Infrastructure.Persistence.ReadModels;
 using Microsoft.EntityFrameworkCore;
@@ -21,6 +22,7 @@ public sealed class CampaignUpdatesDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(CampaignUpdatesDbContext).Assembly);
+        modelBuilder.ConfigureInbox("campaign_updates_processed_events");
         base.OnModelCreating(modelBuilder);
     }
 }

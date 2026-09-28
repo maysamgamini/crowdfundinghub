@@ -1,7 +1,9 @@
 ﻿using CrowdFunding.BuildingBlocks.Infrastructure.Configuration;
+using CrowdFunding.Modules.Contributions.Application.Abstractions.Inbox;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Transactions;
+using CrowdFunding.Modules.Contributions.Infrastructure.Inbox;
 using CrowdFunding.Modules.Contributions.Infrastructure.Outbox;
 using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.Repositories;
@@ -29,7 +31,7 @@ public static class ContributionsInfrastructureDependencyInjection
                 npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "contributions")));
 
         services.AddScoped<IContributionRepository, ContributionRepository>();
-        services.AddScoped<IPaymentWebhookIdempotencyStore, PaymentWebhookIdempotencyStore>();
+        services.AddScoped<IContributionsIdempotentConsumer, ContributionsIdempotentConsumer>();
         services.AddScoped<IActiveCampaignCacheRepository, ActiveCampaignCacheRepository>();
         services.AddScoped<IContributionReadService, ContributionReadService>();
         services.AddScoped<IContributionTransactionExecutor, ContributionTransactionExecutor>();

@@ -1,6 +1,8 @@
 using CrowdFunding.BuildingBlocks.Infrastructure.Configuration;
+using CrowdFunding.Modules.CampaignUpdates.Application.Abstractions.Inbox;
 using CrowdFunding.Modules.CampaignUpdates.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.CampaignUpdates.Application.Abstractions.Services;
+using CrowdFunding.Modules.CampaignUpdates.Infrastructure.Inbox;
 using CrowdFunding.Modules.CampaignUpdates.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.CampaignUpdates.Infrastructure.Persistence.Repositories;
 using CrowdFunding.Modules.CampaignUpdates.Infrastructure.Services;
@@ -28,6 +30,7 @@ public static class CampaignUpdatesInfrastructureDependencyInjection
         services.AddScoped<ICampaignOwnerCacheRepository, CampaignOwnerCacheRepository>();
         services.AddScoped<IWebhookSubscriptionRepository, WebhookSubscriptionRepository>();
         services.AddScoped<IWebhookDeliveryTaskRepository, WebhookDeliveryTaskRepository>();
+        services.AddScoped<ICampaignUpdatesIdempotentConsumer, CampaignUpdatesIdempotentConsumer>();
         services.AddSingleton<ICampaignUpdatesDateTimeProvider, SystemDateTimeProvider>();
 
         // A named client rather than a typed client: the dispatcher calls whatever URL each

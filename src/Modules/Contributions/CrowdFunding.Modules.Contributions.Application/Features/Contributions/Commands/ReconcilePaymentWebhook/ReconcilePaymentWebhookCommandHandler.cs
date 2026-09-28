@@ -1,5 +1,6 @@
 using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
+using CrowdFunding.Modules.Contributions.Application.Abstractions.Inbox;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Transactions;
@@ -17,22 +18,23 @@ public sealed class ReconcilePaymentWebhookCommandHandler : ICommandHandler<Reco
 {
     private const string PaymentSucceededEventType = "payment_intent.succeeded";
     private const string PaymentFailedEventType = "payment_intent.payment_failed";
+    private const string ConsumerName = nameof(ReconcilePaymentWebhookCommandHandler);
 
     private readonly IContributionRepository _contributionRepository;
-    private readonly IPaymentWebhookIdempotencyStore _idempotencyStore;
+    private readonly IContributionsIdempotentConsumer _idempotentConsumer;
     private readonly IActiveCampaignCacheRepository _activeCampaignCacheRepository;
     private readonly IContributionDateTimeProvider _dateTimeProvider;
     private readonly IContributionTransactionExecutor _transactionExecutor;
 
     public ReconcilePaymentWebhookCommandHandler(
         IContributionRepository contributionRepository,
-        IPaymentWebhookIdempotencyStore idempotencyStore,
+        IContributionsIdempotentConsumer idempotentConsumer,
         IActiveCampaignCacheRepository activeCampaignCacheRepository,
         IContributionDateTimeProvider dateTimeProvider,
         IContributionTransactionExecutor transactionExecutor)
     {
         _contributionRepository = contributionRepository;
-        _idempotencyStore = idempotencyStore;
+        _idempotentConsumer = idempotentConsumer;
         _activeCampaignCacheRepository = activeCampaignCacheRepository;
         _dateTimeProvider = dateTimeProvider;
         _transactionExecutor = transactionExecutor;
@@ -45,15 +47,24 @@ public sealed class ReconcilePaymentWebhookCommandHandler : ICommandHandler<Reco
         ReconcilePaymentWebhookCommand command, CancellationToken cancellationToken)
     {
         // Idempotent redelivery (TICKET-033 criterion #1): the gateway retries a webhook for up
-        // to 72 hours on any non-2xx response, and can also simply redeliver the same event more
-        // than once under normal operation. Checked and recorded inside the same transaction as
-        // the state transition itself, not just before/after it, so two concurrent deliveries of
-        // the same event can't both pass the check before either has recorded it.
-        if (await _idempotencyStore.IsProcessedAsync(command.EventId, cancellationToken))
-        {
-            return new ReconcilePaymentWebhookResult(null, "Ignored");
-        }
+        // to 72 hours on any non-2xx response, and can also redeliver the same event under normal
+        // operation. The inbox claim runs inside this handler's transaction, before the state
+        // transition, so the processed-event row and the transition commit or roll back together,
+        // and a concurrent duplicate waits on the first claim instead of passing a check alongside it.
+        ReconcilePaymentWebhookResult? result = null;
 
+        var applied = await _idempotentConsumer.ExecuteOnceAsync(
+            command.EventId,
+            ConsumerName,
+            async ct => result = await ApplyAsync(command, ct),
+            cancellationToken);
+
+        return applied ? result! : new ReconcilePaymentWebhookResult(null, "Ignored");
+    }
+
+    private async Task<ReconcilePaymentWebhookResult> ApplyAsync(
+        ReconcilePaymentWebhookCommand command, CancellationToken cancellationToken)
+    {
         var contribution = await _contributionRepository.GetByExternalPaymentIntentIdAsync(command.PaymentIntentId, cancellationToken);
         if (contribution is null)
         {
@@ -97,12 +108,10 @@ public sealed class ReconcilePaymentWebhookCommandHandler : ICommandHandler<Reco
         }
         // A non-Pending contribution receiving a webhook is not an error either — most likely
         // this exact event already produced the transition under a redelivery this handler
-        // hasn't seen recorded yet (the idempotency row and the state change commit atomically,
+        // hasn't seen recorded yet (the processed-event row and the state change commit atomically,
         // so this should be rare), or a duplicate distinct event id describing the same fact.
         // Either way, re-running ConfirmPayment/FailPayment on a non-Pending contribution would
-        // throw — silently no-op instead and still record the event as processed below.
-
-        await _idempotencyStore.MarkProcessedAsync(command.EventId, command.PaymentIntentId, _dateTimeProvider.UtcNow, cancellationToken);
+        // throw — silently no-op instead; the event is still recorded as processed.
 
         return new ReconcilePaymentWebhookResult(contribution.Id, contribution.Status.ToString());
     }

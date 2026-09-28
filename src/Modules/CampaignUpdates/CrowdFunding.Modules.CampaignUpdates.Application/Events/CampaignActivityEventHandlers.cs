@@ -1,7 +1,8 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignCancelled;
 using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignCreated;
 using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignPublished;
+using CrowdFunding.Modules.CampaignUpdates.Application.Abstractions.Inbox;
 using CrowdFunding.Modules.CampaignUpdates.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.CampaignUpdates.Application.Abstractions.Services;
 using CrowdFunding.Modules.CampaignUpdates.Domain.Aggregates;
@@ -56,6 +57,13 @@ public sealed class CampaignCancelledActivityHandler : IEventHandler<CampaignCan
 /// this handler, which already runs inside Contributions' own outbox worker and must not become
 /// slow or unreliable because a creator's CRM endpoint is. See TICKET-035.
 /// </summary>
+/// <remarks>
+/// Appending delivery tasks is not naturally idempotent: the outbox retries the whole event when
+/// any other consumer of it fails, and every retry would enqueue (and later POST) a duplicate
+/// webhook. The fan-out therefore runs through <see cref="ICampaignUpdatesIdempotentConsumer"/>,
+/// keyed by the event's <c>EventId</c>, so the tasks and the processed-event record commit together
+/// exactly once.
+/// </remarks>
 public sealed class ContributionPaymentConfirmedActivityHandler : IEventHandler<ContributionPaymentConfirmedApplicationEvent>
 {
     private const string PledgeConfirmedEventType = "pledge.confirmed";
@@ -63,19 +71,29 @@ public sealed class ContributionPaymentConfirmedActivityHandler : IEventHandler<
     private readonly IWebhookSubscriptionRepository _subscriptionRepository;
     private readonly IWebhookDeliveryTaskRepository _deliveryTaskRepository;
     private readonly ICampaignUpdatesDateTimeProvider _dateTimeProvider;
+    private readonly ICampaignUpdatesIdempotentConsumer _idempotentConsumer;
 
     public ContributionPaymentConfirmedActivityHandler(
         IWebhookSubscriptionRepository subscriptionRepository,
         IWebhookDeliveryTaskRepository deliveryTaskRepository,
-        ICampaignUpdatesDateTimeProvider dateTimeProvider)
+        ICampaignUpdatesDateTimeProvider dateTimeProvider,
+        ICampaignUpdatesIdempotentConsumer idempotentConsumer)
     {
         _subscriptionRepository = subscriptionRepository;
         _deliveryTaskRepository = deliveryTaskRepository;
         _dateTimeProvider = dateTimeProvider;
+        _idempotentConsumer = idempotentConsumer;
     }
 
     /// <inheritdoc/>
-    public async Task Handle(ContributionPaymentConfirmedApplicationEvent notification, CancellationToken cancellationToken)
+    public Task Handle(ContributionPaymentConfirmedApplicationEvent notification, CancellationToken cancellationToken)
+        => _idempotentConsumer.ExecuteOnceAsync(
+            notification.EventId.ToString(),
+            nameof(ContributionPaymentConfirmedActivityHandler),
+            ct => EnqueueDeliveriesAsync(notification, ct),
+            cancellationToken);
+
+    private async Task EnqueueDeliveriesAsync(ContributionPaymentConfirmedApplicationEvent notification, CancellationToken cancellationToken)
     {
         var subscriptions = await _subscriptionRepository.GetActiveByCampaignIdAsync(notification.CampaignId, cancellationToken);
         if (subscriptions.Count == 0)

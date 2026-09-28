@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using CrowdFunding.BuildingBlocks.Application.Events;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
@@ -34,7 +35,9 @@ public sealed class RabbitMqMessageBus : IMessageBus, IAsyncDisposable
 
         var eventType = applicationEvent.GetType();
         var envelope = new CloudEventEnvelope(
-            Id: Guid.NewGuid().ToString(),
+            // Reuse the event's own identity so a republished message keeps the same CloudEvents id
+            // and consumers can deduplicate on it (see IIdempotentConsumer).
+            Id: (applicationEvent is BaseApplicationEvent integrationEvent ? integrationEvent.EventId : Guid.NewGuid()).ToString(),
             Source: "urn:crowdfunding:monolith",
             Type: eventType.Name,
             Time: DateTimeOffset.UtcNow,

@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Infrastructure.Inbox;
 using Microsoft.EntityFrameworkCore;
 
 namespace CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
@@ -58,6 +59,27 @@ public static class ModelBuilderExtensions
             builder.Property(x => x.FailureReason).HasMaxLength(4000).IsRequired();
             builder.Property(x => x.RecordedAtUtc).IsRequired();
             builder.HasIndex(x => x.SourceEventId);
+        });
+
+        return modelBuilder;
+    }
+
+    /// <summary>
+    /// Maps the module's processed-events (inbox) table used by <see cref="EfIdempotentConsumer{TDbContext}"/>.
+    /// The composite primary key (EventId, ConsumerName) is the idempotency guarantee.
+    /// </summary>
+    /// <param name="modelBuilder">The model builder.</param>
+    /// <param name="tableName">The module-prefixed table name, e.g. <c>contributions_processed_events</c>.</param>
+    /// <returns>The same model builder.</returns>
+    public static ModelBuilder ConfigureInbox(this ModelBuilder modelBuilder, string tableName)
+    {
+        modelBuilder.Entity<ProcessedEvent>(builder =>
+        {
+            builder.ToTable(tableName);
+            builder.HasKey(x => new { x.EventId, x.ConsumerName });
+            builder.Property(x => x.EventId).HasMaxLength(200);
+            builder.Property(x => x.ConsumerName).HasMaxLength(200);
+            builder.Property(x => x.ProcessedAtUtc).IsRequired();
         });
 
         return modelBuilder;
