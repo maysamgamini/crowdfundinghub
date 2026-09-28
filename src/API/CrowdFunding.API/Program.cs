@@ -1,4 +1,3 @@
-using System.Text;
 using CrowdFunding.API.Documentation;
 using CrowdFunding.API.Mapping;
 using CrowdFunding.API.Migrations;
@@ -42,12 +41,8 @@ using Mapster;
 using MapsterMapper;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
-using Microsoft.AspNetCore.Http.Metadata;
-using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi;
-using Swashbuckle.AspNetCore.SwaggerUI;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -58,8 +53,7 @@ var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? throw new InvalidOperatio
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? throw new InvalidOperationException("Jwt:Audience was not configured.");
 
 builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddCrowdFundingSwagger();
+builder.Services.AddCrowdFundingOpenApi();
 
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
@@ -270,7 +264,7 @@ if (args.Length > 0 && args[0] == "seed-admin")
 if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
 {
     await MigrationRunner.RunAsync(app.Services);
-    app.UseCrowdFundingSwagger();
+    app.MapCrowdFundingOpenApi();
 }
 
 await using (var scope = app.Services.CreateAsyncScope())

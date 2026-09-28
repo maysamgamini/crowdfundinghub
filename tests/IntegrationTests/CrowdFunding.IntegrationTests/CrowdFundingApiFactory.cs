@@ -100,8 +100,9 @@ public sealed class CrowdFundingApiFactory : WebApplicationFactory<Program>, IAs
     /// <inheritdoc/>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        // "Testing" instead of "Development" — skips Program's own IsDevelopment() auto-migrate
-        // and Swagger UI registration, since this fixture drives migrations explicitly above.
+        // "Testing" instead of "Development": appsettings.Development.json (dev OTLP endpoint, dev
+        // CORS origins, dev signing-key encryption key) is not loaded; this fixture supplies its own
+        // settings above. Program still migrates and maps the OpenAPI document in Testing.
         builder.UseEnvironment("Testing");
     }
 

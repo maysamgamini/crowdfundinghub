@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Routing;
 namespace CrowdFunding.Samples.RosettaStone;
 
 /// <summary>
-/// Maps every Rosetta Stone tier under one route group and Swagger tag so a reader can compare
+/// Maps every Rosetta Stone tier under one route group and OpenAPI tag so a reader can compare
 /// Tier 1 and Tier 2 side by side. Tier 3 has no endpoint here — it is the monolith's existing
 /// <c>POST /api/campaigns</c>, unmodified; see <c>03-RichDomainModel/README.md</c>.
 /// </summary>

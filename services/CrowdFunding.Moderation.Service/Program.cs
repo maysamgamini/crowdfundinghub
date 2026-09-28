@@ -13,6 +13,7 @@ using CrowdFunding.Modules.Moderation.Infrastructure.Persistence.DbContexts;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,8 +22,7 @@ var jwtIssuer = builder.Configuration["Authentication:Issuer"]
 
 builder.Services.AddServiceOpenTelemetry(builder.Configuration);
 builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(options => options.SwaggerDoc("v1", new() { Title = "CrowdFunding.Moderation.Service", Version = "v1" }));
+builder.Services.AddOpenApi();
 
 builder.Services.AddExceptionHandler<ServiceExceptionHandler>();
 builder.Services.AddProblemDetails();
@@ -97,8 +97,8 @@ if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
     await using var scope = app.Services.CreateAsyncScope();
     await scope.ServiceProvider.GetRequiredService<ModerationDbContext>().Database.MigrateAsync();
 
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    app.MapOpenApi();
+    app.MapScalarApiReference();
 }
 
 app.UseExceptionHandler();
