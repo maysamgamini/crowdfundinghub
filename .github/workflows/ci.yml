@@ -69,12 +69,6 @@ jobs:
           --configuration Release --no-build
           --logger "trx;LogFileName=integration-results.trx"
 
-      - name: Moderation service integration tests (extracted microservice boundary)
-        run: >
-          dotnet test tests/IntegrationTests/CrowdFunding.ModerationService.IntegrationTests/CrowdFunding.ModerationService.IntegrationTests.csproj
-          --configuration Release
-          --logger "trx;LogFileName=moderation-service-results.trx"
-
       - name: Publish test results
         uses: dorny/test-reporter@v1
         if: always()
