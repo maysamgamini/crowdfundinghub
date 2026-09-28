@@ -29,7 +29,7 @@ public sealed record ExceptionClassification(int StatusCode, string Title, strin
 /// <remarks>
 /// Only exception types this codebase owns become 4xx, and only they expose their message:
 /// <see cref="DomainException"/> subtypes from the domain, and the application-layer
-/// <see cref="NotFoundException"/>, <see cref="ResourceConflictException"/>,
+/// <see cref="RequestValidationException"/>, <see cref="NotFoundException"/>, <see cref="ResourceConflictException"/>,
 /// <see cref="ConcurrencyConflictException"/>, <see cref="UnauthenticatedException"/> and
 /// <see cref="ForbiddenAccessException"/>. BCL types such as <see cref="InvalidOperationException"/>
 /// or <see cref="ArgumentException"/> are thrown by EF Core, Npgsql and the framework as well, with
@@ -56,6 +56,7 @@ public static class ExceptionClassifier
 
         return exception switch
         {
+            RequestValidationException => new(400, "Validation Failed", exception.Message),
             DomainConflictException => new(409, "Conflict", exception.Message),
             DomainException => new(400, "Business Rule Violation", exception.Message),
             NotFoundException => new(404, "Not Found", exception.Message),

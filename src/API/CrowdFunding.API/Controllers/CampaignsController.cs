@@ -1,6 +1,5 @@
 using CrowdFunding.API.Contracts.Common;
 using CrowdFunding.API.Contracts.Campaigns;
-using CrowdFunding.API.Validation;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Pagination;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.CancelCampaign;
@@ -9,7 +8,6 @@ using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.Pub
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.GetCampaignById;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.ListCampaigns;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
-using FluentValidation;
 using MapsterMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -28,24 +26,15 @@ public sealed class CampaignsController : ControllerBase
     private readonly ICommandDispatcher _commandDispatcher;
     private readonly IQueryDispatcher _queryDispatcher;
     private readonly IMapper _mapper;
-    private readonly IValidator<CancelCampaignCommand> _cancelCampaignValidator;
-    private readonly IValidator<CreateCampaignCommand> _createCampaignValidator;
-    private readonly IValidator<PublishCampaignCommand> _publishCampaignValidator;
 
     public CampaignsController(
         ICommandDispatcher commandDispatcher,
         IQueryDispatcher queryDispatcher,
-        IMapper mapper,
-        IValidator<CancelCampaignCommand> cancelCampaignValidator,
-        IValidator<CreateCampaignCommand> createCampaignValidator,
-        IValidator<PublishCampaignCommand> publishCampaignValidator)
+        IMapper mapper)
     {
         _commandDispatcher = commandDispatcher;
         _queryDispatcher = queryDispatcher;
         _mapper = mapper;
-        _cancelCampaignValidator = cancelCampaignValidator;
-        _createCampaignValidator = createCampaignValidator;
-        _publishCampaignValidator = publishCampaignValidator;
     }
 
     /// <summary>
@@ -105,13 +94,6 @@ public sealed class CampaignsController : ControllerBase
         CancellationToken cancellationToken)
     {
         var command = _mapper.Map<CreateCampaignCommand>(request);
-        var validationResult = await _createCampaignValidator.ValidateAsync(command, cancellationToken);
-
-        if (!validationResult.IsValid)
-        {
-            validationResult.AddToModelState(ModelState);
-            return ValidationProblem(ModelState);
-        }
 
         var result = await _commandDispatcher.SendAsync<CreateCampaignResult>(command, cancellationToken);
         var response = _mapper.Map<CreateCampaignResponse>(result);
@@ -141,13 +123,6 @@ public sealed class CampaignsController : ControllerBase
     public async Task<ActionResult<PublishCampaignResponse>> Publish([FromRoute] Guid id, CancellationToken cancellationToken)
     {
         var command = new PublishCampaignCommand(id);
-        var validationResult = await _publishCampaignValidator.ValidateAsync(command, cancellationToken);
-
-        if (!validationResult.IsValid)
-        {
-            validationResult.AddToModelState(ModelState);
-            return ValidationProblem(ModelState);
-        }
 
         var result = await _commandDispatcher.SendAsync<PublishCampaignResult>(command, cancellationToken);
         return Ok(_mapper.Map<PublishCampaignResponse>(result));
@@ -175,13 +150,6 @@ public sealed class CampaignsController : ControllerBase
     public async Task<ActionResult<CancelCampaignResponse>> Cancel([FromRoute] Guid id, CancellationToken cancellationToken)
     {
         var command = new CancelCampaignCommand(id);
-        var validationResult = await _cancelCampaignValidator.ValidateAsync(command, cancellationToken);
-
-        if (!validationResult.IsValid)
-        {
-            validationResult.AddToModelState(ModelState);
-            return ValidationProblem(ModelState);
-        }
 
         var result = await _commandDispatcher.SendAsync<CancelCampaignResult>(command, cancellationToken);
         return Ok(_mapper.Map<CancelCampaignResponse>(result));

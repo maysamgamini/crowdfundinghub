@@ -116,5 +116,11 @@ public sealed class CampaignLifecycleE2ETests
         var response = await client.PostAsJsonAsync("/api/campaigns", invalidRequest);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+
+        // The validation pipeline behavior reports per-property messages in the RFC 9457 "errors" member.
+        using var body = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.True(body.RootElement.GetProperty("errors").TryGetProperty("Story", out _));
+        Assert.True(body.RootElement.TryGetProperty("traceId", out _));
     }
 }

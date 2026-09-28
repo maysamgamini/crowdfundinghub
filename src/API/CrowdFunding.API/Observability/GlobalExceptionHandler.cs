@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Infrastructure.ErrorHandling;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
@@ -45,13 +46,14 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
             _logger.LogWarning(exception, "Request failed with {StatusCode}. TraceId: {TraceId}", outcome.StatusCode, traceId);
         }
 
-        var problemDetails = new ProblemDetails
-        {
-            Status = outcome.StatusCode,
-            Title = outcome.Title,
-            Detail = outcome.Detail,
-            Instance = httpContext.Request.Path,
-        };
+        // A validation failure carries per-property messages in the RFC 9457 "errors" member.
+        var problemDetails = exception is RequestValidationException validation
+            ? new ValidationProblemDetails(validation.Errors.ToDictionary())
+            : new ProblemDetails();
+        problemDetails.Status = outcome.StatusCode;
+        problemDetails.Title = outcome.Title;
+        problemDetails.Detail = outcome.Detail;
+        problemDetails.Instance = httpContext.Request.Path;
         problemDetails.Extensions["traceId"] = traceId;
 
         if (outcome.StatusCode == StatusCodes.Status503ServiceUnavailable)
@@ -63,8 +65,10 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
 
         // WriteAsJsonAsync overwrites Content-Type with "application/json" unless a content
         // type is passed explicitly, so it must go here rather than as a prior assignment.
+        // The runtime type is passed so a ValidationProblemDetails keeps its "errors" member.
         await httpContext.Response.WriteAsJsonAsync(
             problemDetails,
+            problemDetails.GetType(),
             options: null,
             contentType: "application/problem+json",
             cancellationToken: cancellationToken);

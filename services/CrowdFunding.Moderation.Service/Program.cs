@@ -1,6 +1,7 @@
 using CrowdFunding.BuildingBlocks.Application.Events;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
+using CrowdFunding.BuildingBlocks.Application.Validation;
 using CrowdFunding.BuildingBlocks.Infrastructure.Messaging;
 using CrowdFunding.Moderation.Service.Observability;
 using CrowdFunding.Moderation.Service.Security;
@@ -27,6 +28,7 @@ builder.Services.AddProblemDetails();
 
 builder.Services.AddScoped<ICommandDispatcher, CommandDispatcher>();
 builder.Services.AddScoped<IQueryDispatcher, QueryDispatcher>();
+builder.Services.AddCommandValidation();
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, ServiceCurrentUser>();

@@ -1,11 +1,9 @@
 using CrowdFunding.API.Contracts.CampaignUpdates;
-using CrowdFunding.API.Validation;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.CampaignUpdates.Application.Features.WebhookSubscriptions.Commands.DeleteWebhookSubscription;
 using CrowdFunding.Modules.CampaignUpdates.Application.Features.WebhookSubscriptions.Commands.RegisterWebhookSubscription;
 using CrowdFunding.Modules.CampaignUpdates.Application.Features.WebhookSubscriptions.Queries.GetWebhookSubscriptionById;
 using CrowdFunding.Modules.CampaignUpdates.Application.Features.WebhookSubscriptions.Queries.ListWebhookSubscriptionsByCampaign;
-using FluentValidation;
 using MapsterMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -24,18 +22,15 @@ public sealed class CampaignWebhookSubscriptionsController : ControllerBase
 {
     private readonly ICommandDispatcher _commandDispatcher;
     private readonly IQueryDispatcher _queryDispatcher;
-    private readonly IValidator<RegisterWebhookSubscriptionCommand> _validator;
     private readonly IMapper _mapper;
 
     public CampaignWebhookSubscriptionsController(
         ICommandDispatcher commandDispatcher,
         IQueryDispatcher queryDispatcher,
-        IValidator<RegisterWebhookSubscriptionCommand> validator,
         IMapper mapper)
     {
         _commandDispatcher = commandDispatcher;
         _queryDispatcher = queryDispatcher;
-        _validator = validator;
         _mapper = mapper;
     }
 
@@ -59,13 +54,6 @@ public sealed class CampaignWebhookSubscriptionsController : ControllerBase
         CancellationToken cancellationToken)
     {
         var command = new RegisterWebhookSubscriptionCommand(campaignId, request.TargetUrl);
-        var validationResult = await _validator.ValidateAsync(command, cancellationToken);
-
-        if (!validationResult.IsValid)
-        {
-            validationResult.AddToModelState(ModelState);
-            return ValidationProblem(ModelState);
-        }
 
         var result = await _commandDispatcher.SendAsync<RegisterWebhookSubscriptionResult>(command, cancellationToken);
         var response = _mapper.Map<RegisterWebhookSubscriptionResponse>(result);

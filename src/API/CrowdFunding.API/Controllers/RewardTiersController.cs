@@ -1,11 +1,9 @@
 using CrowdFunding.API.Contracts.RewardTiers;
-using CrowdFunding.API.Validation;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Campaigns.Application.Features.RewardTiers.Commands.CreateRewardTier;
 using CrowdFunding.Modules.Campaigns.Application.Features.RewardTiers.Commands.ReserveRewardTierSlot;
 using CrowdFunding.Modules.Campaigns.Application.Features.RewardTiers.Queries.GetRewardTierById;
 using CrowdFunding.Modules.Campaigns.Application.Features.RewardTiers.Queries.ListRewardTiersByCampaign;
-using FluentValidation;
 using MapsterMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -23,21 +21,15 @@ public sealed class RewardTiersController : ControllerBase
 {
     private readonly ICommandDispatcher _commandDispatcher;
     private readonly IQueryDispatcher _queryDispatcher;
-    private readonly IValidator<CreateRewardTierCommand> _createValidator;
-    private readonly IValidator<ReserveRewardTierSlotCommand> _reserveValidator;
     private readonly IMapper _mapper;
 
     public RewardTiersController(
         ICommandDispatcher commandDispatcher,
         IQueryDispatcher queryDispatcher,
-        IValidator<CreateRewardTierCommand> createValidator,
-        IValidator<ReserveRewardTierSlotCommand> reserveValidator,
         IMapper mapper)
     {
         _commandDispatcher = commandDispatcher;
         _queryDispatcher = queryDispatcher;
-        _createValidator = createValidator;
-        _reserveValidator = reserveValidator;
         _mapper = mapper;
     }
 
@@ -60,13 +52,6 @@ public sealed class RewardTiersController : ControllerBase
     {
         var command = new CreateRewardTierCommand(
             campaignId, request.Title, request.Description, request.MinimumPledgeAmount, request.Currency, request.TotalCapacity);
-        var validationResult = await _createValidator.ValidateAsync(command, cancellationToken);
-
-        if (!validationResult.IsValid)
-        {
-            validationResult.AddToModelState(ModelState);
-            return ValidationProblem(ModelState);
-        }
 
         var result = await _commandDispatcher.SendAsync<CreateRewardTierResult>(command, cancellationToken);
         var response = _mapper.Map<CreateRewardTierResponse>(result);
@@ -132,13 +117,6 @@ public sealed class RewardTiersController : ControllerBase
         CancellationToken cancellationToken)
     {
         var command = new ReserveRewardTierSlotCommand(campaignId, rewardTierId);
-        var validationResult = await _reserveValidator.ValidateAsync(command, cancellationToken);
-
-        if (!validationResult.IsValid)
-        {
-            validationResult.AddToModelState(ModelState);
-            return ValidationProblem(ModelState);
-        }
 
         var result = await _commandDispatcher.SendAsync<ReserveRewardTierSlotResult>(command, cancellationToken);
         return Ok(_mapper.Map<ReserveRewardTierSlotResponse>(result));

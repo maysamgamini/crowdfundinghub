@@ -1,10 +1,8 @@
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Moderation.Service.Contracts;
-using CrowdFunding.Moderation.Service.Validation;
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Commands.ApproveCampaignReview;
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Commands.RejectCampaignReview;
 using CrowdFunding.Modules.Moderation.Application.Features.CampaignReviews.Queries.GetCampaignReviewByCampaignId;
-using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -23,19 +21,13 @@ public sealed class ModerationReviewsController : ControllerBase
 {
     private readonly ICommandDispatcher _commandDispatcher;
     private readonly IQueryDispatcher _queryDispatcher;
-    private readonly IValidator<ApproveCampaignReviewCommand> _approveValidator;
-    private readonly IValidator<RejectCampaignReviewCommand> _rejectValidator;
 
     public ModerationReviewsController(
         ICommandDispatcher commandDispatcher,
-        IQueryDispatcher queryDispatcher,
-        IValidator<ApproveCampaignReviewCommand> approveValidator,
-        IValidator<RejectCampaignReviewCommand> rejectValidator)
+        IQueryDispatcher queryDispatcher)
     {
         _commandDispatcher = commandDispatcher;
         _queryDispatcher = queryDispatcher;
-        _approveValidator = approveValidator;
-        _rejectValidator = rejectValidator;
     }
 
     [HttpGet("{campaignId:guid}")]
@@ -53,12 +45,6 @@ public sealed class ModerationReviewsController : ControllerBase
         [FromRoute] Guid campaignId, [FromBody] ReviewCampaignRequest request, CancellationToken cancellationToken)
     {
         var command = new ApproveCampaignReviewCommand(campaignId, request.Notes);
-        var validationResult = await _approveValidator.ValidateAsync(command, cancellationToken);
-        if (!validationResult.IsValid)
-        {
-            validationResult.AddToModelState(ModelState);
-            return ValidationProblem(ModelState);
-        }
 
         var result = await _commandDispatcher.SendAsync<ApproveCampaignReviewResult>(command, cancellationToken);
         return Ok(result);
@@ -69,12 +55,6 @@ public sealed class ModerationReviewsController : ControllerBase
         [FromRoute] Guid campaignId, [FromBody] ReviewCampaignRequest request, CancellationToken cancellationToken)
     {
         var command = new RejectCampaignReviewCommand(campaignId, request.Notes);
-        var validationResult = await _rejectValidator.ValidateAsync(command, cancellationToken);
-        if (!validationResult.IsValid)
-        {
-            validationResult.AddToModelState(ModelState);
-            return ValidationProblem(ModelState);
-        }
 
         var result = await _commandDispatcher.SendAsync<RejectCampaignReviewResult>(command, cancellationToken);
         return Ok(result);

@@ -1,7 +1,6 @@
 using CrowdFunding.API.Contracts.Common;
 using CrowdFunding.API.Contracts.Contributions;
 using CrowdFunding.API.RateLimiting;
-using CrowdFunding.API.Validation;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Pagination;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.ConfirmContributionPayment;
@@ -10,7 +9,6 @@ using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Comm
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Queries.GetContributionById;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Queries.ListContributionsByCampaign;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
-using FluentValidation;
 using MapsterMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -29,24 +27,15 @@ public sealed class ContributionsController : ControllerBase
     private readonly ICommandDispatcher _commandDispatcher;
     private readonly IQueryDispatcher _queryDispatcher;
     private readonly IMapper _mapper;
-    private readonly IValidator<ConfirmContributionPaymentCommand> _confirmPaymentValidator;
-    private readonly IValidator<FailContributionPaymentCommand> _failPaymentValidator;
-    private readonly IValidator<MakeContributionCommand> _validator;
 
     public ContributionsController(
         ICommandDispatcher commandDispatcher,
         IQueryDispatcher queryDispatcher,
-        IMapper mapper,
-        IValidator<ConfirmContributionPaymentCommand> confirmPaymentValidator,
-        IValidator<FailContributionPaymentCommand> failPaymentValidator,
-        IValidator<MakeContributionCommand> validator)
+        IMapper mapper)
     {
         _commandDispatcher = commandDispatcher;
         _queryDispatcher = queryDispatcher;
         _mapper = mapper;
-        _confirmPaymentValidator = confirmPaymentValidator;
-        _failPaymentValidator = failPaymentValidator;
-        _validator = validator;
     }
 
     /// <summary>
@@ -113,13 +102,6 @@ public sealed class ContributionsController : ControllerBase
         CancellationToken cancellationToken)
     {
         var command = new MakeContributionCommand(campaignId, request.Amount, request.Currency, request.RewardTierReservationId);
-        var validationResult = await _validator.ValidateAsync(command, cancellationToken);
-
-        if (!validationResult.IsValid)
-        {
-            validationResult.AddToModelState(ModelState);
-            return ValidationProblem(ModelState);
-        }
 
         var result = await _commandDispatcher.SendAsync<MakeContributionResult>(command, cancellationToken);
         var response = _mapper.Map<MakeContributionResponse>(result);
@@ -182,13 +164,6 @@ public sealed class ContributionsController : ControllerBase
         CancellationToken cancellationToken)
     {
         var command = new ConfirmContributionPaymentCommand(campaignId, contributionId, request.PaymentReference);
-        var validationResult = await _confirmPaymentValidator.ValidateAsync(command, cancellationToken);
-
-        if (!validationResult.IsValid)
-        {
-            validationResult.AddToModelState(ModelState);
-            return ValidationProblem(ModelState);
-        }
 
         var result = await _commandDispatcher.SendAsync<ConfirmContributionPaymentResult>(command, cancellationToken);
         return Ok(_mapper.Map<ConfirmContributionPaymentResponse>(result));
@@ -222,13 +197,6 @@ public sealed class ContributionsController : ControllerBase
         CancellationToken cancellationToken)
     {
         var command = new FailContributionPaymentCommand(campaignId, contributionId, request.FailureReason);
-        var validationResult = await _failPaymentValidator.ValidateAsync(command, cancellationToken);
-
-        if (!validationResult.IsValid)
-        {
-            validationResult.AddToModelState(ModelState);
-            return ValidationProblem(ModelState);
-        }
 
         var result = await _commandDispatcher.SendAsync<FailContributionPaymentResult>(command, cancellationToken);
         return Ok(_mapper.Map<FailContributionPaymentResponse>(result));

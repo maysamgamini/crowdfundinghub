@@ -9,6 +9,7 @@ using CrowdFunding.API.Security;
 using CrowdFunding.BuildingBlocks.Application.Events;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
+using CrowdFunding.BuildingBlocks.Application.Validation;
 using CrowdFunding.BuildingBlocks.Infrastructure.Audit;
 using CrowdFunding.BuildingBlocks.Infrastructure.Messaging;
 using CrowdFunding.BuildingBlocks.Infrastructure.Metering;
@@ -104,6 +105,10 @@ builder.Services.AddScoped<IRequestContext, HttpRequestContext>();
 builder.Services.AddCrowdFundingMessaging(builder.Configuration);
 builder.Services.AddScoped<ICommandDispatcher, CommandDispatcher>();
 builder.Services.AddScoped<IQueryDispatcher, QueryDispatcher>();
+
+// Command pipeline behaviors wrap in registration order, so validation (registered first) runs
+// outermost: an invalid command is rejected with a 400 before auditing or the handler run.
+builder.Services.AddCommandValidation();
 
 // TICKET-039: registers the audit-logging pipeline behavior globally, applying to every command
 // dispatched via ICommandDispatcher — see AuditLoggingPipelineBehavior for the interception rule.

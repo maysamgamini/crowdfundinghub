@@ -38,6 +38,8 @@ public static class CampaignsApplicationDependencyInjection
         services.AddScoped<IValidator<CancelCampaignCommand>, CancelCampaignCommandValidator>();
         services.AddScoped<IValidator<CreateCampaignCommand>, CreateCampaignCommandValidator>();
         services.AddScoped<IValidator<PublishCampaignCommand>, PublishCampaignCommandValidator>();
+        services.AddScoped<IValidator<CompleteCampaignCommand>, CompleteCampaignCommandValidator>();
+        services.AddScoped<IValidator<FailCampaignCommand>, FailCampaignCommandValidator>();
         services.AddScoped<IValidator<CreateRewardTierCommand>, CreateRewardTierCommandValidator>();
         services.AddScoped<IValidator<ReserveRewardTierSlotCommand>, ReserveRewardTierSlotCommandValidator>();
 

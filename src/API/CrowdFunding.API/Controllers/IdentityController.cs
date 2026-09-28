@@ -1,6 +1,5 @@
 using CrowdFunding.API.Contracts.Identity;
 using CrowdFunding.API.RateLimiting;
-using CrowdFunding.API.Validation;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.AssignRoleToUser;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.DeactivateUser;
@@ -11,7 +10,6 @@ using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.RefreshA
 using CrowdFunding.Modules.Identity.Application.Features.Users.Commands.RegisterUser;
 using CrowdFunding.Modules.Identity.Application.Features.Users.Queries.GetCurrentUser;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
-using FluentValidation;
 using MapsterMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -30,36 +28,15 @@ public sealed class IdentityController : ControllerBase
     private readonly ICommandDispatcher _commandDispatcher;
     private readonly IQueryDispatcher _queryDispatcher;
     private readonly IMapper _mapper;
-    private readonly IValidator<AssignRoleToUserCommand> _assignRoleValidator;
-    private readonly IValidator<GrantPermissionToUserCommand> _grantPermissionValidator;
-    private readonly IValidator<LoginUserCommand> _loginValidator;
-    private readonly IValidator<RegisterUserCommand> _registerValidator;
-    private readonly IValidator<RefreshAccessTokenCommand> _refreshValidator;
-    private readonly IValidator<LogoutCommand> _logoutValidator;
-    private readonly IValidator<DeactivateUserCommand> _deactivateUserValidator;
 
     public IdentityController(
         ICommandDispatcher commandDispatcher,
         IQueryDispatcher queryDispatcher,
-        IMapper mapper,
-        IValidator<AssignRoleToUserCommand> assignRoleValidator,
-        IValidator<GrantPermissionToUserCommand> grantPermissionValidator,
-        IValidator<LoginUserCommand> loginValidator,
-        IValidator<RegisterUserCommand> registerValidator,
-        IValidator<RefreshAccessTokenCommand> refreshValidator,
-        IValidator<LogoutCommand> logoutValidator,
-        IValidator<DeactivateUserCommand> deactivateUserValidator)
+        IMapper mapper)
     {
         _commandDispatcher = commandDispatcher;
         _queryDispatcher = queryDispatcher;
         _mapper = mapper;
-        _assignRoleValidator = assignRoleValidator;
-        _grantPermissionValidator = grantPermissionValidator;
-        _loginValidator = loginValidator;
-        _registerValidator = registerValidator;
-        _refreshValidator = refreshValidator;
-        _logoutValidator = logoutValidator;
-        _deactivateUserValidator = deactivateUserValidator;
     }
 
     /// <summary>
@@ -81,13 +58,6 @@ public sealed class IdentityController : ControllerBase
         CancellationToken cancellationToken)
     {
         var command = _mapper.Map<RegisterUserCommand>(request);
-        var validationResult = await _registerValidator.ValidateAsync(command, cancellationToken);
-
-        if (!validationResult.IsValid)
-        {
-            validationResult.AddToModelState(ModelState);
-            return ValidationProblem(ModelState);
-        }
 
         var result = await _commandDispatcher.SendAsync<RegisterUserResult>(command, cancellationToken);
 
@@ -116,13 +86,6 @@ public sealed class IdentityController : ControllerBase
         CancellationToken cancellationToken)
     {
         var command = _mapper.Map<LoginUserCommand>(request);
-        var validationResult = await _loginValidator.ValidateAsync(command, cancellationToken);
-
-        if (!validationResult.IsValid)
-        {
-            validationResult.AddToModelState(ModelState);
-            return ValidationProblem(ModelState);
-        }
 
         var result = await _commandDispatcher.SendAsync<LoginUserResult>(command, cancellationToken);
         return Ok(_mapper.Map<LoginUserResponse>(result));
@@ -149,13 +112,6 @@ public sealed class IdentityController : ControllerBase
         CancellationToken cancellationToken)
     {
         var command = _mapper.Map<RefreshAccessTokenCommand>(request);
-        var validationResult = await _refreshValidator.ValidateAsync(command, cancellationToken);
-
-        if (!validationResult.IsValid)
-        {
-            validationResult.AddToModelState(ModelState);
-            return ValidationProblem(ModelState);
-        }
 
         var result = await _commandDispatcher.SendAsync<RefreshAccessTokenResult>(command, cancellationToken);
         return Ok(_mapper.Map<RefreshAccessTokenResponse>(result));
@@ -181,13 +137,6 @@ public sealed class IdentityController : ControllerBase
         CancellationToken cancellationToken)
     {
         var command = _mapper.Map<LogoutCommand>(request);
-        var validationResult = await _logoutValidator.ValidateAsync(command, cancellationToken);
-
-        if (!validationResult.IsValid)
-        {
-            validationResult.AddToModelState(ModelState);
-            return ValidationProblem(ModelState);
-        }
 
         await _commandDispatcher.SendAsync<LogoutResult>(command, cancellationToken);
         return NoContent();
@@ -231,13 +180,6 @@ public sealed class IdentityController : ControllerBase
         CancellationToken cancellationToken)
     {
         var command = new AssignRoleToUserCommand(userId, request.Role);
-        var validationResult = await _assignRoleValidator.ValidateAsync(command, cancellationToken);
-
-        if (!validationResult.IsValid)
-        {
-            validationResult.AddToModelState(ModelState);
-            return ValidationProblem(ModelState);
-        }
 
         var result = await _commandDispatcher.SendAsync<AssignRoleToUserResult>(command, cancellationToken);
         return Ok(_mapper.Map<AssignRoleToUserResponse>(result));
@@ -265,13 +207,6 @@ public sealed class IdentityController : ControllerBase
         CancellationToken cancellationToken)
     {
         var command = new GrantPermissionToUserCommand(userId, request.Permission);
-        var validationResult = await _grantPermissionValidator.ValidateAsync(command, cancellationToken);
-
-        if (!validationResult.IsValid)
-        {
-            validationResult.AddToModelState(ModelState);
-            return ValidationProblem(ModelState);
-        }
 
         var result = await _commandDispatcher.SendAsync<GrantPermissionToUserResult>(command, cancellationToken);
         return Ok(_mapper.Map<GrantPermissionToUserResponse>(result));
@@ -300,13 +235,6 @@ public sealed class IdentityController : ControllerBase
         CancellationToken cancellationToken)
     {
         var command = new DeactivateUserCommand(userId);
-        var validationResult = await _deactivateUserValidator.ValidateAsync(command, cancellationToken);
-
-        if (!validationResult.IsValid)
-        {
-            validationResult.AddToModelState(ModelState);
-            return ValidationProblem(ModelState);
-        }
 
         var result = await _commandDispatcher.SendAsync<DeactivateUserResult>(command, cancellationToken);
         return Ok(_mapper.Map<DeactivateUserResponse>(result));
