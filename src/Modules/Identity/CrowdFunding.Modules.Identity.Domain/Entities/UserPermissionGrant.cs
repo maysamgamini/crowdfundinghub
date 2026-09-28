@@ -1,4 +1,6 @@
-﻿namespace CrowdFunding.Modules.Identity.Domain.Entities;
+﻿using CrowdFunding.BuildingBlocks.Domain.Exceptions;
+
+namespace CrowdFunding.Modules.Identity.Domain.Entities;
 
 /// <summary>
 /// Represents a direct permission granted to a user.
@@ -16,7 +18,7 @@ public sealed class UserPermissionGrant
     {
         if (string.IsNullOrWhiteSpace(permission))
         {
-            throw new ArgumentException("Permission is required.", nameof(permission));
+            throw new BusinessRuleViolationException("Permission is required.");
         }
 
         Id = Guid.NewGuid();

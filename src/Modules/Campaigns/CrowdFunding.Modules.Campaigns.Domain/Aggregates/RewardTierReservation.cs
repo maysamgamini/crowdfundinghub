@@ -1,3 +1,5 @@
+using CrowdFunding.BuildingBlocks.Domain.Exceptions;
+
 namespace CrowdFunding.Modules.Campaigns.Domain.Aggregates;
 
 public enum RewardTierReservationStatus
@@ -66,17 +68,17 @@ public sealed class RewardTierReservation
     {
         if (rewardTierId == Guid.Empty)
         {
-            throw new ArgumentException("RewardTierId is required.", nameof(rewardTierId));
+            throw new BusinessRuleViolationException("RewardTierId is required.");
         }
 
         if (campaignId == Guid.Empty)
         {
-            throw new ArgumentException("CampaignId is required.", nameof(campaignId));
+            throw new BusinessRuleViolationException("CampaignId is required.");
         }
 
         if (backerUserId == Guid.Empty)
         {
-            throw new ArgumentException("BackerUserId is required.", nameof(backerUserId));
+            throw new BusinessRuleViolationException("BackerUserId is required.");
         }
 
         return new RewardTierReservation(Guid.NewGuid(), rewardTierId, campaignId, backerUserId, nowUtc, nowUtc.Add(ReservationWindow));
@@ -89,7 +91,7 @@ public sealed class RewardTierReservation
     {
         if (Status != RewardTierReservationStatus.Reserved)
         {
-            throw new InvalidOperationException($"Cannot confirm reservation '{Id}' in status '{Status}'.");
+            throw new DomainConflictException($"Cannot confirm reservation '{Id}' in status '{Status}'.");
         }
 
         Status = RewardTierReservationStatus.Confirmed;
@@ -104,7 +106,7 @@ public sealed class RewardTierReservation
     {
         if (Status != RewardTierReservationStatus.Reserved)
         {
-            throw new InvalidOperationException($"Cannot release reservation '{Id}' in status '{Status}'.");
+            throw new DomainConflictException($"Cannot release reservation '{Id}' in status '{Status}'.");
         }
 
         Status = RewardTierReservationStatus.Released;
@@ -119,7 +121,7 @@ public sealed class RewardTierReservation
     {
         if (Status != RewardTierReservationStatus.Confirmed)
         {
-            throw new InvalidOperationException($"Cannot refund reservation '{Id}' in status '{Status}'.");
+            throw new DomainConflictException($"Cannot refund reservation '{Id}' in status '{Status}'.");
         }
 
         Status = RewardTierReservationStatus.Released;

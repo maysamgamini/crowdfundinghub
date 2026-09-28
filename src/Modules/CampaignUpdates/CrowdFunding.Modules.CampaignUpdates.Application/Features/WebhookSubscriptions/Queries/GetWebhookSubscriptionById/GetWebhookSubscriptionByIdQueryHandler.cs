@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.CampaignUpdates.Application.Abstractions.Persistence;
@@ -31,7 +32,7 @@ public sealed class GetWebhookSubscriptionByIdQueryHandler
 
         if (subscription is null || subscription.CampaignId != query.CampaignId)
         {
-            throw new KeyNotFoundException($"Webhook subscription '{query.SubscriptionId}' was not found for campaign '{query.CampaignId}'.");
+            throw new NotFoundException($"Webhook subscription '{query.SubscriptionId}' was not found for campaign '{query.CampaignId}'.");
         }
 
         await EnsureOwnerAsync(query.CampaignId, cancellationToken);
@@ -49,14 +50,14 @@ public sealed class GetWebhookSubscriptionByIdQueryHandler
     {
         if (!_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty)
         {
-            throw new UnauthorizedAccessException("The current user must be authenticated to view webhook subscriptions.");
+            throw new UnauthenticatedException("The current user must be authenticated to view webhook subscriptions.");
         }
 
         var campaign = await _campaignOwnerCacheRepository.GetAsync(campaignId, cancellationToken);
 
         if (campaign is null)
         {
-            throw new KeyNotFoundException($"Campaign with id '{campaignId}' was not found.");
+            throw new NotFoundException($"Campaign with id '{campaignId}' was not found.");
         }
 
         if (campaign.OwnerId != _currentUser.UserId)

@@ -1,5 +1,7 @@
+using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Application.Pagination;
 using CrowdFunding.BuildingBlocks.Application.Security;
+using CrowdFunding.BuildingBlocks.Domain.Exceptions;
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Campaigns.Contracts.Enums;
 using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignCancelled;
@@ -49,9 +51,9 @@ public sealed class ContributionDomainTests
             "USD",
             DateTime.UtcNow);
 
-        var exception = Assert.Throws<ArgumentException>(action);
+        var exception = Assert.Throws<BusinessRuleViolationException>(action);
 
-        Assert.Equal("Contribution amount must be greater than zero. (Parameter 'amount')", exception.Message);
+        Assert.Equal("Contribution amount must be greater than zero.", exception.Message);
     }
 
     [Fact]
@@ -144,7 +146,7 @@ public sealed class ContributionDomainTests
 
         var action = () => contribution.ConfirmPayment("PAY-456", new DateTime(2026, 4, 6, 12, 20, 0, DateTimeKind.Utc));
 
-        var exception = Assert.Throws<InvalidOperationException>(action);
+        var exception = Assert.Throws<DomainConflictException>(action);
 
         Assert.Equal("Only pending contributions can be confirmed.", exception.Message);
     }
@@ -161,9 +163,9 @@ public sealed class ContributionDomainTests
 
         var action = () => contribution.FailPayment("   ", new DateTime(2026, 4, 6, 12, 15, 0, DateTimeKind.Utc));
 
-        var exception = Assert.Throws<ArgumentException>(action);
+        var exception = Assert.Throws<BusinessRuleViolationException>(action);
 
-        Assert.Equal("Failure reason is required. (Parameter 'failureReason')", exception.Message);
+        Assert.Equal("Failure reason is required.", exception.Message);
     }
 
     [Fact]
@@ -176,9 +178,9 @@ public sealed class ContributionDomainTests
             "USD",
             DateTime.UtcNow);
 
-        var exception = Assert.Throws<ArgumentException>(action);
+        var exception = Assert.Throws<BusinessRuleViolationException>(action);
 
-        Assert.Equal("CampaignId is required. (Parameter 'campaignId')", exception.Message);
+        Assert.Equal("CampaignId is required.", exception.Message);
     }
 
     [Fact]
@@ -191,9 +193,9 @@ public sealed class ContributionDomainTests
             "USD",
             DateTime.UtcNow);
 
-        var exception = Assert.Throws<ArgumentException>(action);
+        var exception = Assert.Throws<BusinessRuleViolationException>(action);
 
-        Assert.Equal("ContributorId is required. (Parameter 'contributorId')", exception.Message);
+        Assert.Equal("ContributorId is required.", exception.Message);
     }
 
     [Fact]
@@ -208,9 +210,9 @@ public sealed class ContributionDomainTests
 
         var action = () => contribution.ConfirmPayment("   ", new DateTime(2026, 4, 6, 12, 15, 0, DateTimeKind.Utc));
 
-        var exception = Assert.Throws<ArgumentException>(action);
+        var exception = Assert.Throws<BusinessRuleViolationException>(action);
 
-        Assert.Equal("Payment reference is required. (Parameter 'paymentReference')", exception.Message);
+        Assert.Equal("Payment reference is required.", exception.Message);
     }
 
     [Fact]
@@ -226,7 +228,7 @@ public sealed class ContributionDomainTests
 
         var action = () => contribution.FailPayment("Chargeback.", new DateTime(2026, 4, 6, 12, 20, 0, DateTimeKind.Utc));
 
-        var exception = Assert.Throws<InvalidOperationException>(action);
+        var exception = Assert.Throws<DomainConflictException>(action);
 
         Assert.Equal("Only pending contributions can be failed.", exception.Message);
     }
@@ -282,7 +284,7 @@ public sealed class ContributionDomainTests
 
         var action = () => contribution.Refund(new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc));
 
-        var exception = Assert.Throws<InvalidOperationException>(action);
+        var exception = Assert.Throws<DomainConflictException>(action);
         Assert.Equal("Cannot refund contribution with status 'Pending'.", exception.Message);
     }
 
@@ -300,7 +302,7 @@ public sealed class ContributionDomainTests
 
         var action = () => contribution.Refund(new DateTime(2026, 5, 2, 0, 0, 0, DateTimeKind.Utc));
 
-        Assert.Throws<InvalidOperationException>(action);
+        Assert.Throws<DomainConflictException>(action);
     }
 }
 
@@ -356,7 +358,7 @@ public sealed class MakeContributionCommandHandlerTests
             new MakeContributionCommand(Guid.NewGuid(), 100m, "USD"),
             CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(action);
+        var exception = await Assert.ThrowsAsync<UnauthenticatedException>(action);
 
         Assert.Equal("The current user must be authenticated to contribute to a campaign.", exception.Message);
     }
@@ -400,7 +402,7 @@ public sealed class MakeContributionCommandHandlerTests
             new MakeContributionCommand(campaignId, 100m, "USD"),
             CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<KeyNotFoundException>(action);
+        var exception = await Assert.ThrowsAsync<NotFoundException>(action);
 
         Assert.Equal($"Campaign with id '{campaignId}' was not found.", exception.Message);
         Assert.Equal(0, transactionExecutor.InvocationCount);
@@ -426,7 +428,7 @@ public sealed class MakeContributionCommandHandlerTests
             new MakeContributionCommand(campaignId, 100m, "USD"),
             CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(action);
+        var exception = await Assert.ThrowsAsync<DomainConflictException>(action);
 
         Assert.Equal(
             $"Campaign '{campaignId}' cannot accept contributions — it is not active or has passed its deadline.",
@@ -455,7 +457,7 @@ public sealed class MakeContributionCommandHandlerTests
             new MakeContributionCommand(campaignId, 100m, "EUR"),
             CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(action);
+        var exception = await Assert.ThrowsAsync<BusinessRuleViolationException>(action);
 
         // Rejected here, before any Contribution/payment record is created — catching this at
         // MakeContribution time instead of leaving it to surface as Money.Add throwing much
@@ -489,7 +491,7 @@ public sealed class MakeContributionCommandHandlerTests
             new MakeContributionCommand(campaignId, 100m, "USD"),
             CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(action);
+        var exception = await Assert.ThrowsAsync<BusinessRuleViolationException>(action);
         Assert.Equal("Campaign creators cannot back or contribute to their own campaigns.", exception.Message);
         Assert.Equal(0, transactionExecutor.InvocationCount);
         Assert.Null(repository.SavedContribution);
@@ -555,7 +557,7 @@ public sealed class ConfirmContributionPaymentCommandHandlerTests
             new ConfirmContributionPaymentCommand(contribution.CampaignId, contribution.Id, "PAY-123"),
             CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(action);
+        var exception = await Assert.ThrowsAsync<UnauthenticatedException>(action);
 
         Assert.Equal("The current user must be authenticated to manage contribution payments.", exception.Message);
     }
@@ -606,7 +608,7 @@ public sealed class ConfirmContributionPaymentCommandHandlerTests
             new ConfirmContributionPaymentCommand(campaignId, contributionId, "PAY-123"),
             CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<KeyNotFoundException>(action);
+        var exception = await Assert.ThrowsAsync<NotFoundException>(action);
 
         Assert.Equal($"Contribution '{contributionId}' was not found for campaign '{campaignId}'.", exception.Message);
         Assert.Equal(0, transactionExecutor.InvocationCount);
@@ -636,7 +638,7 @@ public sealed class ConfirmContributionPaymentCommandHandlerTests
             new ConfirmContributionPaymentCommand(contribution.CampaignId, contribution.Id, "PAY-123"),
             CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<KeyNotFoundException>(action);
+        var exception = await Assert.ThrowsAsync<NotFoundException>(action);
 
         Assert.Equal($"Campaign with id '{contribution.CampaignId}' was not found.", exception.Message);
         Assert.Equal(0, transactionExecutor.InvocationCount);
@@ -666,7 +668,7 @@ public sealed class ConfirmContributionPaymentCommandHandlerTests
             new ConfirmContributionPaymentCommand(contribution.CampaignId, contribution.Id, "PAY-123"),
             CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(action);
+        var exception = await Assert.ThrowsAsync<DomainConflictException>(action);
 
         Assert.Equal("Contribution payments can only be confirmed while the campaign is published.", exception.Message);
         Assert.Equal(0, transactionExecutor.InvocationCount);
@@ -728,7 +730,7 @@ public sealed class FailContributionPaymentCommandHandlerTests
             new FailContributionPaymentCommand(contribution.CampaignId, contribution.Id, "Card declined."),
             CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(action);
+        var exception = await Assert.ThrowsAsync<UnauthenticatedException>(action);
 
         Assert.Equal("The current user must be authenticated to manage contribution payments.", exception.Message);
     }
@@ -777,7 +779,7 @@ public sealed class FailContributionPaymentCommandHandlerTests
             new FailContributionPaymentCommand(campaignId, contributionId, "Card declined."),
             CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<KeyNotFoundException>(action);
+        var exception = await Assert.ThrowsAsync<NotFoundException>(action);
 
         Assert.Equal($"Contribution '{contributionId}' was not found for campaign '{campaignId}'.", exception.Message);
         Assert.Equal(0, transactionExecutor.InvocationCount);
@@ -993,7 +995,7 @@ public sealed class GetContributionByIdQueryHandlerTests
 
         var action = async () => await handler.Handle(new GetContributionByIdQuery(campaignId, contributionId), CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<KeyNotFoundException>(action);
+        var exception = await Assert.ThrowsAsync<NotFoundException>(action);
         Assert.Equal($"Contribution '{contributionId}' was not found for campaign '{campaignId}'.", exception.Message);
     }
 }

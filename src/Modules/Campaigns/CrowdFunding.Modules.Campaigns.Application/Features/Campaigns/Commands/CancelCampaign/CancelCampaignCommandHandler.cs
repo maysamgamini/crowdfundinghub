@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.BuildingBlocks.Domain.Common;
@@ -40,7 +41,7 @@ public sealed class CancelCampaignCommandHandler : ICommandHandler<CancelCampaig
         await _transactionExecutor.ExecuteAsync(advisoryLockKey, async ct =>
         {
             var campaign = await _campaignRepository.GetByIdAsync(command.CampaignId, ct)
-                ?? throw new KeyNotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
+                ?? throw new NotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
 
             EnsureCanManageCampaign(campaign.OwnerId);
 
@@ -58,7 +59,7 @@ public sealed class CancelCampaignCommandHandler : ICommandHandler<CancelCampaig
     {
         if (!_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty)
         {
-            throw new UnauthorizedAccessException("The current user must be authenticated to cancel a campaign.");
+            throw new UnauthenticatedException("The current user must be authenticated to cancel a campaign.");
         }
 
         var canManageAny = _currentUser.HasPermission(PermissionConstants.CampaignsManageAny);

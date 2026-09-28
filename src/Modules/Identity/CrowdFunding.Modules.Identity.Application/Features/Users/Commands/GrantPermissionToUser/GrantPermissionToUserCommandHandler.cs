@@ -1,4 +1,5 @@
-﻿using CrowdFunding.BuildingBlocks.Application.Messaging;
+﻿using CrowdFunding.BuildingBlocks.Application.Exceptions;
+using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Transactions;
@@ -31,7 +32,7 @@ public sealed class GrantPermissionToUserCommandHandler : ICommandHandler<GrantP
         EnsureCanGrantPermissions();
 
         var user = await _userRepository.GetByIdAsync(command.UserId, cancellationToken)
-                   ?? throw new KeyNotFoundException($"User '{command.UserId}' was not found.");
+                   ?? throw new NotFoundException($"User '{command.UserId}' was not found.");
 
         user.GrantPermission(command.Permission);
         await _transactionExecutor.ExecuteAsync(
@@ -48,7 +49,7 @@ public sealed class GrantPermissionToUserCommandHandler : ICommandHandler<GrantP
     {
         if (!_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty)
         {
-            throw new UnauthorizedAccessException("The current user must be authenticated to grant permissions.");
+            throw new UnauthenticatedException("The current user must be authenticated to grant permissions.");
         }
 
         if (!_currentUser.HasPermission(PermissionConstants.IdentityPermissionsGrant))

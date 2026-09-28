@@ -58,7 +58,7 @@ public sealed class CreateCampaignCommandHandler : ICommandHandler<CreateCampaig
     {
         if (!_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty)
         {
-            throw new UnauthorizedAccessException("The current user must be authenticated to create a campaign.");
+            throw new UnauthenticatedException("The current user must be authenticated to create a campaign.");
         }
 
         if (!_currentUser.HasPermission(PermissionConstants.CampaignsCreate))

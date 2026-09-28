@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.CampaignUpdates.Application.Abstractions.Persistence;
@@ -27,14 +28,14 @@ public sealed class DeleteWebhookSubscriptionCommandHandler : ICommandHandler<De
     {
         if (!_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty)
         {
-            throw new UnauthorizedAccessException("The current user must be authenticated to delete a webhook subscription.");
+            throw new UnauthenticatedException("The current user must be authenticated to delete a webhook subscription.");
         }
 
         var campaign = await _campaignOwnerCacheRepository.GetAsync(command.CampaignId, cancellationToken);
 
         if (campaign is null)
         {
-            throw new KeyNotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
+            throw new NotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
         }
 
         if (campaign.OwnerId != _currentUser.UserId)
@@ -46,7 +47,7 @@ public sealed class DeleteWebhookSubscriptionCommandHandler : ICommandHandler<De
 
         if (subscription is null || subscription.CampaignId != command.CampaignId)
         {
-            throw new KeyNotFoundException($"Webhook subscription '{command.SubscriptionId}' was not found for campaign '{command.CampaignId}'.");
+            throw new NotFoundException($"Webhook subscription '{command.SubscriptionId}' was not found for campaign '{command.CampaignId}'.");
         }
 
         subscription.Deactivate();

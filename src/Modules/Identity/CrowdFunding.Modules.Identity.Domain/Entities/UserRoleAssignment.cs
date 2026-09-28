@@ -1,4 +1,6 @@
-﻿namespace CrowdFunding.Modules.Identity.Domain.Entities;
+﻿using CrowdFunding.BuildingBlocks.Domain.Exceptions;
+
+namespace CrowdFunding.Modules.Identity.Domain.Entities;
 
 /// <summary>
 /// Represents a role assigned to a user.
@@ -16,7 +18,7 @@ public sealed class UserRoleAssignment
     {
         if (string.IsNullOrWhiteSpace(role))
         {
-            throw new ArgumentException("Role is required.", nameof(role));
+            throw new BusinessRuleViolationException("Role is required.");
         }
 
         Id = Guid.NewGuid();

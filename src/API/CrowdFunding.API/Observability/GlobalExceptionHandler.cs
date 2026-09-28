@@ -1,24 +1,24 @@
 using System.Diagnostics;
-using System.Net;
-using CrowdFunding.BuildingBlocks.Application.Exceptions;
-using CrowdFunding.BuildingBlocks.Application.Security;
+using CrowdFunding.BuildingBlocks.Infrastructure.ErrorHandling;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Npgsql;
 
 namespace CrowdFunding.API.Observability;
 
 /// <summary>
 /// Converts unhandled exceptions into RFC 9457 <c>application/problem+json</c> responses.
-/// Replaces the previous middleware, which returned a proprietary { StatusCode, Message } shape
-/// and — for any exception, not just 500s — wrote <c>exception.Message</c> straight to the
-/// client. A generic 500 can carry a raw Npgsql/db message (schema names, connection details),
-/// so only the sanitized cases below expose their message; everything else gets a generic
-/// message plus a TraceId the caller can quote when contacting support.
 /// </summary>
+/// <remarks>
+/// <see cref="ExceptionClassifier"/> decides the status code and the client-safe detail; this
+/// handler only logs and writes the response. Domain and application exceptions become 4xx with
+/// their own message. Everything else (framework, EF Core, Npgsql) becomes a generic 500 so no
+/// schema name or connection detail reaches the client, except database overload, which becomes
+/// 503 with <c>Retry-After</c>. Every response carries a <c>traceId</c> the caller can quote.
+/// </remarks>
 public sealed class GlobalExceptionHandler : IExceptionHandler
 {
+    private const string RetryAfterSeconds = "2";
+
     private readonly ILogger<GlobalExceptionHandler> _logger;
 
     /// <summary>
@@ -34,47 +34,32 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
         var traceId = Activity.Current?.TraceId.ToHexString() ?? httpContext.TraceIdentifier;
+        var outcome = ExceptionClassifier.Classify(exception);
 
-        var (statusCode, title, detail) = exception switch
+        if (outcome.IsServerFault)
         {
-            ArgumentException => (HttpStatusCode.BadRequest, "Bad Request", exception.Message),
-            InvalidOperationException => (HttpStatusCode.BadRequest, "Bad Request", exception.Message),
-            UnauthorizedAccessException => (HttpStatusCode.Unauthorized, "Unauthorized", "Authentication required or invalid credentials."),
-            ForbiddenAccessException => (HttpStatusCode.Forbidden, "Forbidden", "You do not have permission to perform this action."),
-            KeyNotFoundException => (HttpStatusCode.NotFound, "Not Found", exception.Message),
-            // Resource-state conflicts (RFC 9110 §15.5.10) — duplicate unique values, invalid
-            // state-machine transitions — are distinct from malformed input (400).
-            ResourceConflictException => (HttpStatusCode.Conflict, "Conflict", exception.Message),
-            // A losing optimistic-concurrency writer is also a conflict, not a server failure —
-            // the client can safely retry with a fresh read.
-            ConcurrencyConflictException => (HttpStatusCode.Conflict, "Conflict", "The resource was modified by another request. Please retry with the latest data."),
-            // A unique-constraint violation that reaches here uncaught (i.e. no handler already
-            // treated it as an idempotent no-op) is a client-facing conflict, not a server bug —
-            // e.g. two concurrent requests racing to create the same logically-unique record.
-            DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } } =>
-                (HttpStatusCode.Conflict, "Conflict", "A record with the same unique value already exists."),
-            _ => (HttpStatusCode.InternalServerError, "Internal Server Error", "An unexpected error occurred. Please contact support quoting the TraceId.")
-        };
-
-        if (statusCode == HttpStatusCode.InternalServerError)
-        {
-            _logger.LogError(exception, "Unhandled exception occurred. TraceId: {TraceId}", traceId);
+            _logger.LogError(exception, "Request failed with {StatusCode}. TraceId: {TraceId}", outcome.StatusCode, traceId);
         }
         else
         {
-            _logger.LogWarning(exception, "Request failed with {StatusCode}. TraceId: {TraceId}", (int)statusCode, traceId);
+            _logger.LogWarning(exception, "Request failed with {StatusCode}. TraceId: {TraceId}", outcome.StatusCode, traceId);
         }
 
         var problemDetails = new ProblemDetails
         {
-            Status = (int)statusCode,
-            Title = title,
-            Detail = detail,
+            Status = outcome.StatusCode,
+            Title = outcome.Title,
+            Detail = outcome.Detail,
             Instance = httpContext.Request.Path,
         };
         problemDetails.Extensions["traceId"] = traceId;
 
-        httpContext.Response.StatusCode = (int)statusCode;
+        if (outcome.StatusCode == StatusCodes.Status503ServiceUnavailable)
+        {
+            httpContext.Response.Headers.RetryAfter = RetryAfterSeconds;
+        }
+
+        httpContext.Response.StatusCode = outcome.StatusCode;
 
         // WriteAsJsonAsync overwrites Content-Type with "application/json" unless a content
         // type is passed explicitly, so it must go here rather than as a prior assignment.

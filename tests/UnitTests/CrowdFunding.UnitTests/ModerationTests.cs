@@ -1,6 +1,8 @@
+using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Pagination;
 using CrowdFunding.BuildingBlocks.Application.Security;
+using CrowdFunding.BuildingBlocks.Domain.Exceptions;
 using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignCreated;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Services;
@@ -78,7 +80,7 @@ public sealed class CampaignReviewDomainTests
 
         var action = () => review.Approve(Guid.NewGuid(), "Approve again.", new DateTime(2026, 4, 8, 12, 0, 0, DateTimeKind.Utc));
 
-        var exception = Assert.Throws<InvalidOperationException>(action);
+        var exception = Assert.Throws<DomainConflictException>(action);
 
         Assert.Equal("Only pending campaign reviews can be updated.", exception.Message);
     }
@@ -88,9 +90,9 @@ public sealed class CampaignReviewDomainTests
     {
         var action = () => CampaignReview.Create(Guid.Empty, DateTime.UtcNow);
 
-        var exception = Assert.Throws<ArgumentException>(action);
+        var exception = Assert.Throws<BusinessRuleViolationException>(action);
 
-        Assert.Equal("CampaignId is required. (Parameter 'campaignId')", exception.Message);
+        Assert.Equal("CampaignId is required.", exception.Message);
     }
 
     [Fact]
@@ -100,9 +102,9 @@ public sealed class CampaignReviewDomainTests
 
         var action = () => review.Approve(Guid.Empty, "Notes.", new DateTime(2026, 4, 7, 12, 0, 0, DateTimeKind.Utc));
 
-        var exception = Assert.Throws<ArgumentException>(action);
+        var exception = Assert.Throws<BusinessRuleViolationException>(action);
 
-        Assert.Equal("ModeratorId is required. (Parameter 'moderatorId')", exception.Message);
+        Assert.Equal("ModeratorId is required.", exception.Message);
     }
 
     [Fact]
@@ -112,9 +114,9 @@ public sealed class CampaignReviewDomainTests
 
         var action = () => review.Reject(Guid.Empty, "Notes.", new DateTime(2026, 4, 7, 12, 0, 0, DateTimeKind.Utc));
 
-        var exception = Assert.Throws<ArgumentException>(action);
+        var exception = Assert.Throws<BusinessRuleViolationException>(action);
 
-        Assert.Equal("ModeratorId is required. (Parameter 'moderatorId')", exception.Message);
+        Assert.Equal("ModeratorId is required.", exception.Message);
     }
 
     [Fact]
@@ -124,9 +126,9 @@ public sealed class CampaignReviewDomainTests
 
         var action = () => review.Approve(Guid.NewGuid(), new string('a', 501), new DateTime(2026, 4, 7, 12, 0, 0, DateTimeKind.Utc));
 
-        var exception = Assert.Throws<ArgumentException>(action);
+        var exception = Assert.Throws<BusinessRuleViolationException>(action);
 
-        Assert.Equal("Review notes cannot exceed 500 characters. (Parameter 'notes')", exception.Message);
+        Assert.Equal("Review notes cannot exceed 500 characters.", exception.Message);
     }
 }
 
@@ -212,7 +214,7 @@ public sealed class ApproveCampaignReviewCommandHandlerTests
             new ApproveCampaignReviewCommand(review.CampaignId, "Looks good."),
             CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(action);
+        var exception = await Assert.ThrowsAsync<UnauthenticatedException>(action);
 
         Assert.Equal("The current user must be authenticated to approve a campaign review.", exception.Message);
     }
@@ -255,7 +257,7 @@ public sealed class ApproveCampaignReviewCommandHandlerTests
             new ApproveCampaignReviewCommand(campaignId, "Looks good."),
             CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<KeyNotFoundException>(action);
+        var exception = await Assert.ThrowsAsync<NotFoundException>(action);
 
         Assert.Equal($"Campaign review for campaign '{campaignId}' was not found.", exception.Message);
         Assert.Equal(0, transactionExecutor.InvocationCount);
@@ -305,7 +307,7 @@ public sealed class RejectCampaignReviewCommandHandlerTests
             new RejectCampaignReviewCommand(review.CampaignId, "Needs more evidence."),
             CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(action);
+        var exception = await Assert.ThrowsAsync<UnauthenticatedException>(action);
 
         Assert.Equal("The current user must be authenticated to reject a campaign review.", exception.Message);
     }
@@ -348,7 +350,7 @@ public sealed class RejectCampaignReviewCommandHandlerTests
             new RejectCampaignReviewCommand(campaignId, "Needs more evidence."),
             CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<KeyNotFoundException>(action);
+        var exception = await Assert.ThrowsAsync<NotFoundException>(action);
 
         Assert.Equal($"Campaign review for campaign '{campaignId}' was not found.", exception.Message);
         Assert.Equal(0, transactionExecutor.InvocationCount);
@@ -383,7 +385,7 @@ public sealed class GetCampaignReviewByCampaignIdQueryHandlerTests
 
         var action = async () => await handler.Handle(new GetCampaignReviewByCampaignIdQuery(campaignId), CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<KeyNotFoundException>(action);
+        var exception = await Assert.ThrowsAsync<NotFoundException>(action);
 
         Assert.Equal($"Campaign review for campaign '{campaignId}' was not found.", exception.Message);
     }
@@ -442,7 +444,7 @@ public sealed class GetCampaignReviewStatusByCampaignIdQueryHandlerTests
 
         var action = async () => await handler.Handle(new GetCampaignReviewStatusByCampaignIdQuery(campaignId), CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<KeyNotFoundException>(action);
+        var exception = await Assert.ThrowsAsync<NotFoundException>(action);
 
         Assert.Equal($"Campaign review for campaign '{campaignId}' was not found.", exception.Message);
     }

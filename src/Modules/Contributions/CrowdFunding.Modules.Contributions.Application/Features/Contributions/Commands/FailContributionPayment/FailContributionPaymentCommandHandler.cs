@@ -1,4 +1,5 @@
-﻿using CrowdFunding.BuildingBlocks.Application.Messaging;
+﻿using CrowdFunding.BuildingBlocks.Application.Exceptions;
+using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
@@ -37,7 +38,7 @@ public sealed class FailContributionPaymentCommandHandler : ICommandHandler<Fail
         var contribution = await _contributionRepository.GetByIdAsync(command.ContributionId, cancellationToken);
         if (contribution is null || contribution.CampaignId != command.CampaignId)
         {
-            throw new KeyNotFoundException($"Contribution '{command.ContributionId}' was not found for campaign '{command.CampaignId}'.");
+            throw new NotFoundException($"Contribution '{command.ContributionId}' was not found for campaign '{command.CampaignId}'.");
         }
 
         await _transactionExecutor.ExecuteAsync(async ct =>
@@ -53,7 +54,7 @@ public sealed class FailContributionPaymentCommandHandler : ICommandHandler<Fail
     {
         if (!_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty)
         {
-            throw new UnauthorizedAccessException("The current user must be authenticated to manage contribution payments.");
+            throw new UnauthenticatedException("The current user must be authenticated to manage contribution payments.");
         }
 
         if (!_currentUser.HasPermission(PermissionConstants.ContributionsPaymentsManage))

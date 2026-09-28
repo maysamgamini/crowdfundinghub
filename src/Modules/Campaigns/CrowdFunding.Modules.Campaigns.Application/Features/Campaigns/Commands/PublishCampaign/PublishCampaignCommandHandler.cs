@@ -51,7 +51,7 @@ public sealed class PublishCampaignCommandHandler : ICommandHandler<PublishCampa
         await _transactionExecutor.ExecuteAsync(advisoryLockKey, async ct =>
         {
             var campaign = await _campaignRepository.GetByIdAsync(command.CampaignId, ct)
-                ?? throw new KeyNotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
+                ?? throw new NotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
 
             EnsureCanManageCampaign(campaign.OwnerId);
 
@@ -80,7 +80,7 @@ public sealed class PublishCampaignCommandHandler : ICommandHandler<PublishCampa
     {
         if (!_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty)
         {
-            throw new UnauthorizedAccessException("The current user must be authenticated to publish a campaign.");
+            throw new UnauthenticatedException("The current user must be authenticated to publish a campaign.");
         }
 
         var canManageAny = _currentUser.HasPermission(PermissionConstants.CampaignsManageAny);

@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.CampaignUpdates.Application.Abstractions.Persistence;
@@ -30,14 +31,14 @@ public sealed class ListWebhookSubscriptionsByCampaignQueryHandler
     {
         if (!_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty)
         {
-            throw new UnauthorizedAccessException("The current user must be authenticated to view webhook subscriptions.");
+            throw new UnauthenticatedException("The current user must be authenticated to view webhook subscriptions.");
         }
 
         var campaign = await _campaignOwnerCacheRepository.GetAsync(query.CampaignId, cancellationToken);
 
         if (campaign is null)
         {
-            throw new KeyNotFoundException($"Campaign with id '{query.CampaignId}' was not found.");
+            throw new NotFoundException($"Campaign with id '{query.CampaignId}' was not found.");
         }
 
         if (campaign.OwnerId != _currentUser.UserId)

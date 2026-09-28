@@ -1,4 +1,5 @@
 using CrowdFunding.BuildingBlocks.Domain.Common;
+using CrowdFunding.BuildingBlocks.Domain.Exceptions;
 
 namespace CrowdFunding.Modules.CampaignUpdates.Domain.Aggregates;
 
@@ -43,17 +44,17 @@ public sealed class WebhookSubscription : BaseEntity
     {
         if (campaignId == Guid.Empty)
         {
-            throw new ArgumentException("CampaignId is required.", nameof(campaignId));
+            throw new BusinessRuleViolationException("CampaignId is required.");
         }
 
         if (string.IsNullOrWhiteSpace(targetUrl))
         {
-            throw new ArgumentException("Target URL is required.", nameof(targetUrl));
+            throw new BusinessRuleViolationException("Target URL is required.");
         }
 
         if (string.IsNullOrWhiteSpace(secretKey))
         {
-            throw new ArgumentException("Secret key is required.", nameof(secretKey));
+            throw new BusinessRuleViolationException("Secret key is required.");
         }
 
         return new WebhookSubscription(Guid.NewGuid(), campaignId, targetUrl.Trim(), secretKey, createdAtUtc);
@@ -94,7 +95,7 @@ public sealed class WebhookSubscription : BaseEntity
     {
         if (!IsActive)
         {
-            throw new InvalidOperationException("This webhook subscription is already inactive.");
+            throw new DomainConflictException("This webhook subscription is already inactive.");
         }
 
         IsActive = false;

@@ -1,5 +1,7 @@
+using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
+using CrowdFunding.BuildingBlocks.Domain.Exceptions;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Transactions;
@@ -44,12 +46,12 @@ public sealed class MakeContributionCommandHandler : ICommandHandler<MakeContrib
 
         if (campaign is null)
         {
-            throw new KeyNotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
+            throw new NotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
         }
 
         if (!campaign.IsActive || campaign.DeadlineUtc <= _dateTimeProvider.UtcNow)
         {
-            throw new InvalidOperationException(
+            throw new DomainConflictException(
                 $"Campaign '{command.CampaignId}' cannot accept contributions — it is not active or has passed its deadline.");
         }
 
@@ -60,7 +62,7 @@ public sealed class MakeContributionCommandHandler : ICommandHandler<MakeContrib
         // without manual intervention.
         if (!string.Equals(campaign.Currency, command.Currency, StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException(
+            throw new BusinessRuleViolationException(
                 $"Contribution currency '{command.Currency}' does not match campaign currency '{campaign.Currency}'.");
         }
 
@@ -68,7 +70,7 @@ public sealed class MakeContributionCommandHandler : ICommandHandler<MakeContrib
         // and perk tier inventory hoarding (TICKET-054).
         if (campaign.OwnerId != Guid.Empty && campaign.OwnerId == _currentUser.UserId)
         {
-            throw new InvalidOperationException("Campaign creators cannot back or contribute to their own campaigns.");
+            throw new BusinessRuleViolationException("Campaign creators cannot back or contribute to their own campaigns.");
         }
 
         var contribution = Contribution.Create(
@@ -97,7 +99,7 @@ public sealed class MakeContributionCommandHandler : ICommandHandler<MakeContrib
     {
         if (!_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty)
         {
-            throw new UnauthorizedAccessException("The current user must be authenticated to contribute to a campaign.");
+            throw new UnauthenticatedException("The current user must be authenticated to contribute to a campaign.");
         }
 
         if (!_currentUser.HasPermission(PermissionConstants.CampaignsContribute))

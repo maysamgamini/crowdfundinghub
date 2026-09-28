@@ -38,13 +38,13 @@ public sealed class CreateRewardTierCommandHandler : ICommandHandler<CreateRewar
     {
         if (!_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty)
         {
-            throw new UnauthorizedAccessException("The current user must be authenticated to create a reward tier.");
+            throw new UnauthenticatedException("The current user must be authenticated to create a reward tier.");
         }
 
         var campaign = await _campaignRepository.GetByIdAsync(command.CampaignId, cancellationToken);
         if (campaign is null)
         {
-            throw new KeyNotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
+            throw new NotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
         }
 
         if (campaign.OwnerId != _currentUser.UserId)

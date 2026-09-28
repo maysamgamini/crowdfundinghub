@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 
@@ -22,7 +23,7 @@ public sealed class GetRewardTierByIdQueryHandler : IQueryHandler<GetRewardTierB
 
         if (rewardTier is null || rewardTier.CampaignId != query.CampaignId)
         {
-            throw new KeyNotFoundException($"Reward tier '{query.RewardTierId}' was not found for campaign '{query.CampaignId}'.");
+            throw new NotFoundException($"Reward tier '{query.RewardTierId}' was not found for campaign '{query.CampaignId}'.");
         }
 
         return new GetRewardTierByIdResult(

@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Domain.Common;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
@@ -56,7 +57,7 @@ public sealed class ReleaseExpiredRewardTierReservationCommandHandler
             }
 
             var rewardTier = await _rewardTierRepository.GetByIdAsync(reservation.RewardTierId, ct)
-                ?? throw new KeyNotFoundException($"Reward tier '{reservation.RewardTierId}' was not found.");
+                ?? throw new NotFoundException($"Reward tier '{reservation.RewardTierId}' was not found.");
 
             rewardTier.ReleaseReservation();
             reservation.Release();

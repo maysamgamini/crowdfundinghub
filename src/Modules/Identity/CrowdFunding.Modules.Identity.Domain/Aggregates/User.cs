@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Domain.Exceptions;
 using CrowdFunding.Modules.Identity.Domain.Entities;
 
 namespace CrowdFunding.Modules.Identity.Domain.Aggregates;
@@ -50,7 +51,7 @@ public sealed class User
 
         if (string.IsNullOrWhiteSpace(passwordHash))
         {
-            throw new ArgumentException("Password hash is required.", nameof(passwordHash));
+            throw new BusinessRuleViolationException("Password hash is required.");
         }
 
         return new User(
@@ -126,14 +127,14 @@ public sealed class User
     {
         if (string.IsNullOrWhiteSpace(email))
         {
-            throw new ArgumentException("Email is required.", nameof(email));
+            throw new BusinessRuleViolationException("Email is required.");
         }
 
         var normalized = email.Trim();
 
         if (!normalized.Contains('@'))
         {
-            throw new ArgumentException("Email must be a valid email address.", nameof(email));
+            throw new BusinessRuleViolationException("Email must be a valid email address.");
         }
 
         return normalized.ToUpperInvariant();
@@ -143,14 +144,14 @@ public sealed class User
     {
         if (string.IsNullOrWhiteSpace(displayName))
         {
-            throw new ArgumentException("Display name is required.", nameof(displayName));
+            throw new BusinessRuleViolationException("Display name is required.");
         }
 
         var normalized = displayName.Trim();
 
         if (normalized.Length > 100)
         {
-            throw new ArgumentException("Display name cannot exceed 100 characters.", nameof(displayName));
+            throw new BusinessRuleViolationException("Display name cannot exceed 100 characters.");
         }
 
         return normalized;
@@ -160,7 +161,7 @@ public sealed class User
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            throw new ArgumentException($"{parameterName} is required.", parameterName);
+            throw new BusinessRuleViolationException($"{parameterName} is required.");
         }
 
         return value.Trim();

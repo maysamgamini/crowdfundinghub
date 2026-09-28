@@ -1,4 +1,5 @@
 ﻿using CrowdFunding.BuildingBlocks.Domain.Common;
+using CrowdFunding.BuildingBlocks.Domain.Exceptions;
 using CrowdFunding.Modules.Moderation.Domain.Enums;
 using CrowdFunding.Modules.Moderation.Domain.Events;
 
@@ -48,7 +49,7 @@ public sealed class CampaignReview : BaseEntity
     {
         if (campaignId == Guid.Empty)
         {
-            throw new ArgumentException("CampaignId is required.", nameof(campaignId));
+            throw new BusinessRuleViolationException("CampaignId is required.");
         }
 
         return new CampaignReview(Guid.NewGuid(), campaignId, createdAtUtc);
@@ -130,7 +131,7 @@ public sealed class CampaignReview : BaseEntity
     {
         if (Status != CampaignReviewStatus.Pending)
         {
-            throw new InvalidOperationException("Only pending campaign reviews can be updated.");
+            throw new DomainConflictException("Only pending campaign reviews can be updated.");
         }
     }
 
@@ -138,7 +139,7 @@ public sealed class CampaignReview : BaseEntity
     {
         if (moderatorId == Guid.Empty)
         {
-            throw new ArgumentException("ModeratorId is required.", nameof(moderatorId));
+            throw new BusinessRuleViolationException("ModeratorId is required.");
         }
     }
 
@@ -153,7 +154,7 @@ public sealed class CampaignReview : BaseEntity
 
         if (normalized.Length > 500)
         {
-            throw new ArgumentException("Review notes cannot exceed 500 characters.", nameof(notes));
+            throw new BusinessRuleViolationException("Review notes cannot exceed 500 characters.");
         }
 
         return normalized;

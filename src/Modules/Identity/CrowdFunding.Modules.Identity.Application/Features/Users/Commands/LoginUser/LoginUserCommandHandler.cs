@@ -1,4 +1,5 @@
 using CrowdFunding.BuildingBlocks.Application.Messaging;
+using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Services;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Transactions;
@@ -55,7 +56,7 @@ public sealed class LoginUserCommandHandler : ICommandHandler<LoginUserCommand, 
 
         if (user is null || !passwordValid || !user.IsActive)
         {
-            throw new UnauthorizedAccessException("Invalid email or password.");
+            throw new UnauthenticatedException("Invalid email or password.");
         }
 
         var accessToken = _accessTokenProvider.Create(user, UserAuthorizationProjection.GetEffectivePermissions(user));

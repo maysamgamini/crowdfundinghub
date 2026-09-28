@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
@@ -56,7 +57,7 @@ public sealed class ReconcilePaymentWebhookCommandHandler : ICommandHandler<Reco
         var contribution = await _contributionRepository.GetByExternalPaymentIntentIdAsync(command.PaymentIntentId, cancellationToken);
         if (contribution is null)
         {
-            throw new KeyNotFoundException($"No contribution found for payment intent '{command.PaymentIntentId}'.");
+            throw new NotFoundException($"No contribution found for payment intent '{command.PaymentIntentId}'.");
         }
 
         if (contribution.Status == ContributionStatus.Pending)

@@ -1,5 +1,6 @@
 using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Application.Security;
+using CrowdFunding.BuildingBlocks.Domain.Exceptions;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Services;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Transactions;
@@ -66,9 +67,9 @@ public sealed class UserDomainTests
     {
         var action = () => User.Register("user@example.com", "User", "   ", DateTime.UtcNow);
 
-        var exception = Assert.Throws<ArgumentException>(action);
+        var exception = Assert.Throws<BusinessRuleViolationException>(action);
 
-        Assert.Equal("Password hash is required. (Parameter 'passwordHash')", exception.Message);
+        Assert.Equal("Password hash is required.", exception.Message);
     }
 
     [Fact]
@@ -76,9 +77,9 @@ public sealed class UserDomainTests
     {
         var action = () => User.Register("user@example.com", new string('a', 101), "hash", DateTime.UtcNow);
 
-        var exception = Assert.Throws<ArgumentException>(action);
+        var exception = Assert.Throws<BusinessRuleViolationException>(action);
 
-        Assert.Equal("Display name cannot exceed 100 characters. (Parameter 'displayName')", exception.Message);
+        Assert.Equal("Display name cannot exceed 100 characters.", exception.Message);
     }
 
     [Fact]
@@ -86,9 +87,9 @@ public sealed class UserDomainTests
     {
         var action = () => User.Register("not-an-email", "User", "hash", DateTime.UtcNow);
 
-        var exception = Assert.Throws<ArgumentException>(action);
+        var exception = Assert.Throws<BusinessRuleViolationException>(action);
 
-        Assert.Equal("Email must be a valid email address. (Parameter 'email')", exception.Message);
+        Assert.Equal("Email must be a valid email address.", exception.Message);
     }
 }
 
@@ -279,7 +280,7 @@ public sealed class LoginUserCommandHandlerTests
             new LoginUserCommand("creator@example.com", "wrong-password"),
             CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(action);
+        var exception = await Assert.ThrowsAsync<UnauthenticatedException>(action);
 
         Assert.Equal("Invalid email or password.", exception.Message);
     }
@@ -299,7 +300,7 @@ public sealed class LoginUserCommandHandlerTests
         // Same generic exception as "wrong password"/"no such user" — previously this threw a
         // distinct "account is inactive" message, which confirmed to an attacker that the email
         // belongs to a real (if disabled) account (improvement.md §2.8).
-        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(action);
+        var exception = await Assert.ThrowsAsync<UnauthenticatedException>(action);
 
         Assert.Equal("Invalid email or password.", exception.Message);
     }
@@ -314,7 +315,7 @@ public sealed class LoginUserCommandHandlerTests
             new LoginUserCommand("nobody@example.com", "whatever"),
             CancellationToken.None);
 
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(action);
+        await Assert.ThrowsAsync<UnauthenticatedException>(action);
 
         // Constant-time login: even with no matching user, VerifyPassword must still run against
         // DummyHash, so a missing account costs the same PBKDF2 work as a wrong password.
@@ -357,7 +358,7 @@ public sealed class AssignRoleToUserCommandHandlerTests
             new AssignRoleToUserCommand(user.Id, RoleConstants.Moderator),
             CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(action);
+        var exception = await Assert.ThrowsAsync<UnauthenticatedException>(action);
 
         Assert.Equal("The current user must be authenticated to assign roles.", exception.Message);
     }
@@ -393,7 +394,7 @@ public sealed class AssignRoleToUserCommandHandlerTests
             new AssignRoleToUserCommand(userId, RoleConstants.Moderator),
             CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<KeyNotFoundException>(action);
+        var exception = await Assert.ThrowsAsync<NotFoundException>(action);
 
         Assert.Equal($"User '{userId}' was not found.", exception.Message);
     }
@@ -433,7 +434,7 @@ public sealed class GrantPermissionToUserCommandHandlerTests
             new GrantPermissionToUserCommand(user.Id, PermissionConstants.IdentityPermissionsGrant),
             CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(action);
+        var exception = await Assert.ThrowsAsync<UnauthenticatedException>(action);
 
         Assert.Equal("The current user must be authenticated to grant permissions.", exception.Message);
     }
@@ -469,7 +470,7 @@ public sealed class GrantPermissionToUserCommandHandlerTests
             new GrantPermissionToUserCommand(userId, PermissionConstants.IdentityPermissionsGrant),
             CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<KeyNotFoundException>(action);
+        var exception = await Assert.ThrowsAsync<NotFoundException>(action);
 
         Assert.Equal($"User '{userId}' was not found.", exception.Message);
     }
@@ -503,7 +504,7 @@ public sealed class GetCurrentUserQueryHandlerTests
 
         var action = async () => await handler.Handle(new GetCurrentUserQuery(), CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(action);
+        var exception = await Assert.ThrowsAsync<UnauthenticatedException>(action);
 
         Assert.Equal("The current user is not authenticated.", exception.Message);
     }
@@ -518,7 +519,7 @@ public sealed class GetCurrentUserQueryHandlerTests
 
         var action = async () => await handler.Handle(new GetCurrentUserQuery(), CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<KeyNotFoundException>(action);
+        var exception = await Assert.ThrowsAsync<NotFoundException>(action);
 
         Assert.Equal($"User '{userId}' was not found.", exception.Message);
     }
@@ -752,7 +753,7 @@ public sealed class RefreshTokenDomainTests
     {
         var action = () => RefreshToken.Issue(Guid.NewGuid(), blankHash, DateTime.UtcNow, TimeSpan.FromDays(1));
 
-        Assert.Throws<ArgumentException>(action);
+        Assert.Throws<BusinessRuleViolationException>(action);
     }
 
     [Fact]
@@ -760,7 +761,7 @@ public sealed class RefreshTokenDomainTests
     {
         var action = () => RefreshToken.Issue(Guid.NewGuid(), "hash", DateTime.UtcNow, TimeSpan.Zero);
 
-        Assert.Throws<ArgumentException>(action);
+        Assert.Throws<BusinessRuleViolationException>(action);
     }
 
     [Fact]
@@ -848,7 +849,7 @@ public sealed class RefreshAccessTokenCommandHandlerTests
 
         var action = async () => await handler.Handle(new RefreshAccessTokenCommand("never-issued"), CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(action);
+        var exception = await Assert.ThrowsAsync<UnauthenticatedException>(action);
         Assert.Equal("Invalid refresh token.", exception.Message);
     }
 
@@ -865,7 +866,7 @@ public sealed class RefreshAccessTokenCommandHandlerTests
 
         var action = async () => await handler.Handle(new RefreshAccessTokenCommand("raw-token"), CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(action);
+        var exception = await Assert.ThrowsAsync<UnauthenticatedException>(action);
         Assert.Equal("Refresh token has expired.", exception.Message);
     }
 
@@ -894,7 +895,7 @@ public sealed class RefreshAccessTokenCommandHandlerTests
 
         var action = async () => await handler.Handle(new RefreshAccessTokenCommand("stolen-token"), CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(action);
+        var exception = await Assert.ThrowsAsync<UnauthenticatedException>(action);
         Assert.Equal("Refresh token reuse detected; all sessions have been revoked.", exception.Message);
         Assert.True(otherActiveToken.IsRevoked);
         Assert.NotEqual(compromisedStamp, user.SecurityStamp);
@@ -915,7 +916,7 @@ public sealed class RefreshAccessTokenCommandHandlerTests
 
         var action = async () => await handler.Handle(new RefreshAccessTokenCommand("raw-token"), CancellationToken.None);
 
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(action);
+        await Assert.ThrowsAsync<UnauthenticatedException>(action);
     }
 }
 
@@ -988,7 +989,7 @@ public sealed class LogoutCommandHandlerTests
 
         var action = async () => await handler.Handle(new LogoutCommand("whatever"), CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(action);
+        var exception = await Assert.ThrowsAsync<UnauthenticatedException>(action);
         Assert.Equal("The current user must be authenticated to log out.", exception.Message);
     }
 }

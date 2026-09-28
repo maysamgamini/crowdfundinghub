@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Domain.Exceptions;
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 
 namespace CrowdFunding.Modules.Campaigns.Domain.Aggregates;
@@ -54,17 +55,17 @@ public sealed class RewardTier
     {
         if (campaignId == Guid.Empty)
         {
-            throw new ArgumentException("CampaignId is required.", nameof(campaignId));
+            throw new BusinessRuleViolationException("CampaignId is required.");
         }
 
         if (string.IsNullOrWhiteSpace(title))
         {
-            throw new ArgumentException("Title is required.", nameof(title));
+            throw new BusinessRuleViolationException("Title is required.");
         }
 
         if (totalCapacity <= 0)
         {
-            throw new ArgumentException("Total capacity must be greater than zero.", nameof(totalCapacity));
+            throw new BusinessRuleViolationException("Total capacity must be greater than zero.");
         }
 
         return new RewardTier(Guid.NewGuid(), campaignId, title.Trim(), description?.Trim() ?? string.Empty, minimumPledgeAmount, totalCapacity, createdAtUtc);
@@ -83,7 +84,7 @@ public sealed class RewardTier
     {
         if (AvailableCount <= 0)
         {
-            throw new InvalidOperationException($"Reward tier '{Title}' is completely sold out.");
+            throw new DomainConflictException($"Reward tier '{Title}' is completely sold out.");
         }
 
         ReservedCount++;
@@ -97,7 +98,7 @@ public sealed class RewardTier
     {
         if (ReservedCount <= 0)
         {
-            throw new InvalidOperationException("No reserved slot to release for this tier.");
+            throw new DomainConflictException("No reserved slot to release for this tier.");
         }
 
         ReservedCount--;
@@ -108,7 +109,7 @@ public sealed class RewardTier
     {
         if (ReservedCount <= 0)
         {
-            throw new InvalidOperationException("No reserved slot to confirm for this tier.");
+            throw new DomainConflictException("No reserved slot to confirm for this tier.");
         }
 
         ReservedCount--;
@@ -122,7 +123,7 @@ public sealed class RewardTier
     {
         if (ClaimedCount <= 0)
         {
-            throw new InvalidOperationException("No claimed slot to release for this tier.");
+            throw new DomainConflictException("No claimed slot to release for this tier.");
         }
 
         ClaimedCount--;

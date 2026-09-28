@@ -2,6 +2,7 @@ using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Application.Pagination;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
+using CrowdFunding.BuildingBlocks.Domain.Exceptions;
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
@@ -66,7 +67,7 @@ public sealed class CampaignDomainTests
 
         var action = () => campaign.Publish(deadlineUtc);
 
-        var exception = Assert.Throws<InvalidOperationException>(action);
+        var exception = Assert.Throws<DomainConflictException>(action);
 
         Assert.Equal("Cannot publish a campaign with a past deadline.", exception.Message);
     }
@@ -95,9 +96,9 @@ public sealed class CampaignDomainTests
             DateTime.UtcNow.AddDays(5),
             DateTime.UtcNow);
 
-        var exception = Assert.Throws<ArgumentException>(action);
+        var exception = Assert.Throws<BusinessRuleViolationException>(action);
 
-        Assert.Equal("Campaign story must be at least 20 characters. (Parameter 'story')", exception.Message);
+        Assert.Equal("Campaign story must be at least 20 characters.", exception.Message);
     }
 
     [Fact]
@@ -112,9 +113,9 @@ public sealed class CampaignDomainTests
             DateTime.UtcNow.AddDays(5),
             DateTime.UtcNow);
 
-        var exception = Assert.Throws<ArgumentException>(action);
+        var exception = Assert.Throws<BusinessRuleViolationException>(action);
 
-        Assert.Equal("OwnerId is required. (Parameter 'ownerId')", exception.Message);
+        Assert.Equal("OwnerId is required.", exception.Message);
     }
 
     [Fact]
@@ -129,9 +130,9 @@ public sealed class CampaignDomainTests
             DateTime.UtcNow.AddDays(5),
             DateTime.UtcNow);
 
-        var exception = Assert.Throws<ArgumentException>(action);
+        var exception = Assert.Throws<BusinessRuleViolationException>(action);
 
-        Assert.Equal("Campaign title is required. (Parameter 'title')", exception.Message);
+        Assert.Equal("Campaign title is required.", exception.Message);
     }
 
     [Fact]
@@ -146,9 +147,9 @@ public sealed class CampaignDomainTests
             DateTime.UtcNow.AddDays(5),
             DateTime.UtcNow);
 
-        var exception = Assert.Throws<ArgumentException>(action);
+        var exception = Assert.Throws<BusinessRuleViolationException>(action);
 
-        Assert.Equal("Campaign title cannot exceed 200 characters. (Parameter 'title')", exception.Message);
+        Assert.Equal("Campaign title cannot exceed 200 characters.", exception.Message);
     }
 
     [Fact]
@@ -163,9 +164,9 @@ public sealed class CampaignDomainTests
             DateTime.UtcNow.AddDays(5),
             DateTime.UtcNow);
 
-        var exception = Assert.Throws<ArgumentException>(action);
+        var exception = Assert.Throws<BusinessRuleViolationException>(action);
 
-        Assert.Equal("Campaign category is required. (Parameter 'category')", exception.Message);
+        Assert.Equal("Campaign category is required.", exception.Message);
     }
 
     [Fact]
@@ -180,9 +181,9 @@ public sealed class CampaignDomainTests
             DateTime.UtcNow.AddDays(5),
             DateTime.UtcNow);
 
-        var exception = Assert.Throws<ArgumentException>(action);
+        var exception = Assert.Throws<BusinessRuleViolationException>(action);
 
-        Assert.Equal("Campaign category cannot exceed 100 characters. (Parameter 'category')", exception.Message);
+        Assert.Equal("Campaign category cannot exceed 100 characters.", exception.Message);
     }
 
     [Fact]
@@ -197,9 +198,9 @@ public sealed class CampaignDomainTests
             DateTime.UtcNow.AddDays(5),
             DateTime.UtcNow);
 
-        var exception = Assert.Throws<ArgumentException>(action);
+        var exception = Assert.Throws<BusinessRuleViolationException>(action);
 
-        Assert.Equal("Campaign goal amount must be greater than zero. (Parameter 'goalAmount')", exception.Message);
+        Assert.Equal("Campaign goal amount must be greater than zero.", exception.Message);
     }
 
     [Fact]
@@ -216,9 +217,9 @@ public sealed class CampaignDomainTests
             createdAtUtc,
             createdAtUtc);
 
-        var exception = Assert.Throws<ArgumentException>(action);
+        var exception = Assert.Throws<BusinessRuleViolationException>(action);
 
-        Assert.Equal("Campaign deadline must be in the future. (Parameter 'deadlineUtc')", exception.Message);
+        Assert.Equal("Campaign deadline must be in the future.", exception.Message);
     }
 
     [Fact]
@@ -230,7 +231,7 @@ public sealed class CampaignDomainTests
 
         var action = () => campaign.Publish(createdAtUtc.AddDays(2));
 
-        var exception = Assert.Throws<InvalidOperationException>(action);
+        var exception = Assert.Throws<DomainConflictException>(action);
 
         Assert.Equal("Only draft campaigns can be published.", exception.Message);
     }
@@ -244,7 +245,7 @@ public sealed class CampaignDomainTests
 
         var action = () => campaign.Cancel();
 
-        var exception = Assert.Throws<InvalidOperationException>(action);
+        var exception = Assert.Throws<DomainConflictException>(action);
 
         // Previously this succeeded silently and re-raised a duplicate
         // CampaignCancelledDomainEvent on every repeated call.
@@ -271,7 +272,7 @@ public sealed class CampaignDomainTests
 
         var action = () => campaign.ApplyConfirmedContribution(new Money(125m, "USD"));
 
-        var exception = Assert.Throws<InvalidOperationException>(action);
+        var exception = Assert.Throws<DomainConflictException>(action);
 
         Assert.Equal(
             "Cannot apply contributions to campaign in status 'Draft'. Only Published campaigns can accept funds.",
@@ -288,7 +289,7 @@ public sealed class CampaignDomainTests
 
         var action = () => campaign.ApplyConfirmedContribution(new Money(125m, "USD"));
 
-        var exception = Assert.Throws<InvalidOperationException>(action);
+        var exception = Assert.Throws<DomainConflictException>(action);
 
         Assert.Equal(
             "Cannot apply contributions to campaign in status 'Cancelled'. Only Published campaigns can accept funds.",
@@ -304,7 +305,7 @@ public sealed class CampaignDomainTests
 
         var action = () => campaign.ApplyConfirmedContribution(new Money(0m, "USD"));
 
-        var exception = Assert.Throws<InvalidOperationException>(action);
+        var exception = Assert.Throws<BusinessRuleViolationException>(action);
 
         Assert.Equal("Contribution amount must be greater than zero.", exception.Message);
     }
@@ -333,7 +334,7 @@ public sealed class CampaignDomainTests
 
         var action = () => campaign.CompleteSuccessfully(createdAtUtc.AddDays(15));
 
-        var exception = Assert.Throws<InvalidOperationException>(action);
+        var exception = Assert.Throws<DomainConflictException>(action);
         Assert.Equal("Cannot complete a campaign successfully — its funding goal was not reached.", exception.Message);
     }
 
@@ -345,7 +346,7 @@ public sealed class CampaignDomainTests
 
         var action = () => campaign.CompleteSuccessfully(createdAtUtc.AddDays(15));
 
-        Assert.Throws<InvalidOperationException>(action);
+        Assert.Throws<DomainConflictException>(action);
     }
 
     [Fact]
@@ -372,7 +373,7 @@ public sealed class CampaignDomainTests
 
         var action = () => campaign.MarkFailed(createdAtUtc.AddDays(15));
 
-        var exception = Assert.Throws<InvalidOperationException>(action);
+        var exception = Assert.Throws<DomainConflictException>(action);
         Assert.Equal("Cannot mark a campaign failed — its funding goal was reached.", exception.Message);
     }
 
@@ -443,7 +444,7 @@ public sealed class CreateCampaignCommandHandlerTests
                 new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc)),
             CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(action);
+        var exception = await Assert.ThrowsAsync<UnauthenticatedException>(action);
 
         Assert.Equal("The current user must be authenticated to create a campaign.", exception.Message);
     }
@@ -526,7 +527,7 @@ public sealed class PublishCampaignCommandHandlerTests
 
         var action = async () => await handler.Handle(new PublishCampaignCommand(Guid.NewGuid()), CancellationToken.None);
 
-        await Assert.ThrowsAsync<KeyNotFoundException>(action);
+        await Assert.ThrowsAsync<NotFoundException>(action);
     }
 
     [Fact]
@@ -647,7 +648,7 @@ public sealed class PublishCampaignCommandHandlerTests
 
         var action = async () => await handler.Handle(new PublishCampaignCommand(campaign.Id), CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(action);
+        var exception = await Assert.ThrowsAsync<UnauthenticatedException>(action);
 
         Assert.Equal("The current user must be authenticated to publish a campaign.", exception.Message);
     }
@@ -748,7 +749,7 @@ public sealed class AddContributionToCampaignCommandHandlerTests
             new AddContributionToCampaignCommand(Guid.NewGuid(), Guid.NewGuid(), 125m, "usd"),
             CancellationToken.None);
 
-        await Assert.ThrowsAsync<KeyNotFoundException>(action);
+        await Assert.ThrowsAsync<NotFoundException>(action);
 
         // The existence check now runs inside the locked critical section (the campaign is
         // loaded after the advisory lock is acquired, not before), so the executor is invoked
@@ -842,7 +843,7 @@ public sealed class CancelCampaignCommandHandlerTests
 
         var action = async () => await handler.Handle(new CancelCampaignCommand(campaign.Id), CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(action);
+        var exception = await Assert.ThrowsAsync<UnauthenticatedException>(action);
 
         Assert.Equal("The current user must be authenticated to cancel a campaign.", exception.Message);
     }
@@ -925,7 +926,7 @@ public sealed class GetCampaignByIdQueryHandlerTests
 
         var action = async () => await handler.Handle(new GetCampaignByIdQuery(campaignId), CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<KeyNotFoundException>(action);
+        var exception = await Assert.ThrowsAsync<NotFoundException>(action);
 
         Assert.Equal($"Campaign with id '{campaignId}' was not found.", exception.Message);
     }

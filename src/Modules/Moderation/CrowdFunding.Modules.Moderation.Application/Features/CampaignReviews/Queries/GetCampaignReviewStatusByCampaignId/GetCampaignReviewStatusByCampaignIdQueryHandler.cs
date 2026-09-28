@@ -1,4 +1,5 @@
-﻿using CrowdFunding.BuildingBlocks.Application.Messaging;
+﻿using CrowdFunding.BuildingBlocks.Application.Exceptions;
+using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Services;
 using CrowdFunding.Modules.Moderation.Contracts.Enums;
 using CrowdFunding.Modules.Moderation.Contracts.Queries.GetCampaignReviewStatusByCampaignId;
@@ -25,7 +26,7 @@ public sealed class GetCampaignReviewStatusByCampaignIdQueryHandler : IQueryHand
 
         if (result is null)
         {
-            throw new KeyNotFoundException($"Campaign review for campaign '{query.CampaignId}' was not found.");
+            throw new NotFoundException($"Campaign review for campaign '{query.CampaignId}' was not found.");
         }
 
         return new GetCampaignReviewStatusByCampaignIdResult(

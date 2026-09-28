@@ -1,3 +1,5 @@
+using CrowdFunding.BuildingBlocks.Domain.Exceptions;
+
 namespace CrowdFunding.Modules.Identity.Domain.Entities;
 
 /// <summary>
@@ -34,17 +36,17 @@ public sealed class RefreshToken
     {
         if (userId == Guid.Empty)
         {
-            throw new ArgumentException("User id is required.", nameof(userId));
+            throw new BusinessRuleViolationException("User id is required.");
         }
 
         if (string.IsNullOrWhiteSpace(tokenHash))
         {
-            throw new ArgumentException("Token hash is required.", nameof(tokenHash));
+            throw new BusinessRuleViolationException("Token hash is required.");
         }
 
         if (lifetime <= TimeSpan.Zero)
         {
-            throw new ArgumentException("Lifetime must be positive.", nameof(lifetime));
+            throw new BusinessRuleViolationException("Lifetime must be positive.");
         }
 
         return new RefreshToken(Guid.NewGuid(), userId, tokenHash, issuedAtUtc, issuedAtUtc + lifetime);

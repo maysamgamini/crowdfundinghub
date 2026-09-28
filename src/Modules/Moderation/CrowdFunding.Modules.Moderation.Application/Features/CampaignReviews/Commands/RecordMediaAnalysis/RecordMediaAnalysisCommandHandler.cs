@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Services;
@@ -32,7 +33,7 @@ public sealed class RecordMediaAnalysisCommandHandler : ICommandHandler<RecordMe
         var campaignReview = await _campaignReviewRepository.GetByCampaignIdAsync(command.CampaignId, cancellationToken);
         if (campaignReview is null)
         {
-            throw new KeyNotFoundException($"Campaign review for campaign '{command.CampaignId}' was not found.");
+            throw new NotFoundException($"Campaign review for campaign '{command.CampaignId}' was not found.");
         }
 
         await _transactionExecutor.ExecuteAsync(async ct =>

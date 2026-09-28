@@ -55,7 +55,7 @@ public sealed class RewardTierConcurrencyE2ETests
         var responses = await Task.WhenAll(tasks);
 
         var succeeded = responses.Count(r => r.StatusCode == HttpStatusCode.OK);
-        var rejected = responses.Count(r => r.StatusCode == HttpStatusCode.BadRequest);
+        var rejected = responses.Count(r => r.StatusCode == HttpStatusCode.Conflict);
 
         Assert.Equal(5, succeeded);
         Assert.Equal(45, rejected);
@@ -65,8 +65,9 @@ public sealed class RewardTierConcurrencyE2ETests
         finalCheckClient.SetBearerToken(creatorToken);
         var moderatorResponse = await finalCheckClient.PostAsync(
             $"/api/campaigns/{campaignId}/reward-tiers/{rewardTierId}/reserve", content: null);
-        // The tier is now fully exhausted — even a 51st attempt is rejected the same way.
-        Assert.Equal(HttpStatusCode.BadRequest, moderatorResponse.StatusCode);
+        // The tier is now fully exhausted — even a 51st attempt is rejected the same way (409:
+        // the request is valid, the tier's current state is what refuses it).
+        Assert.Equal(HttpStatusCode.Conflict, moderatorResponse.StatusCode);
     }
 
     private async Task<HttpResponseMessage> ReserveAsync(Guid campaignId, Guid rewardTierId, string label)

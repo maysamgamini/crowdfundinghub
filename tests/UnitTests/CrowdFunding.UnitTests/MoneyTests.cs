@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Domain.Exceptions;
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 
 namespace CrowdFunding.UnitTests;
@@ -18,9 +19,9 @@ public sealed class MoneyTests
     {
         var action = () => new Money(-1m, "USD");
 
-        var exception = Assert.Throws<ArgumentException>(action);
+        var exception = Assert.Throws<BusinessRuleViolationException>(action);
 
-        Assert.Equal("Money amount cannot be negative. (Parameter 'amount')", exception.Message);
+        Assert.Equal("Money amount cannot be negative.", exception.Message);
     }
 
     [Fact]
@@ -28,9 +29,9 @@ public sealed class MoneyTests
     {
         var action = () => new Money(10m, "   ");
 
-        var exception = Assert.Throws<ArgumentException>(action);
+        var exception = Assert.Throws<BusinessRuleViolationException>(action);
 
-        Assert.Equal("Currency is required. (Parameter 'currency')", exception.Message);
+        Assert.Equal("Currency is required.", exception.Message);
     }
 
     [Fact]
@@ -38,9 +39,9 @@ public sealed class MoneyTests
     {
         var action = () => new Money(10m, "US");
 
-        var exception = Assert.Throws<ArgumentException>(action);
+        var exception = Assert.Throws<BusinessRuleViolationException>(action);
 
-        Assert.Equal("Currency must be a 3-letter ISO code. (Parameter 'currency')", exception.Message);
+        Assert.Equal("Currency must be a 3-letter ISO code.", exception.Message);
     }
 
     [Fact]
@@ -56,7 +57,7 @@ public sealed class MoneyTests
     {
         var action = () => new Money(10m, "USD").Add(new Money(5m, "EUR"));
 
-        var exception = Assert.Throws<InvalidOperationException>(action);
+        var exception = Assert.Throws<BusinessRuleViolationException>(action);
 
         Assert.Equal("Money currency mismatch.", exception.Message);
     }
@@ -74,7 +75,7 @@ public sealed class MoneyTests
     {
         var action = () => new Money(10m, "USD").Subtract(new Money(4m, "EUR"));
 
-        var exception = Assert.Throws<InvalidOperationException>(action);
+        var exception = Assert.Throws<BusinessRuleViolationException>(action);
 
         Assert.Equal("Money currency mismatch.", exception.Message);
     }
@@ -84,7 +85,7 @@ public sealed class MoneyTests
     {
         var action = () => new Money(4m, "USD").Subtract(new Money(10m, "USD"));
 
-        var exception = Assert.Throws<InvalidOperationException>(action);
+        var exception = Assert.Throws<BusinessRuleViolationException>(action);
 
         Assert.Equal("Cannot subtract more money than available.", exception.Message);
     }

@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.BuildingBlocks.Domain.Common;
@@ -50,7 +51,7 @@ public sealed class ReserveRewardTierSlotCommandHandler : ICommandHandler<Reserv
     {
         if (!_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty)
         {
-            throw new UnauthorizedAccessException("The current user must be authenticated to reserve a reward tier slot.");
+            throw new UnauthenticatedException("The current user must be authenticated to reserve a reward tier slot.");
         }
 
         // Every concurrent reservation attempt on this tier contends for the same
@@ -72,7 +73,7 @@ public sealed class ReserveRewardTierSlotCommandHandler : ICommandHandler<Reserv
             var rewardTier = await _rewardTierRepository.GetByIdAsync(command.RewardTierId, ct);
             if (rewardTier is null || rewardTier.CampaignId != command.CampaignId)
             {
-                throw new KeyNotFoundException($"Reward tier '{command.RewardTierId}' was not found for campaign '{command.CampaignId}'.");
+                throw new NotFoundException($"Reward tier '{command.RewardTierId}' was not found for campaign '{command.CampaignId}'.");
             }
 
             justSoldOut = rewardTier.ReserveSlot();

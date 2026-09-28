@@ -1,4 +1,5 @@
-﻿using CrowdFunding.BuildingBlocks.Application.Messaging;
+﻿using CrowdFunding.BuildingBlocks.Application.Exceptions;
+using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Persistence;
@@ -37,7 +38,7 @@ public sealed class ApproveCampaignReviewCommandHandler : ICommandHandler<Approv
         var campaignReview = await _campaignReviewRepository.GetByCampaignIdAsync(command.CampaignId, cancellationToken);
         if (campaignReview is null)
         {
-            throw new KeyNotFoundException($"Campaign review for campaign '{command.CampaignId}' was not found.");
+            throw new NotFoundException($"Campaign review for campaign '{command.CampaignId}' was not found.");
         }
 
         await _transactionExecutor.ExecuteAsync(async ct =>
@@ -53,7 +54,7 @@ public sealed class ApproveCampaignReviewCommandHandler : ICommandHandler<Approv
     {
         if (!_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty)
         {
-            throw new UnauthorizedAccessException("The current user must be authenticated to approve a campaign review.");
+            throw new UnauthenticatedException("The current user must be authenticated to approve a campaign review.");
         }
 
         if (!_currentUser.HasPermission(PermissionConstants.ModerationReview))

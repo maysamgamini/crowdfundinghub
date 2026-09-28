@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Domain.Exceptions;
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Campaigns.Application.Features.RewardTiers.Events;
 using CrowdFunding.Modules.Campaigns.Domain.Aggregates;
@@ -28,7 +29,7 @@ public sealed class RewardTierTests
 
     [Fact]
     public void Create_ShouldThrow_WhenTotalCapacityIsNotPositive()
-        => Assert.Throws<ArgumentException>(() => RewardTier.Create(Guid.NewGuid(), "Tier", "Desc", new Money(1m, "USD"), 0, DateTime.UtcNow));
+        => Assert.Throws<BusinessRuleViolationException>(() => RewardTier.Create(Guid.NewGuid(), "Tier", "Desc", new Money(1m, "USD"), 0, DateTime.UtcNow));
 
     [Fact]
     public void ReserveSlot_ShouldIncrementReservedCount_AndDecrementAvailability()
@@ -47,7 +48,7 @@ public sealed class RewardTierTests
         var tier = CreateTier(totalCapacity: 1);
         tier.ReserveSlot();
 
-        Assert.Throws<InvalidOperationException>(() => tier.ReserveSlot());
+        Assert.Throws<DomainConflictException>(() => tier.ReserveSlot());
     }
 
     [Fact]
@@ -77,7 +78,7 @@ public sealed class RewardTierTests
     {
         var tier = CreateTier();
 
-        Assert.Throws<InvalidOperationException>(() => tier.ConfirmClaim());
+        Assert.Throws<DomainConflictException>(() => tier.ConfirmClaim());
     }
 
     [Fact]
@@ -97,7 +98,7 @@ public sealed class RewardTierTests
     {
         var tier = CreateTier();
 
-        Assert.Throws<InvalidOperationException>(() => tier.ReleaseReservation());
+        Assert.Throws<DomainConflictException>(() => tier.ReleaseReservation());
     }
 
     [Fact]
@@ -112,7 +113,7 @@ public sealed class RewardTierTests
 
         Assert.True(tier.ClaimedCount + tier.ReservedCount <= tier.TotalCapacity);
         Assert.Equal(0, tier.AvailableCount);
-        Assert.Throws<InvalidOperationException>(() => tier.ReserveSlot());
+        Assert.Throws<DomainConflictException>(() => tier.ReserveSlot());
     }
 
     [Fact]
@@ -134,7 +135,7 @@ public sealed class RewardTierTests
     public void ReleaseClaim_ShouldThrow_WhenClaimedCountIsZero()
     {
         var tier = CreateTier();
-        Assert.Throws<InvalidOperationException>(() => tier.ReleaseClaim());
+        Assert.Throws<DomainConflictException>(() => tier.ReleaseClaim());
     }
 
     [Fact]
@@ -154,7 +155,7 @@ public sealed class RewardTierTests
     public void Reservation_Refund_ShouldThrow_WhenStatusIsNotConfirmed()
     {
         var reservation = RewardTierReservation.Create(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), DateTime.UtcNow);
-        Assert.Throws<InvalidOperationException>(() => reservation.Refund());
+        Assert.Throws<DomainConflictException>(() => reservation.Refund());
     }
 
     [Fact]

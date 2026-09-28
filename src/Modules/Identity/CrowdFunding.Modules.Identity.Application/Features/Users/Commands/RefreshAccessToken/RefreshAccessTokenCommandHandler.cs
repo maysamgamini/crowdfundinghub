@@ -1,5 +1,6 @@
 using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
+using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Services;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Transactions;
@@ -54,25 +55,25 @@ public sealed class RefreshAccessTokenCommandHandler : ICommandHandler<RefreshAc
 
         if (storedToken is null)
         {
-            throw new UnauthorizedAccessException("Invalid refresh token.");
+            throw new UnauthenticatedException("Invalid refresh token.");
         }
 
         if (storedToken.IsRevoked)
         {
             await HandleReuseAsync(storedToken.UserId, now, cancellationToken);
-            throw new UnauthorizedAccessException("Refresh token reuse detected; all sessions have been revoked.");
+            throw new UnauthenticatedException("Refresh token reuse detected; all sessions have been revoked.");
         }
 
         if (!storedToken.IsActive(now))
         {
-            throw new UnauthorizedAccessException("Refresh token has expired.");
+            throw new UnauthenticatedException("Refresh token has expired.");
         }
 
         var user = await _userRepository.GetByIdAsync(storedToken.UserId, cancellationToken);
 
         if (user is null || !user.IsActive)
         {
-            throw new UnauthorizedAccessException("Invalid refresh token.");
+            throw new UnauthenticatedException("Invalid refresh token.");
         }
 
         var newRawToken = _refreshTokenService.GenerateToken();
@@ -98,7 +99,7 @@ public sealed class RefreshAccessTokenCommandHandler : ICommandHandler<RefreshAc
             // HandleReuseAsync and revoke every session on the account. The presented token is
             // simply no longer valid; the caller should retry with the token pair the winning
             // request returned.
-            throw new UnauthorizedAccessException("Refresh token was already rotated by a concurrent request.");
+            throw new UnauthenticatedException("Refresh token was already rotated by a concurrent request.");
         }
 
         var accessToken = _accessTokenProvider.Create(user, UserAuthorizationProjection.GetEffectivePermissions(user));

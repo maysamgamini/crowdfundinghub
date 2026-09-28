@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Persistence;
@@ -44,11 +45,11 @@ public sealed class LogoutCommandHandler : ICommandHandler<LogoutCommand, Logout
     {
         if (!_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty)
         {
-            throw new UnauthorizedAccessException("The current user must be authenticated to log out.");
+            throw new UnauthenticatedException("The current user must be authenticated to log out.");
         }
 
         var user = await _userRepository.GetByIdAsync(_currentUser.UserId, cancellationToken)
-                   ?? throw new KeyNotFoundException($"User '{_currentUser.UserId}' was not found.");
+                   ?? throw new NotFoundException($"User '{_currentUser.UserId}' was not found.");
 
         var now = _dateTimeProvider.UtcNow;
         var tokenHash = _refreshTokenService.Hash(command.RefreshToken);

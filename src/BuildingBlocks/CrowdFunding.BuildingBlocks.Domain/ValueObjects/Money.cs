@@ -1,3 +1,5 @@
+using CrowdFunding.BuildingBlocks.Domain.Exceptions;
+
 namespace CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 
 /// <summary>
@@ -13,22 +15,22 @@ public sealed class Money : IEquatable<Money>
     /// </summary>
     /// <param name="amount">The non-negative decimal amount, rounded to two decimal places.</param>
     /// <param name="currency">The 3-letter ISO currency code.</param>
-    /// <exception cref="ArgumentException">Thrown when amount is negative or currency is invalid.</exception>
+    /// <exception cref="BusinessRuleViolationException">Thrown when amount is negative or currency is invalid.</exception>
     public Money(decimal amount, string currency)
     {
         if (amount < 0)
         {
-            throw new ArgumentException("Money amount cannot be negative.", nameof(amount));
+            throw new BusinessRuleViolationException("Money amount cannot be negative.");
         }
 
         if (string.IsNullOrWhiteSpace(currency))
         {
-            throw new ArgumentException("Currency is required.", nameof(currency));
+            throw new BusinessRuleViolationException("Currency is required.");
         }
 
         if (currency.Trim().Length != 3)
         {
-            throw new ArgumentException("Currency must be a 3-letter ISO code.", nameof(currency));
+            throw new BusinessRuleViolationException("Currency must be a 3-letter ISO code.");
         }
 
         Amount = decimal.Round(amount, 2, MidpointRounding.AwayFromZero);
@@ -47,7 +49,7 @@ public sealed class Money : IEquatable<Money>
     /// </summary>
     /// <param name="other">The money to add.</param>
     /// <returns>A new <see cref="Money"/> instance representing the sum.</returns>
-    /// <exception cref="InvalidOperationException">Thrown when currencies do not match.</exception>
+    /// <exception cref="BusinessRuleViolationException">Thrown when currencies do not match.</exception>
     public Money Add(Money other)
     {
         EnsureSameCurrency(other);
@@ -59,14 +61,14 @@ public sealed class Money : IEquatable<Money>
     /// </summary>
     /// <param name="other">The money to subtract.</param>
     /// <returns>A new <see cref="Money"/> instance representing the difference.</returns>
-    /// <exception cref="InvalidOperationException">Thrown when currencies mismatch or result would be negative.</exception>
+    /// <exception cref="BusinessRuleViolationException">Thrown when currencies mismatch or result would be negative.</exception>
     public Money Subtract(Money other)
     {
         EnsureSameCurrency(other);
 
         if (other.Amount > Amount)
         {
-            throw new InvalidOperationException("Cannot subtract more money than available.");
+            throw new BusinessRuleViolationException("Cannot subtract more money than available.");
         }
 
         return new Money(Amount - other.Amount, Currency);
@@ -81,7 +83,7 @@ public sealed class Money : IEquatable<Money>
 
         if (!Currency.Equals(other.Currency, StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException("Money currency mismatch.");
+            throw new BusinessRuleViolationException("Money currency mismatch.");
         }
     }
 

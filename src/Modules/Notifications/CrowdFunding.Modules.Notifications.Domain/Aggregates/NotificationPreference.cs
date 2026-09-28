@@ -1,3 +1,5 @@
+using CrowdFunding.BuildingBlocks.Domain.Exceptions;
+
 namespace CrowdFunding.Modules.Notifications.Domain.Aggregates;
 
 /// <summary>
@@ -28,7 +30,7 @@ public sealed class NotificationPreference
     {
         if (userId == Guid.Empty)
         {
-            throw new ArgumentException("UserId is required.", nameof(userId));
+            throw new BusinessRuleViolationException("UserId is required.");
         }
 
         return new NotificationPreference(userId, campaignUpdatesEnabled: true, marketingAnnouncementsEnabled: false, nowUtc);

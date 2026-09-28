@@ -1,4 +1,5 @@
-﻿using CrowdFunding.BuildingBlocks.Application.Messaging;
+﻿using CrowdFunding.BuildingBlocks.Application.Exceptions;
+using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
 
 namespace CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.GetCampaignById;
@@ -23,7 +24,7 @@ public sealed class GetCampaignByIdQueryHandler : IQueryHandler<GetCampaignByIdQ
 
         if (campaign is null)
         {
-            throw new KeyNotFoundException($"Campaign with id '{query.CampaignId}' was not found.");
+            throw new NotFoundException($"Campaign with id '{query.CampaignId}' was not found.");
         }
 
         return campaign;

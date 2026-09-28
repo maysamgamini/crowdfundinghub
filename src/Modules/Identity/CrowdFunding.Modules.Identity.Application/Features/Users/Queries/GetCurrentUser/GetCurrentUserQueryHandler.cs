@@ -1,4 +1,5 @@
-﻿using CrowdFunding.BuildingBlocks.Application.Messaging;
+﻿using CrowdFunding.BuildingBlocks.Application.Exceptions;
+using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Persistence;
 
@@ -26,11 +27,11 @@ public sealed class GetCurrentUserQueryHandler : IQueryHandler<GetCurrentUserQue
     {
         if (!_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty)
         {
-            throw new UnauthorizedAccessException("The current user is not authenticated.");
+            throw new UnauthenticatedException("The current user is not authenticated.");
         }
 
         var user = await _userRepository.GetByIdAsync(_currentUser.UserId, cancellationToken)
-                   ?? throw new KeyNotFoundException($"User '{_currentUser.UserId}' was not found.");
+                   ?? throw new NotFoundException($"User '{_currentUser.UserId}' was not found.");
 
         return new GetCurrentUserResult(
             user.Id,

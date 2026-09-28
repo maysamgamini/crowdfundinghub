@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
+using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
+using CrowdFunding.BuildingBlocks.Domain.Exceptions;
 using CrowdFunding.Modules.CampaignUpdates.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.CampaignUpdates.Application.Abstractions.Services;
 using CrowdFunding.Modules.CampaignUpdates.Application.Security;
@@ -36,7 +38,7 @@ public sealed class RegisterWebhookSubscriptionCommandHandler
     {
         if (!_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty)
         {
-            throw new UnauthorizedAccessException("The current user must be authenticated to register a webhook subscription.");
+            throw new UnauthenticatedException("The current user must be authenticated to register a webhook subscription.");
         }
 
         // Reads CampaignUpdates' own locally replicated campaign-owner snapshot rather than
@@ -44,7 +46,7 @@ public sealed class RegisterWebhookSubscriptionCommandHandler
         var campaign = await _campaignOwnerCacheRepository.GetAsync(command.CampaignId, cancellationToken);
         if (campaign is null)
         {
-            throw new KeyNotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
+            throw new NotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
         }
 
         if (campaign.OwnerId != _currentUser.UserId)
@@ -54,9 +56,8 @@ public sealed class RegisterWebhookSubscriptionCommandHandler
 
         if (!Uri.TryCreate(command.TargetUrl, UriKind.Absolute, out var targetUri) || !UrlSecurityValidator.IsSafeExternalUrl(targetUri))
         {
-            throw new ArgumentException(
-                "Target URL must be a public HTTPS address — private, loopback, and link-local addresses are not allowed.",
-                nameof(command.TargetUrl));
+            throw new BusinessRuleViolationException(
+                "Target URL must be a public HTTPS address — private, loopback, and link-local addresses are not allowed.");
         }
 
         var secretKey = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));

@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Domain.Common;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
@@ -33,7 +34,7 @@ public sealed class CompleteCampaignCommandHandler : ICommandHandler<CompleteCam
         return await _transactionExecutor.ExecuteAsync(lockKey, async ct =>
         {
             var campaign = await _campaignRepository.GetByIdAsync(command.CampaignId, ct)
-                           ?? throw new KeyNotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
+                           ?? throw new NotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
 
             campaign.CompleteSuccessfully(_dateTimeProvider.UtcNow);
             await _campaignRepository.UpdateAsync(campaign, ct);

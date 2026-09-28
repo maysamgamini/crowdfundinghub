@@ -1,4 +1,5 @@
 ﻿using CrowdFunding.BuildingBlocks.Domain.Common;
+using CrowdFunding.BuildingBlocks.Domain.Exceptions;
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Campaigns.Domain.Enums;
 using CrowdFunding.Modules.Campaigns.Domain.Events;
@@ -87,12 +88,12 @@ public sealed class Campaign : BaseEntity
     {
         if (Status != CampaignStatus.Draft)
         {
-            throw new InvalidOperationException("Only draft campaigns can be published.");
+            throw new DomainConflictException("Only draft campaigns can be published.");
         }
 
         if (DeadlineUtc <= currentUtc)
         {
-            throw new InvalidOperationException("Cannot publish a campaign with a past deadline.");
+            throw new DomainConflictException("Cannot publish a campaign with a past deadline.");
         }
 
         Status = CampaignStatus.Published;
@@ -106,12 +107,12 @@ public sealed class Campaign : BaseEntity
     {
         if (Status == CampaignStatus.Cancelled)
         {
-            throw new InvalidOperationException("Campaign is already cancelled.");
+            throw new DomainConflictException("Campaign is already cancelled.");
         }
 
         if (Status == CampaignStatus.Successful || Status == CampaignStatus.Failed)
         {
-            throw new InvalidOperationException("Completed campaigns cannot be cancelled.");
+            throw new DomainConflictException("Completed campaigns cannot be cancelled.");
         }
 
         Status = CampaignStatus.Cancelled;
@@ -128,17 +129,17 @@ public sealed class Campaign : BaseEntity
     {
         if (Status != CampaignStatus.Published)
         {
-            throw new InvalidOperationException($"Only published campaigns can be completed. Current status: '{Status}'.");
+            throw new DomainConflictException($"Only published campaigns can be completed. Current status: '{Status}'.");
         }
 
         if (RaisedAmount.Amount < GoalAmount.Amount)
         {
-            throw new InvalidOperationException("Cannot complete a campaign successfully — its funding goal was not reached.");
+            throw new DomainConflictException("Cannot complete a campaign successfully — its funding goal was not reached.");
         }
 
         if (nowUtc < DeadlineUtc)
         {
-            throw new InvalidOperationException(
+            throw new DomainConflictException(
                 $"Cannot complete campaign '{Id}' before its deadline '{DeadlineUtc:O}'. Current time: '{nowUtc:O}'.");
         }
 
@@ -157,17 +158,17 @@ public sealed class Campaign : BaseEntity
     {
         if (Status != CampaignStatus.Published)
         {
-            throw new InvalidOperationException($"Only published campaigns can be marked failed. Current status: '{Status}'.");
+            throw new DomainConflictException($"Only published campaigns can be marked failed. Current status: '{Status}'.");
         }
 
         if (RaisedAmount.Amount >= GoalAmount.Amount)
         {
-            throw new InvalidOperationException("Cannot mark a campaign failed — its funding goal was reached.");
+            throw new DomainConflictException("Cannot mark a campaign failed — its funding goal was reached.");
         }
 
         if (nowUtc < DeadlineUtc)
         {
-            throw new InvalidOperationException(
+            throw new DomainConflictException(
                 $"Cannot mark campaign '{Id}' failed before its deadline '{DeadlineUtc:O}'. Current time: '{nowUtc:O}'.");
         }
 
@@ -183,7 +184,7 @@ public sealed class Campaign : BaseEntity
     {
         if (Status != CampaignStatus.Published)
         {
-            throw new InvalidOperationException(
+            throw new DomainConflictException(
                 $"Cannot apply contributions to campaign in status '{Status}'. Only Published campaigns can accept funds.");
         }
 
@@ -191,7 +192,7 @@ public sealed class Campaign : BaseEntity
 
         if (contribution.Amount <= 0)
         {
-            throw new InvalidOperationException("Contribution amount must be greater than zero.");
+            throw new BusinessRuleViolationException("Contribution amount must be greater than zero.");
         }
 
         RaisedAmount = RaisedAmount.Add(contribution);
@@ -201,7 +202,7 @@ public sealed class Campaign : BaseEntity
     {
         if (ownerId == Guid.Empty)
         {
-            throw new ArgumentException("OwnerId is required.", nameof(ownerId));
+            throw new BusinessRuleViolationException("OwnerId is required.");
         }
     }
 
@@ -209,12 +210,12 @@ public sealed class Campaign : BaseEntity
     {
         if (string.IsNullOrWhiteSpace(title))
         {
-            throw new ArgumentException("Campaign title is required.", nameof(title));
+            throw new BusinessRuleViolationException("Campaign title is required.");
         }
 
         if (title.Trim().Length > 200)
         {
-            throw new ArgumentException("Campaign title cannot exceed 200 characters.", nameof(title));
+            throw new BusinessRuleViolationException("Campaign title cannot exceed 200 characters.");
         }
     }
 
@@ -222,12 +223,12 @@ public sealed class Campaign : BaseEntity
     {
         if (string.IsNullOrWhiteSpace(story))
         {
-            throw new ArgumentException("Campaign story is required.", nameof(story));
+            throw new BusinessRuleViolationException("Campaign story is required.");
         }
 
         if (story.Trim().Length < 20)
         {
-            throw new ArgumentException("Campaign story must be at least 20 characters.", nameof(story));
+            throw new BusinessRuleViolationException("Campaign story must be at least 20 characters.");
         }
     }
 
@@ -235,12 +236,12 @@ public sealed class Campaign : BaseEntity
     {
         if (string.IsNullOrWhiteSpace(category))
         {
-            throw new ArgumentException("Campaign category is required.", nameof(category));
+            throw new BusinessRuleViolationException("Campaign category is required.");
         }
 
         if (category.Trim().Length > 100)
         {
-            throw new ArgumentException("Campaign category cannot exceed 100 characters.", nameof(category));
+            throw new BusinessRuleViolationException("Campaign category cannot exceed 100 characters.");
         }
     }
 
@@ -250,7 +251,7 @@ public sealed class Campaign : BaseEntity
 
         if (goalAmount.Amount <= 0)
         {
-            throw new ArgumentException("Campaign goal amount must be greater than zero.", nameof(goalAmount));
+            throw new BusinessRuleViolationException("Campaign goal amount must be greater than zero.");
         }
     }
 
@@ -258,7 +259,7 @@ public sealed class Campaign : BaseEntity
     {
         if (deadlineUtc <= createdAtUtc)
         {
-            throw new ArgumentException("Campaign deadline must be in the future.", nameof(deadlineUtc));
+            throw new BusinessRuleViolationException("Campaign deadline must be in the future.");
         }
     }
 }

@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
 
@@ -19,7 +20,7 @@ public sealed class GetContributionByIdQueryHandler : IQueryHandler<GetContribut
     {
         var result = await _contributionReadService.GetByIdAsync(query.CampaignId, query.ContributionId, cancellationToken);
 
-        return result ?? throw new KeyNotFoundException(
+        return result ?? throw new NotFoundException(
             $"Contribution '{query.ContributionId}' was not found for campaign '{query.CampaignId}'.");
     }
 }

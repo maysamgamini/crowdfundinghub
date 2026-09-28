@@ -1,4 +1,5 @@
 using CrowdFunding.BuildingBlocks.Domain.Common;
+using CrowdFunding.BuildingBlocks.Domain.Exceptions;
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Contributions.Domain.Enums;
 using CrowdFunding.Modules.Contributions.Domain.Events;
@@ -71,19 +72,19 @@ public sealed class Contribution : BaseEntity
     {
         if (campaignId == Guid.Empty)
         {
-            throw new ArgumentException("CampaignId is required.", nameof(campaignId));
+            throw new BusinessRuleViolationException("CampaignId is required.");
         }
 
         if (contributorId == Guid.Empty)
         {
-            throw new ArgumentException("ContributorId is required.", nameof(contributorId));
+            throw new BusinessRuleViolationException("ContributorId is required.");
         }
 
         var money = new Money(amount, currency);
 
         if (money.Amount <= 0)
         {
-            throw new ArgumentException("Contribution amount must be greater than zero.", nameof(amount));
+            throw new BusinessRuleViolationException("Contribution amount must be greater than zero.");
         }
 
         return new Contribution(
@@ -106,12 +107,12 @@ public sealed class Contribution : BaseEntity
     {
         if (Status != ContributionStatus.Pending)
         {
-            throw new InvalidOperationException("A payment intent can only be attached while the contribution is pending.");
+            throw new DomainConflictException("A payment intent can only be attached while the contribution is pending.");
         }
 
         if (string.IsNullOrWhiteSpace(externalPaymentIntentId))
         {
-            throw new ArgumentException("External payment intent id is required.", nameof(externalPaymentIntentId));
+            throw new BusinessRuleViolationException("External payment intent id is required.");
         }
 
         ExternalPaymentIntentId = externalPaymentIntentId.Trim();
@@ -127,12 +128,12 @@ public sealed class Contribution : BaseEntity
     {
         if (Status != ContributionStatus.Pending)
         {
-            throw new InvalidOperationException("Only pending contributions can be confirmed.");
+            throw new DomainConflictException("Only pending contributions can be confirmed.");
         }
 
         if (string.IsNullOrWhiteSpace(paymentReference))
         {
-            throw new ArgumentException("Payment reference is required.", nameof(paymentReference));
+            throw new BusinessRuleViolationException("Payment reference is required.");
         }
 
         Status = ContributionStatus.Succeeded;
@@ -152,12 +153,12 @@ public sealed class Contribution : BaseEntity
     {
         if (Status != ContributionStatus.Pending)
         {
-            throw new InvalidOperationException("Only pending contributions can be failed.");
+            throw new DomainConflictException("Only pending contributions can be failed.");
         }
 
         if (string.IsNullOrWhiteSpace(failureReason))
         {
-            throw new ArgumentException("Failure reason is required.", nameof(failureReason));
+            throw new BusinessRuleViolationException("Failure reason is required.");
         }
 
         Status = ContributionStatus.Failed;
@@ -180,7 +181,7 @@ public sealed class Contribution : BaseEntity
     {
         if (Status != ContributionStatus.Succeeded)
         {
-            throw new InvalidOperationException($"Cannot refund contribution with status '{Status}'.");
+            throw new DomainConflictException($"Cannot refund contribution with status '{Status}'.");
         }
 
         Status = ContributionStatus.Refunded;

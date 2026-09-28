@@ -1,5 +1,7 @@
-﻿using CrowdFunding.BuildingBlocks.Application.Messaging;
+﻿using CrowdFunding.BuildingBlocks.Application.Exceptions;
+using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
+using CrowdFunding.BuildingBlocks.Domain.Exceptions;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Transactions;
@@ -41,7 +43,7 @@ public sealed class ConfirmContributionPaymentCommandHandler : ICommandHandler<C
         var contribution = await _contributionRepository.GetByIdAsync(command.ContributionId, cancellationToken);
         if (contribution is null || contribution.CampaignId != command.CampaignId)
         {
-            throw new KeyNotFoundException($"Contribution '{command.ContributionId}' was not found for campaign '{command.CampaignId}'.");
+            throw new NotFoundException($"Contribution '{command.ContributionId}' was not found for campaign '{command.CampaignId}'.");
         }
 
         // TICKET-033 "Out-of-Order Safety": a payment gateway webhook can reconcile this exact
@@ -60,12 +62,12 @@ public sealed class ConfirmContributionPaymentCommandHandler : ICommandHandler<C
 
         if (campaign is null)
         {
-            throw new KeyNotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
+            throw new NotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
         }
 
         if (!campaign.IsActive)
         {
-            throw new InvalidOperationException("Contribution payments can only be confirmed while the campaign is published.");
+            throw new DomainConflictException("Contribution payments can only be confirmed while the campaign is published.");
         }
 
         await _transactionExecutor.ExecuteAsync(async ct =>
@@ -81,7 +83,7 @@ public sealed class ConfirmContributionPaymentCommandHandler : ICommandHandler<C
     {
         if (!_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty)
         {
-            throw new UnauthorizedAccessException("The current user must be authenticated to manage contribution payments.");
+            throw new UnauthenticatedException("The current user must be authenticated to manage contribution payments.");
         }
 
         if (!_currentUser.HasPermission(PermissionConstants.ContributionsPaymentsManage))

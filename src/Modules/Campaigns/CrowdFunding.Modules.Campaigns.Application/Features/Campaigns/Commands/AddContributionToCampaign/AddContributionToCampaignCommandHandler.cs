@@ -78,7 +78,7 @@ public sealed class AddContributionToCampaignCommandHandler : ICommandHandler<Ad
 
                     if (campaign is null)
                     {
-                        throw new KeyNotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
+                        throw new NotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
                     }
 
                     // Idempotency guard: at-least-once delivery of the payment-confirmed event
@@ -167,7 +167,7 @@ public sealed class AddContributionToCampaignCommandHandler : ICommandHandler<Ad
             }
 
             var rewardTier = await _rewardTierRepository.GetByIdAsync(freshReservation.RewardTierId, ct)
-                ?? throw new KeyNotFoundException($"Reward tier '{freshReservation.RewardTierId}' was not found.");
+                ?? throw new NotFoundException($"Reward tier '{freshReservation.RewardTierId}' was not found.");
 
             rewardTier.ConfirmClaim();
             freshReservation.Confirm(contributionId);

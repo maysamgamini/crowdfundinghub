@@ -1,4 +1,5 @@
-﻿using CrowdFunding.BuildingBlocks.Application.Messaging;
+﻿using CrowdFunding.BuildingBlocks.Application.Exceptions;
+using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Persistence;
@@ -31,7 +32,7 @@ public sealed class AssignRoleToUserCommandHandler : ICommandHandler<AssignRoleT
         EnsureCanAssignRoles();
 
         var user = await _userRepository.GetByIdAsync(command.UserId, cancellationToken)
-                   ?? throw new KeyNotFoundException($"User '{command.UserId}' was not found.");
+                   ?? throw new NotFoundException($"User '{command.UserId}' was not found.");
 
         user.AssignRole(command.Role);
         await _transactionExecutor.ExecuteAsync(
@@ -48,7 +49,7 @@ public sealed class AssignRoleToUserCommandHandler : ICommandHandler<AssignRoleT
     {
         if (!_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty)
         {
-            throw new UnauthorizedAccessException("The current user must be authenticated to assign roles.");
+            throw new UnauthenticatedException("The current user must be authenticated to assign roles.");
         }
 
         if (!_currentUser.HasPermission(PermissionConstants.IdentityRolesAssign))
