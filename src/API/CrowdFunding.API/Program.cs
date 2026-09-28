@@ -33,7 +33,6 @@ using CrowdFunding.Modules.Moderation.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.Notifications.Application.DependencyInjection;
 using CrowdFunding.Modules.Notifications.Infrastructure.DependencyInjection;
 using CrowdFunding.Modules.Notifications.Infrastructure.Persistence.DbContexts;
-using CrowdFunding.Samples.RosettaStone;
 using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignCreated;
 using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPaymentConfirmed;
 using CrowdFunding.Modules.Moderation.Contracts.Events.CampaignReviewApproved;
@@ -222,8 +221,6 @@ builder.Services.AddNotificationsInfrastructure(builder.Configuration);
 builder.Services.AddCampaignUpdatesApplication();
 builder.Services.AddCampaignUpdatesInfrastructure(builder.Configuration);
 
-builder.Services.AddRosettaStoneSample(builder.Configuration);
-
 var typeAdapterConfig = new TypeAdapterConfig();
 CampaignsMappingConfig.Register(typeAdapterConfig);
 ContributionsMappingConfig.Register(typeAdapterConfig);
@@ -298,8 +295,6 @@ app.MapGet("/.well-known/jwks.json", JwksEndpoint.Get)
     .AllowAnonymous()
     .WithTags("System")
     .DisableRateLimiting();
-
-app.MapRosettaStoneSample();
 
 // Authentication before the rate limiter, so policies can partition by the caller's "sub".
 app.UseAuthentication();

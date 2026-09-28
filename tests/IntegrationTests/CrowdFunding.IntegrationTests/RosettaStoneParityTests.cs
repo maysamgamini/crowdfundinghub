@@ -2,6 +2,10 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using CrowdFunding.API.Contracts.Campaigns;
+using CrowdFunding.Samples.RosettaStone;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Hosting;
 
 namespace CrowdFunding.IntegrationTests;
 
@@ -10,16 +14,35 @@ namespace CrowdFunding.IntegrationTests;
 /// three tiers accept the same valid payload and persist a record, and all three return the
 /// same RFC 9457 <c>application/problem+json</c> validation shape for the same invalid payload,
 /// despite Tier 1 (Minimal API) and Tier 2 (Pragmatic CQRS) bypassing MVC's controller pipeline
-/// entirely.
+/// entirely. Tiers 1 and 2 run in the sample's own standalone host (the production API does not
+/// reference the sample); Tier 3 is the production API. Both hosts share the fixture's Postgres.
 /// </summary>
 [Collection(CrowdFundingApiCollection.Name)]
-public sealed class RosettaStoneParityTests
+public sealed class RosettaStoneParityTests : IDisposable
 {
     private readonly CrowdFundingApiFactory _factory;
+    private readonly RosettaStoneSampleFactory _sampleFactory = new();
 
     public RosettaStoneParityTests(CrowdFundingApiFactory factory)
     {
         _factory = factory;
+    }
+
+    public void Dispose() => _sampleFactory.Dispose();
+
+    /// <summary>
+    /// Boots the sample's own entry point (<see cref="RosettaStoneHost"/>). The connection string
+    /// comes from the environment variables the API fixture already set.
+    /// </summary>
+    private sealed class RosettaStoneSampleFactory : WebApplicationFactory<RosettaStoneHost>
+    {
+        protected override IHost CreateHost(IHostBuilder builder)
+        {
+            builder.UseContentRoot(AppContext.BaseDirectory);
+            return base.CreateHost(builder);
+        }
+
+        protected override void ConfigureWebHost(IWebHostBuilder builder) => builder.UseEnvironment("Testing");
     }
 
     private sealed record RosettaCampaignPayload(string Title, string Story, decimal TargetAmount, string Currency);
@@ -39,7 +62,7 @@ public sealed class RosettaStoneParityTests
     [Fact]
     public async Task Tier1MinimalApi_ValidPayload_PersistsAndReturns201()
     {
-        using var client = _factory.CreateClient();
+        using var client = _sampleFactory.CreateClient();
 
         var response = await client.PostAsJsonAsync(
             "/rosetta/v1/campaigns/tier1-minimal-api", ValidPayload("Rosetta Tier 1 Campaign"));
@@ -50,7 +73,7 @@ public sealed class RosettaStoneParityTests
     [Fact]
     public async Task Tier2PragmaticCqrs_ValidPayload_PersistsAndReturns201()
     {
-        using var client = _factory.CreateClient();
+        using var client = _sampleFactory.CreateClient();
 
         var response = await client.PostAsJsonAsync(
             "/rosetta/v1/campaigns/tier2-pragmatic-cqrs", ValidPayload("Rosetta Tier 2 Campaign"));
@@ -83,7 +106,7 @@ public sealed class RosettaStoneParityTests
     [InlineData("/rosetta/v1/campaigns/tier2-pragmatic-cqrs")]
     public async Task InvalidPayload_AcrossTier1AndTier2_ReturnsSameProblemDetailsShape(string endpoint)
     {
-        using var client = _factory.CreateClient();
+        using var client = _sampleFactory.CreateClient();
 
         var response = await client.PostAsJsonAsync(endpoint, InvalidPayload());
 

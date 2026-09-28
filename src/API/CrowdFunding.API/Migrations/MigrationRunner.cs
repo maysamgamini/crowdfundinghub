@@ -5,7 +5,6 @@ using CrowdFunding.Modules.Identity.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.Moderation.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.CampaignUpdates.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.Notifications.Infrastructure.Persistence.DbContexts;
-using CrowdFunding.Samples.RosettaStone.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -39,7 +38,6 @@ public static class MigrationRunner
         await MigrateAsync<NotificationsDbContext>(scope.ServiceProvider, logger, cancellationToken);
         await MigrateAsync<CampaignUpdatesDbContext>(scope.ServiceProvider, logger, cancellationToken);
         await MigrateAsync<AuditDbContext>(scope.ServiceProvider, logger, cancellationToken);
-        await MigrateAsync<RosettaStoneDbContext>(scope.ServiceProvider, logger, cancellationToken);
     }
 
     private static async Task MigrateAsync<TContext>(

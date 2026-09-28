@@ -1,9 +1,22 @@
 # The Rosetta Stone: Three Tiers, One Business Requirement
 
 Three implementations of the exact same use case — **create a campaign with a title, a story,
-and a target amount** — living side by side in the same running host, so a reader can compare
-them without imagining anything. Run the API (`dotnet run --project src/API/CrowdFunding.API`)
-and open Swagger: all three appear under the **RosettaStone** tag.
+and a target amount** — so a reader can compare them without imagining anything. Tiers 1 and 2
+live in this project, which is its own runnable host; Tier 3 is the production endpoint of
+`CrowdFunding.API`. The production API does not reference this sample (an architecture test,
+`ApiHostDependencyTests`, enforces it): teaching code never ships in the production host.
+
+Run the sample (it applies its own `rosetta` migrations on startup) and open its API reference:
+
+```bash
+docker compose up -d                                  # Postgres
+dotnet run --project src/Samples/RosettaStone         # http://localhost:5090/scalar/v1
+dotnet run --project src/API/CrowdFunding.API         # Tier 3, see the root README
+```
+
+The connection string comes from `Properties/launchSettings.json`
+(`ConnectionStrings__DefaultConnection`); set that environment variable yourself when running
+outside the launch profile.
 
 | Tier | Endpoint | Folder |
 | :--- | :--- | :--- |
@@ -21,9 +34,9 @@ Send an invalid one (blank title, or a non-positive `targetAmount`) to any of th
 answer with the same shape: an RFC 9457 `application/problem+json` validation-problem body —
 `{ "type", "title", "status": 400, "errors": { "<field>": ["<message>"] } }` — because Tier 1
 and Tier 2 both call `Results.ValidationProblem(...)`, the identical machinery ASP.NET Core's
-MVC pipeline uses for Tier 3's `ModelState`-based validation. See
-`tests/IntegrationTests/CrowdFunding.IntegrationTests/RosettaStone/RosettaStoneParityTests.cs`
-for the tests that assert this across all three tiers against a real Postgres instance.
+production API returns for Tier 3 when its `ValidationPipelineBehavior` rejects the command. See
+`tests/IntegrationTests/CrowdFunding.IntegrationTests/RosettaStoneParityTests.cs`, which boots
+both hosts against one real Postgres instance and asserts this across all three tiers.
 
 ## The scorecard
 
@@ -37,7 +50,7 @@ graph today.
 | **Lines of code** | 48 | 91 | 960 total (see note) |
 | **Assemblies involved** | 1 (`Samples.RosettaStone`) | 2 (`Samples.RosettaStone` + `BuildingBlocks.Application`) | 5 |
 | **Persistence model** | Flat record, direct `DbSet.Add` | Flat record, direct `DbSet.Add` via handler | Aggregate root, private setters, invariants enforced in the constructor/factory |
-| **Validation** | Manual `if` | `FluentValidation`, dispatched before the write | `FluentValidation`, wired through `ModelState` |
+| **Validation** | Manual `if` | `FluentValidation`, called explicitly by the endpoint | `FluentValidation`, run by the command pipeline (`ValidationPipelineBehavior`) |
 | **Decomposition effort** | Zero — owns its own `rosetta` schema already | Zero — owns its own `rosetta` schema already | Zero — contracts, events, and the transaction boundary are already extracted (see TICKET-029) |
 | **Audit / outbox guarantee** | None — a lost write after `SaveChangesAsync` is just gone | None — same as Tier 1 | Guaranteed at-least-once delivery: `CampaignCreatedDomainEvent` → outbox row committed in the *same* transaction as the row it describes |
 | **Concurrency defense** | None needed — single-writer insert, no shared mutable state | None needed — same reason | `xmin` optimistic concurrency + `pg_advisory_xact_lock` on later commands (`AddContribution`, `Publish`, `Cancel`) that mutate this same row |
