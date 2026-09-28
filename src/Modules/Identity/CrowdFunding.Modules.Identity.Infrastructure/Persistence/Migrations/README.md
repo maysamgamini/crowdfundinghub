@@ -10,6 +10,7 @@ Contains the EF Core migration history for the Identity module. These files are 
 - `20260909153329_AddRefreshTokenConcurrencyToken.cs` (+ `.Designer.cs`): Concurrency token on refresh tokens.
 - `20260928165938_EncryptSigningKeysAtRest.cs` (+ `.Designer.cs`): Renames `PrivateKeyPkcs8Base64` to `ProtectedPrivateKey`; existing plaintext values are re-encrypted by the next signing key warm-up.
 - `20260928204407_MoveTablesToModuleSchema.cs` (+ `.Designer.cs`): Moves every Identity table from `public` into the `identity` schema (`ALTER TABLE ... SET SCHEMA`, no data copied).
+- `20260928210154_GrantModuleRole.cs` (+ `.Designer.cs`): Grants the module's runtime role DML on the tables moved in from `public` (default privileges only cover tables created in the schema) and revokes its rights on the migrations history; skipped when the role does not exist.
 - `IdentityDbContextModelSnapshot.cs`: Current model snapshot.
 
 ## Child Folders

@@ -52,6 +52,7 @@ Versions live only in `Directory.Packages.props` (central package management). R
 - Prefer invariants the database enforces (unique keys, CHECK constraints, triggers) for money and other state that must never drift; see `docs/append-only-ledger.md`. Hand-write the SQL parts of such migrations and cover them with integration tests against PostgreSQL.
 - Every module owns one PostgreSQL schema, declared as `{Module}DbContext.Schema` and applied with `HasDefaultSchema`; new tables land there automatically. Never map a table into another module's schema or into `public` (`ModuleSchemaOwnershipTests` fails the build).
 - Schema-qualify every table in hand-written SQL (`campaigns.campaign_ledger_entries`), or read the name from the EF model with `QualifiedTableName.Of<TEntity>(dbContext)`. Do not rely on `search_path`. PL/pgSQL functions resolve names at run time, so qualify tables inside them too. See `docs/data-ownership.md`.
+- Each module connects as its own role (`<schema>_app`) with DML on its own schema only; migrations run as `crowdfunding_migrator`. A new module needs its schema added to `db/init/01-module-roles.sql`, a `ConnectionStrings:{Module}Db` with an explicit `Maximum Pool Size`, and an entry in the integration tests' `ModuleDatabaseRoles`. Never grant a module role rights on another schema, `TRUNCATE`, or ownership.
 
 ## Security
 - Register new permissions in `PermissionConstants` and, when relevant, map them through `RolePermissionCatalog`.

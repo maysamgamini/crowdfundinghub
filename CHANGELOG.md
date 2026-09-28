@@ -1,19 +1,30 @@
 # Changelog
 
-## 2026-09-28: Data ownership, one schema per module
+## 2026-09-28: Data ownership, one schema and one database role per module
 
-Every module now owns one PostgreSQL schema instead of sharing `public`. The course material for the change is [`docs/data-ownership.md`](docs/data-ownership.md): why code-only separation is not enough, the Campaigns to Moderation review-status read as the cross-module worked example, per-module database roles as the next step, and how a schema per module becomes a database per service.
+Every module now owns one PostgreSQL schema instead of sharing `public`, and connects as its own database role that can use only that schema, so PostgreSQL itself refuses cross-module queries. The course material for the change is [`docs/data-ownership.md`](docs/data-ownership.md): why code-only separation is not enough, the Campaigns to Moderation review-status read as the cross-module worked example, the per-module roles, the owner role and the connection-pool math, and how a schema per module becomes a database per service.
 
 ### Changed
 
 - **Schema per module.** Each module DbContext declares `Schema` and calls `HasDefaultSchema(Schema)`; the migrations history table uses the same constant. Schemas: `campaigns`, `contributions`, `identity`, `moderation`, `notifications`, `campaignupdates` (the name the CampaignUpdates history table already used). Outbox, dead-letter and inbox tables move with their module. `system.audit_records` stays in the shared `system` schema with one owner (`AuditDbContext`) and no readers.
 - **Raw SQL is schema-qualified.** The outbox claim reads its table from the EF model through the new [`QualifiedTableName`](src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/QualifiedTableName.cs) (module outbox processors no longer pass a table name), the inbox claim uses the same helper, and the ledger and webhook-claim statements name `campaigns.` and `campaignupdates.` explicitly.
 - **Tests.** [`ModuleSchemaOwnershipTests`](tests/ArchitectureTests/CrowdFunding.ArchitectureTests/ModuleSchemaOwnershipTests.cs) fails the build when a module has no schema of its own, shares one, or maps a table outside it. [`ModuleSchemaMigrationTests`](tests/IntegrationTests/CrowdFunding.IntegrationTests/ModuleSchemaMigrationTests.cs) upgrades a database holding data in `public` and proves rows, ledger triggers and outbox delivery survive.
+- **Per-module database roles.** [`db/init/01-module-roles.sql`](db/init/01-module-roles.sql) creates `<schema>_app` roles with `USAGE` and DML on their own schema only (no DDL, `TRUNCATE`, trigger control or ownership, so the ledger triggers cannot be bypassed), `audit_app` with `SELECT, INSERT` on `system.audit_records` only, and the `crowdfunding_migrator` owner role; default privileges cover tables added later. Docker compose runs it on a new volume, with development passwords from `02-dev-passwords.sql`. `MigrationRunner` runs migrations with the credentials of `ConnectionStrings:Migrations` on each module's own connection. Every module string sets `Maximum Pool Size` (46 connections per replica in total).
+- **Role tests.** The shared integration-test factory provisions the roles and connects every module as its role, so the whole suite runs under enforcement. [`ModuleDatabaseRoleTests`](tests/IntegrationTests/CrowdFunding.IntegrationTests/ModuleDatabaseRoleTests.cs) proves each role can work in its schema and is refused everywhere else.
+
+### Configuration required
+
+| Setting | Required | Notes |
+| :--- | :--- | :--- |
+| `ConnectionStrings:{Module}Db` (`CampaignsDb`, `ContributionsDb`, `IdentityDb`, `ModerationDb`, `NotificationsDb`, `CampaignUpdatesDb`, `AuditDb`) | Yes, to enforce ownership | Each module's role and pool ceiling. Without it a module falls back to `DefaultConnection`. |
+| `ConnectionStrings:Migrations` | For the migration job | The owner role's credentials; only the user name and password are used. |
+| Role passwords | Yes, outside development | Run `db/init/01-module-roles.sql` once per database as a superuser, then set passwords from the secret store. |
 
 ### Database migrations
 
 - `MoveTablesToModuleSchema` in each of the six modules: `ALTER TABLE public.x SET SCHEMA <module>` for every table the module owns. A catalog change: no rows are copied; indexes, constraints and triggers move with their tables. Each statement briefly takes an exclusive lock, so run it while the application is idle.
 - The Campaigns migration also moves the ledger trigger functions into `campaigns` and recreates `campaigns_raised_amount_matches_ledger()` with a schema-qualified table name, because PL/pgSQL resolves table names through `search_path` at run time.
+- `GrantModuleRole` in each of the six modules: grants the module's role DML on the tables moved in from `public` (default privileges apply only to tables created in the schema) and revokes its rights on the migrations history. Skipped when the role does not exist. The roles script runs before `migrate` on a new database; on an existing one it can run before or after, because it hands the tables the old owner created (in `public` or already moved) to the migrator.
 
 ## 2026-09-28: Production hardening for the Clean Architecture course
 

@@ -15,6 +15,7 @@ Contains the EF Core migration history for the Moderation module. These files ar
 - `20260909025308_AddCampaignReviewAutomatedAnalysisScores.Designer.cs`: Generated model metadata for the `AddCampaignReviewAutomatedAnalysisScores` migration.
 - `20260909025308_AddCampaignReviewAutomatedAnalysisScores.cs`: Migration that applies: add campaign review automated analysis scores.
 - `20260928204408_MoveTablesToModuleSchema.cs` (+ `.Designer.cs`): Moves every Moderation table from `public` into the `moderation` schema.
+- `20260928210155_GrantModuleRole.cs` (+ `.Designer.cs`): Grants the module's runtime role DML on the tables moved in from `public` (default privileges only cover tables created in the schema) and revokes its rights on the migrations history; skipped when the role does not exist.
 - `ModerationDbContextModelSnapshot.cs`: EF Core model snapshot of the current `ModerationDbContext` schema, used to compute the next migration.
 
 ## Child Folders

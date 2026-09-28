@@ -40,7 +40,7 @@ Moderation runs as an in-process module on this branch. **Extracting a module in
 ## 2. The Rules the Codebase Follows
 
 1. **Contracts only across modules.** A module references another module's `Contracts` project (events, queries, a cross-module command), never its Application, Domain or Infrastructure. [`ModuleBoundaryConventionTests`](tests/ArchitectureTests/CrowdFunding.ArchitectureTests/ModuleBoundaryConventionTests.cs) enforces this for every module by convention.
-2. **Each module owns its data.** One DbContext, one set of tables and its own migration history per module, no cross-module foreign keys, and a per-module connection string (`ConnectionStrings:{Module}Db`, falling back to `DefaultConnection`) so a module can move to its own database. Every module owns one PostgreSQL schema (`campaigns`, `contributions`, `identity`, `moderation`, `notifications`, `campaignupdates`) holding all its tables, its outbox, inbox and migration history; an architecture test fails if a module maps a table outside it. See [`docs/data-ownership.md`](docs/data-ownership.md).
+2. **Each module owns its data.** One DbContext, one set of tables and its own migration history per module, no cross-module foreign keys, and a per-module connection string (`ConnectionStrings:{Module}Db`, falling back to `DefaultConnection`) so a module can move to its own database. Every module owns one PostgreSQL schema (`campaigns`, `contributions`, `identity`, `moderation`, `notifications`, `campaignupdates`) holding all its tables, its outbox, inbox and migration history; an architecture test fails if a module maps a table outside it. Each module connects as its own database role that can use only its own schema, so PostgreSQL refuses cross-module queries; migrations run as a separate owner role. See [`docs/data-ownership.md`](docs/data-ownership.md).
 3. **Asynchronous integration through a transactional outbox.** Domain events become application events written in the same transaction as the state change, delivered at least once, and consumed idempotently. See [`docs/outbox-architecture.md`](docs/outbox-architecture.md).
 4. **Offline token validation.** Identity signs ES256 JWTs and publishes public keys at `/.well-known/jwks.json`; private keys are encrypted at rest.
 5. **Invariants where they cannot be bypassed.** Business rules live in aggregates; money invariants are also enforced by PostgreSQL. See [`docs/append-only-ledger.md`](docs/append-only-ledger.md).
@@ -97,6 +97,13 @@ docker compose up -d
 ```
 Starts PostgreSQL (`localhost:5432`, database `crowdfundingdb`, `postgres/postgres`), Redis (`localhost:6379`) and the .NET Aspire dashboard for OpenTelemetry (UI at `http://localhost:18888`, OTLP on `localhost:4317`).
 
+When the Postgres volume is first created, the scripts in [`db/init/`](db/init) create the per-module roles (`campaigns_app`, ..., `audit_app`), the `crowdfunding_migrator` owner role, and development-only passwords that match `appsettings.Development.json`. A volume created before these scripts existed does not run them; apply them once:
+```bash
+docker compose exec -T crowdfunding-db psql -U postgres -d crowdfundingdb < db/init/01-module-roles.sql
+docker compose exec -T crowdfunding-db psql -U postgres -d crowdfundingdb < db/init/02-dev-passwords.sql
+```
+(or `docker compose down -v` to start from an empty database).
+
 ### 2. Run the API
 ```bash
 dotnet run --project src/API/CrowdFunding.API
@@ -121,7 +128,9 @@ dotnet run --project src/Samples/RosettaStone   # http://localhost:5090/scalar/v
 
 | Setting | Purpose |
 | :--- | :--- |
-| `ConnectionStrings:DefaultConnection`, `ConnectionStrings:{Module}Db` | PostgreSQL; a module-specific string moves that module to its own database. |
+| `ConnectionStrings:{Module}Db` (`CampaignsDb`, `ContributionsDb`, `IdentityDb`, `ModerationDb`, `NotificationsDb`, `CampaignUpdatesDb`, `AuditDb`) | Each module's PostgreSQL connection, as its own role and with its own `Maximum Pool Size`; it can also point a module at its own database. Falls back to `DefaultConnection`. |
+| `ConnectionStrings:Migrations` | Credentials of the owner role that runs migrations (`crowdfunding_migrator`); only its user name and password are used, applied to each module's connection. Give it to the migration job only. |
+| `ConnectionStrings:DefaultConnection` | Fallback for any module without its own string (single-role setup). |
 | `ConnectionStrings:Redis` | Redis. |
 | `Jwt:Issuer`, `Jwt:Audience`, `Jwt:ExpirationMinutes` | Token settings. |
 | `SigningKeyEncryption:Key` | **Required.** Base64 32-byte key encrypting the ES256 private keys at rest (`openssl rand -base64 32`). A development-only key is in `appsettings.Development.json`. |
@@ -144,6 +153,6 @@ dotnet test CrowdFunding.slnx
 | :--- | :--- | :---: |
 | `CrowdFunding.UnitTests` | Aggregates, value objects, handlers, pipeline behaviors, exception mapping, signing-key encryption. | 321 |
 | `CrowdFunding.ArchitectureTests` | Module boundaries by convention, one schema per module, per-module dependency rules, API host rules. | 29 |
-| `CrowdFunding.IntegrationTests` | End-to-end HTTP flows, outbox and inbox, the funding ledger and its migration, the schema-per-module upgrade, edge hardening, OpenAPI, telemetry, against PostgreSQL and Redis in Testcontainers. | 106 |
+| `CrowdFunding.IntegrationTests` | End-to-end HTTP flows, outbox and inbox, the funding ledger and its migration, the schema-per-module upgrade, per-module database roles, edge hardening, OpenAPI, telemetry, against PostgreSQL and Redis in Testcontainers (each module connected as its own role). | 112 |
 
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) verifies formatting, builds in Release with warnings as errors, then runs architecture, unit and integration tests.

@@ -28,7 +28,7 @@ You are the Platform & Codebase Shortcomings Evaluator.
 Your mission is to perform an exhaustive architectural and technical evaluation of the platform's shortcomings and keep the analysis document at `docs/PLATFORM_SHORTCOMINGS.md` accurate. Verify every claim against the code before keeping it, and move items that have since been implemented (for example refunds on cancelled or failed campaigns, deadline-driven campaign expiration, reward tiers, notification preferences, refresh-token rotation and logout, the audit trail, Redis cache invalidation, the API Dockerfile, CI, and the OTLP exporter) out of the open list.
 Evaluate at least these known open areas:
 1. Persistence and module isolation:
-   - Each module owns its own PostgreSQL schema (tables, outbox, inbox, migration history), but all modules connect with the same database role.
+   - Each module owns its own PostgreSQL schema and connects as its own role (grants in `db/init/01-module-roles.sql`); check the per-replica connection budget (one pool per module) against `max_connections`.
 2. Messaging and scale-out:
    - The RabbitMQ bus is publish-only; there is no broker consumer, so cross-process event delivery (and module extraction) is not implemented on this branch.
    - The outbox wake-up signal is in-process; other replicas rely on the 5 s fallback sweep (a CDC relay was considered, not implemented).

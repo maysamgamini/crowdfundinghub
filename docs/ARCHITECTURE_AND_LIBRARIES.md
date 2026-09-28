@@ -282,7 +282,14 @@ letters, inbox) and its EF migrations history live in its own PostgreSQL schema:
 `system.audit_records`, owned by `AuditDbContext`. Nothing lives in `public`. Hand-written SQL is
 schema-qualified (the outbox and inbox claims read the name from the EF model through
 `QualifiedTableName`). `ModuleSchemaOwnershipTests` fails the build if a module maps a table
-outside its schema. See [data-ownership.md](data-ownership.md).
+outside its schema.
+
+**One database role per module.** Each module connects as `<schema>_app`, which has `USAGE` and
+DML on its own schema only; `audit_app` may only insert into and read the audit trail; the
+`crowdfunding_migrator` owner role runs migrations (`ConnectionStrings:Migrations`). PostgreSQL
+itself refuses cross-module queries, DDL and trigger bypasses from the application. Roles and
+grants come from `db/init/01-module-roles.sql`; every module string sets `Maximum Pool Size`. See
+[data-ownership.md](data-ownership.md).
 
 **Per-module connection strings.** Each module resolves `ConnectionStrings:{Module}Db` and falls
 back to `ConnectionStrings:DefaultConnection`
@@ -555,7 +562,7 @@ which sends usage events as CloudEvents over HTTP.
 These are current, known gaps; [`PLATFORM_SHORTCOMINGS.md`](PLATFORM_SHORTCOMINGS.md) and
 [`TRADE_OFFS_AND_LIMITATIONS.md`](TRADE_OFFS_AND_LIMITATIONS.md) discuss them in depth.
 
-1. Every module has its own schema, but all modules connect with the same database role; per-module roles are not provisioned.
+1. One Npgsql pool per module per replica (46 connections): a second replica needs PgBouncer or a larger `max_connections`.
 2. The RabbitMQ bus publishes only; cross-process event delivery (and so extraction) is not
    implemented on this branch.
 3. The outbox wake-up signal is in-process; other replicas rely on the 5-second sweep. A CDC

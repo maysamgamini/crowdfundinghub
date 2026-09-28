@@ -17,9 +17,8 @@ namespace CrowdFunding.IntegrationTests;
 /// behavior can be exercised end-to-end instead of only the module-internal concurrency tests in
 /// <see cref="CampaignsPostgresFixture"/>/<see cref="ContributionsPostgresFixture"/>.
 ///
-/// All four module DbContexts share one Postgres database (each with its own
-/// <c>__EFMigrationsHistory</c> schema — see the module DependencyInjection classes), so a single
-/// container suffices.
+/// Every module DbContext shares one Postgres database, each in its own schema and connecting as
+/// its own role (<see cref="ModuleDatabaseRoles"/>), so a single container suffices.
 /// </summary>
 public sealed class CrowdFundingApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
@@ -36,6 +35,12 @@ public sealed class CrowdFundingApiFactory : WebApplicationFactory<Program>, IAs
     {
         await _dbContainer.StartAsync();
         await _redisContainer.StartAsync();
+
+        // Per-module database roles, as in every deployed environment: each module connects as its
+        // own role (USAGE on its own schema only) and migrations run as the owner role. The
+        // superuser DefaultConnection stays for tests that inspect or tamper with data directly.
+        await ModuleDatabaseRoles.ProvisionAsync(_dbContainer.GetConnectionString());
+        ModuleDatabaseRoles.UseInEnvironment(_dbContainer.GetConnectionString());
 
         // Program.cs reads Jwt:*/ConnectionStrings:*/OpenMeter:* eagerly via `builder.Configuration`
         // in its own top-level statements, executed while WebApplicationFactory is still replaying
@@ -73,6 +78,7 @@ public sealed class CrowdFundingApiFactory : WebApplicationFactory<Program>, IAs
 
     async Task IAsyncLifetime.DisposeAsync()
     {
+        ModuleDatabaseRoles.ClearEnvironment();
         await _dbContainer.DisposeAsync();
         await _redisContainer.DisposeAsync();
         await base.DisposeAsync();

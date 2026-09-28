@@ -15,7 +15,7 @@ The first version of this document (2026-09-08) listed 14 shortcomings. Most are
 | 5 | Security | Anonymous unsubscribe trusts a bare user id | High |
 | 6 | Security | No rotation of the signing-key encryption key (KEK) | Medium |
 | 7 | Scale | Rate limiting is per instance | Medium |
-| 8 | Persistence | Schemas are per module, database roles are not | Low |
+| 8 | Persistence | Connection budget: a second replica needs a pooler or a larger `max_connections` | Low |
 | 9 | Payments | Refunds are recorded, not executed at the gateway; no dispute handling | High |
 | 10 | Domain | Ledger edge cases: early refund, hot-campaign serialization | Low |
 | 11 | Domain | Single currency per campaign | Low (scope choice) |
@@ -85,13 +85,13 @@ The first version of this document (2026-09-08) listed 14 shortcomings. Most are
 
 **Fix path.** Move the strict policies to a shared store (a Redis token bucket, or limits at the gateway/WAF). Keep the in-memory global limiter as a cheap first line.
 
-### 8. Schemas are per module, database roles are not
+### 8. Connection budget: a second replica needs a pooler or a larger `max_connections`
 
-**What.** Every module owns one PostgreSQL schema (`campaigns`, `contributions`, `identity`, `moderation`, `notifications`, `campaignupdates`; audit uses `system`) holding all its tables, its outbox, inbox, dead letters and migration history, and [`ModuleSchemaOwnershipTests`](../tests/ArchitectureTests/CrowdFunding.ArchitectureTests/ModuleSchemaOwnershipTests.cs) fails the build if a module maps a table outside it. But every module still connects with the same database role, which can read and write every schema.
+**What.** Every module connects as its own role, so each replica holds one Npgsql pool per module plus one for audit, with explicit ceilings (10, 10, 8, 5, 5, 5 and 3: 46 connections). PostgreSQL's default `max_connections` is 100, 3 of them reserved for superusers.
 
-**Why it matters.** The schema makes ownership visible and testable in the model, but PostgreSQL does not yet refuse a cross-module query: a raw SQL statement in Campaigns that reads `moderation.campaign_reviews` would succeed.
+**Why it matters.** One replica fits with room for the migration job and operators; two replicas (92 connections) do not. Without the explicit `Maximum Pool Size` in every module string, Npgsql's default of 100 per pool would allow 700 connections per replica.
 
-**Fix path.** One login role per module with `USAGE` on its own schema and DML on its tables only (`ALTER DEFAULT PRIVILEGES` for tables added later), a separate owner role for migrations, and the module's credentials in its existing `ConnectionStrings:{Module}Db`. No code change is needed. See section 5 of [data-ownership.md](data-ownership.md).
+**Fix path.** Before running more than one replica: PgBouncer in transaction mode (compatible with the transaction-scoped advisory locks and `SKIP LOCKED` claims used here), or a larger `max_connections` sized to memory, or smaller per-module ceilings. Add `CONNECTION LIMIT` per role so one module cannot starve the others. The math is in section 5 of [data-ownership.md](data-ownership.md).
 
 ### 9. Refunds are recorded, not executed at the gateway; no dispute handling
 
@@ -163,7 +163,8 @@ Fixed since the 2026-09-08 review. One line each; the code is the reference.
 | No CI | [`.github/workflows/ci.yml`](../.github/workflows/ci.yml): format check, Release build with warnings as errors, architecture, unit and integration tests |
 | No OpenTelemetry | Traces and metrics over OTLP; `docker-compose.yml` runs the Aspire dashboard |
 | Stub notifications, no preferences | [`NotificationPreference`](../src/Modules/Notifications/CrowdFunding.Modules.Notifications.Domain/Aggregates/NotificationPreference.cs), RFC 8058 unsubscribe headers, preference-aware e-mail (anonymous unsubscribe still weak, item 5) |
-| Module tables in the shared `public` schema | Schema per module: `HasDefaultSchema` in every module DbContext, `MoveTablesToModuleSchema` migrations, schema-qualified raw SQL, [`ModuleSchemaOwnershipTests`](../tests/ArchitectureTests/CrowdFunding.ArchitectureTests/ModuleSchemaOwnershipTests.cs) ([data-ownership.md](data-ownership.md); database roles still open, item 8) |
+| Module tables in the shared `public` schema | Schema per module: `HasDefaultSchema` in every module DbContext, `MoveTablesToModuleSchema` migrations, schema-qualified raw SQL, [`ModuleSchemaOwnershipTests`](../tests/ArchitectureTests/CrowdFunding.ArchitectureTests/ModuleSchemaOwnershipTests.cs) ([data-ownership.md](data-ownership.md)) |
+| One database role for every module | Per-module roles with `USAGE` and DML on their own schema only, an owner role for migrations, `db/init/01-module-roles.sql`, `GrantModuleRole` migrations, [`ModuleDatabaseRoleTests`](../tests/IntegrationTests/CrowdFunding.IntegrationTests/ModuleDatabaseRoleTests.cs) ([data-ownership.md](data-ownership.md), section 5) |
 | Increment-based campaign totals | Append-only ledger with database-enforced sum ([append-only-ledger.md](append-only-ledger.md)) |
 
 Not addressed and out of scope for the course: backer profiles (avatar, biography, public backing history).

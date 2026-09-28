@@ -57,14 +57,7 @@ public sealed class ModuleSchemaMigrationTests : IAsyncLifetime
     public async Task Upgrade_ShouldMoveEveryRowIntoItsModuleSchema_AndKeepLedgerAndOutboxWorking()
     {
         // 1. The pre-change database: every module migrated up to, not including, its schema move.
-        foreach (var contextType in ModuleDbContextTypes)
-        {
-            await using var dbContext = CreateDbContext(contextType);
-            var migrations = dbContext.Database.GetMigrations().ToList();
-            var moveIndex = migrations.FindIndex(name => name.EndsWith(SchemaMoveMigrationSuffix, StringComparison.Ordinal));
-            Assert.True(moveIndex > 0, $"{contextType.Name} has no {SchemaMoveMigrationSuffix} migration.");
-            await dbContext.GetService<IMigrator>().MigrateAsync(migrations[moveIndex - 1]);
-        }
+        await MigrateToBeforeTheSchemaMoveAsync();
 
         // 2. Seed rows in public: a user with a role, a published campaign whose raised amount is
         //    backed by one ledger pledge, and a CampaignCreated event still pending in the outbox.
@@ -217,13 +210,116 @@ public sealed class ModuleSchemaMigrationTests : IAsyncLifetime
             Assert.Equal(150m, reader.GetDecimal(0));
             Assert.Equal(150m, reader.GetDecimal(1));
         }
+
+        // 5. An existing deployment adopting per-module roles after the upgrade: the roles script
+        //    takes over ownership of the tables the superuser created and grants each module its
+        //    own schema only.
+        await ModuleDatabaseRoles.ProvisionAsync(_postgres.GetConnectionString());
+        await using (var campaignsRole = new NpgsqlConnection(
+                         ModuleDatabaseRoles.ConnectionStringFor(_postgres.GetConnectionString(), "campaigns_app")))
+        {
+            await campaignsRole.OpenAsync();
+            await using (var reader = await ReaderAsync(campaignsRole,
+                             """SELECT "Title" FROM campaigns.campaigns WHERE "Id" = @campaign""",
+                             command => command.Parameters.AddWithValue("campaign", campaignId)))
+            {
+                Assert.True(await reader.ReadAsync());
+                Assert.Equal(title, reader.GetString(0));
+            }
+
+            var crossModule = await Assert.ThrowsAsync<PostgresException>(() => ExecuteAsync(campaignsRole,
+                "SELECT 1 FROM moderation.campaign_reviews LIMIT 1"));
+            Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, crossModule.SqlState);
+        }
+
+        await using (var connection = await OpenConnectionAsync())
+        {
+            await using var reader = await ReaderAsync(connection,
+                """
+                SELECT COUNT(*) FROM pg_tables
+                WHERE schemaname IN ('campaigns', 'contributions', 'identity', 'moderation', 'notifications', 'campaignupdates')
+                  AND tableowner <> @migrator
+                """,
+                command => command.Parameters.AddWithValue("migrator", ModuleDatabaseRoles.MigratorRole));
+            Assert.True(await reader.ReadAsync());
+            Assert.Equal(0L, reader.GetInt64(0));
+        }
     }
 
-    private DbContext CreateDbContext(Type contextType)
+    [Fact]
+    public async Task ExistingDatabase_ShouldUpgradeAsTheMigrator_AfterTheRolesScriptTakesOwnership()
+    {
+        // A deployed database from before module schemas and roles: tables in public, owned by the
+        // superuser that migrated them, holding a funded campaign.
+        await MigrateToBeforeTheSchemaMoveAsync();
+        var campaignId = Guid.NewGuid();
+        await using (var connection = await OpenConnectionAsync())
+        {
+            await ExecuteAsync(connection,
+                """
+                INSERT INTO public.campaigns ("Id", "OwnerId", "Title", "Story", "Category", "DeadlineUtc", "Status", goal_amount, goal_currency, raised_amount, raised_currency, "CreatedAtUtc")
+                VALUES (@campaign, gen_random_uuid(), 'Existing', 'A story that is long enough to be a campaign.', 'Technology', now() + interval '30 days', 2, 1000, 'USD', 0, 'USD', now());
+                INSERT INTO public.campaign_ledger_entries ("Id", "CampaignId", "ContributionId", "Kind", "Amount", "Currency", "RecordedAtUtc")
+                VALUES (gen_random_uuid(), @campaign, gen_random_uuid(), 0, 40, 'USD', now());
+                UPDATE public.campaigns SET raised_amount = 40 WHERE "Id" = @campaign;
+                """,
+                command => command.Parameters.AddWithValue("campaign", campaignId));
+        }
+
+        // Roles first, then the upgrade run by the migrator, which must now own what it moves.
+        await ModuleDatabaseRoles.ProvisionAsync(_postgres.GetConnectionString());
+        var migratorConnection = ModuleDatabaseRoles.ConnectionStringFor(_postgres.GetConnectionString(), ModuleDatabaseRoles.MigratorRole);
+        foreach (var contextType in ModuleDbContextTypes)
+        {
+            await using var dbContext = CreateDbContext(contextType, migratorConnection);
+            await dbContext.Database.MigrateAsync();
+        }
+
+        await using (var campaignsRole = new NpgsqlConnection(
+                         ModuleDatabaseRoles.ConnectionStringFor(_postgres.GetConnectionString(), "campaigns_app")))
+        {
+            await campaignsRole.OpenAsync();
+
+            // Its own schema: readable, and the moved snapshot trigger still guards it.
+            await using (var reader = await ReaderAsync(campaignsRole,
+                             """SELECT raised_amount FROM campaigns.campaigns WHERE "Id" = @campaign""",
+                             command => command.Parameters.AddWithValue("campaign", campaignId)))
+            {
+                Assert.True(await reader.ReadAsync());
+                Assert.Equal(40m, reader.GetDecimal(0));
+            }
+
+            var drift = await Assert.ThrowsAsync<PostgresException>(() => ExecuteAsync(campaignsRole,
+                """UPDATE campaigns.campaigns SET raised_amount = 1 WHERE "Id" = @campaign""",
+                command => command.Parameters.AddWithValue("campaign", campaignId)));
+            Assert.Equal(PostgresErrorCodes.CheckViolation, drift.SqlState);
+
+            // Anyone else's schema: refused.
+            var crossModule = await Assert.ThrowsAsync<PostgresException>(() => ExecuteAsync(campaignsRole,
+                "SELECT 1 FROM identity.users LIMIT 1"));
+            Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, crossModule.SqlState);
+        }
+
+        Assert.Empty(await CountRowsAsync("public"));
+    }
+
+    private async Task MigrateToBeforeTheSchemaMoveAsync()
+    {
+        foreach (var contextType in ModuleDbContextTypes)
+        {
+            await using var dbContext = CreateDbContext(contextType);
+            var migrations = dbContext.Database.GetMigrations().ToList();
+            var moveIndex = migrations.FindIndex(name => name.EndsWith(SchemaMoveMigrationSuffix, StringComparison.Ordinal));
+            Assert.True(moveIndex > 0, $"{contextType.Name} has no {SchemaMoveMigrationSuffix} migration.");
+            await dbContext.GetService<IMigrator>().MigrateAsync(migrations[moveIndex - 1]);
+        }
+    }
+
+    private DbContext CreateDbContext(Type contextType, string? connectionString = null)
     {
         var schema = (string)contextType.GetField("Schema")!.GetValue(null)!;
         var builder = (DbContextOptionsBuilder)Activator.CreateInstance(typeof(DbContextOptionsBuilder<>).MakeGenericType(contextType))!;
-        builder.UseNpgsql(_postgres.GetConnectionString(), npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", schema));
+        builder.UseNpgsql(connectionString ?? _postgres.GetConnectionString(), npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", schema));
         return (DbContext)Activator.CreateInstance(contextType, builder.Options)!;
     }
 
@@ -295,6 +391,7 @@ public sealed class ModuleSchemaMigrationTests : IAsyncLifetime
 
     private WebApplicationFactory<Program> CreateFactory()
     {
+        ModuleDatabaseRoles.ClearEnvironment();
         Environment.SetEnvironmentVariable("ConnectionStrings__DefaultConnection", _postgres.GetConnectionString());
         Environment.SetEnvironmentVariable("ConnectionStrings__Redis", _redis.GetConnectionString());
         Environment.SetEnvironmentVariable("Jwt__Issuer", "CrowdFunding.Test");

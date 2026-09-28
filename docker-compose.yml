@@ -10,6 +10,10 @@ services:
       - "5432:5432"
     volumes:
       - crowdfunding_postgres_data:/var/lib/postgresql/data
+      # Runs once, when the data volume is first created: per-module roles, the migrator role and
+      # development-only passwords (docs/data-ownership.md, section 5). For an existing volume run
+      # the scripts by hand, see README "Start the infrastructure".
+      - ./db/init:/docker-entrypoint-initdb.d:ro
 
   crowdfunding-redis:
     image: redis:7-alpine

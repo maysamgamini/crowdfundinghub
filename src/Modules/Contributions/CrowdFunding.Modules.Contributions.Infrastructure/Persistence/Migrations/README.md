@@ -29,6 +29,7 @@ Contains the EF Core migration history for the Contributions module. These files
 - `20260928164036_AddInboxProcessedEvents.Designer.cs`: Generated model snapshot for the migration above.
 - `20260928164036_AddInboxProcessedEvents.cs`: Migration: Add Inbox Processed Events.
 - `20260928204405_MoveTablesToModuleSchema.cs` (+ `.Designer.cs`): Moves every Contributions table from `public` into the `contributions` schema.
+- `20260928210153_GrantModuleRole.cs` (+ `.Designer.cs`): Grants the module's runtime role DML on the tables moved in from `public` (default privileges only cover tables created in the schema) and revokes its rights on the migrations history; skipped when the role does not exist.
 - `ContributionsDbContextModelSnapshot.cs`: Generated snapshot of the current model, used to compute the next migration.
 
 ## Child Folders

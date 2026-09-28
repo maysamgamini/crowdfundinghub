@@ -2,7 +2,7 @@
 
 > **Audience:** senior engineers, tech leads and architects
 > **Rule:** every module owns one PostgreSQL schema. Its tables, its outbox, its inbox, its dead letters and its migration history live there, and no other module maps a table into it.
-> **Enforced by:** [`ModuleSchemaOwnershipTests`](../tests/ArchitectureTests/CrowdFunding.ArchitectureTests/ModuleSchemaOwnershipTests.cs) (the model) and [`ModuleSchemaMigrationTests`](../tests/IntegrationTests/CrowdFunding.IntegrationTests/ModuleSchemaMigrationTests.cs) (the upgrade)
+> **Enforced by:** the database (one login role per module, section 5), [`ModuleSchemaOwnershipTests`](../tests/ArchitectureTests/CrowdFunding.ArchitectureTests/ModuleSchemaOwnershipTests.cs) (the model), [`ModuleDatabaseRoleTests`](../tests/IntegrationTests/CrowdFunding.IntegrationTests/ModuleDatabaseRoleTests.cs) (the grants) and [`ModuleSchemaMigrationTests`](../tests/IntegrationTests/CrowdFunding.IntegrationTests/ModuleSchemaMigrationTests.cs) (the upgrade)
 
 ---
 
@@ -25,7 +25,7 @@ Nothing lives in `public`.
 
 **Naming.** A module's schema is its name in lower case, which is exactly the schema its migrations history table already used before this change. That is why CampaignUpdates owns `campaignupdates` rather than `campaign_updates`: moving the history table would make EF believe no migration had ever run and replay them all. Table names were kept as they were (including prefixes such as `campaigns_outbox_messages`), so the upgrade is a pure schema move with nothing renamed. Inside a module's schema the prefixes are now redundant, but harmless.
 
-**The audit trail.** `system.audit_records` spans every module: [`AuditLoggingPipelineBehavior`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Application/Audit/AuditLoggingPipelineBehavior.cs) records every `[AuditableAction]` command, whatever module handles it. It stays in a shared building-block schema with a single writer: only `AuditDbContext` (through `EfAuditStore`) maps it, it is insert-only (its migration revokes `UPDATE` and `DELETE` from `PUBLIC`, which binds once the application connects as a non-owner role, section 5), it reads its own connection string (`ConnectionStrings:AuditDb`, falling back to `DefaultConnection`), and no module reads it. A shared schema with one owner and no readers does not couple modules to each other. When a module is extracted, the service keeps its own audit table or ships records to a log pipeline; nothing in the monolith has to change.
+**The audit trail.** `system.audit_records` spans every module: [`AuditLoggingPipelineBehavior`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Application/Audit/AuditLoggingPipelineBehavior.cs) records every `[AuditableAction]` command, whatever module handles it. It stays in a shared building-block schema with a single writer: only `AuditDbContext` (through `EfAuditStore`) maps it, it is append-only (the only runtime role with rights on it, `audit_app`, may insert and read, section 5), it reads its own connection string (`ConnectionStrings:AuditDb`, falling back to `DefaultConnection`), and no module reads it. A shared schema with one owner and no readers does not couple modules to each other. When a module is extracted, the service keeps its own audit table or ships records to a log pipeline; nothing in the monolith has to change.
 
 ---
 
@@ -39,7 +39,7 @@ Before this change the code was already well separated: one DbContext per module
 4. **Extraction needs an inventory.** Moving a module to its own database meant listing its tables by hand (`pg_dump -t public.campaign_reviews -t public.moderation_outbox_messages ...`) and hoping the list was complete. With a schema per module it is `pg_dump --schema=moderation`.
 5. **Permissions need a unit.** PostgreSQL grants privileges per schema (`USAGE`) and per table. Without schemas, per-module database roles (section 5) would need a grant per table, maintained by hand as tables are added.
 
-Schemas do not stop a determined developer by themselves (the application role can still read every schema), but they make ownership a property of the database, give tests something precise to check, and are the prerequisite for the enforcement described in section 5.
+Schemas alone do not stop a determined developer (a role with rights on every schema can still read them all), but they make ownership a property of the database, give tests something precise to check, and are the unit that per-module roles grant on (section 5).
 
 ---
 
@@ -118,7 +118,7 @@ sequenceDiagram
     M-->>C: Approved / Pending / Rejected
 ```
 
-What this gets right: Campaigns never touches `moderation.campaign_reviews`. The SQL runs through Moderation's DbContext, Moderation's connection string and, once roles exist (section 5), Moderation's role. The contract is a query object and a result, so Moderation can change its tables freely.
+What this gets right: Campaigns never touches `moderation.campaign_reviews`. The SQL runs through Moderation's DbContext, Moderation's connection string and Moderation's role (section 5): `campaigns_app` could not read that table even if Campaigns tried. The contract is a query object and a result, so Moderation can change its tables freely.
 
 What it costs: temporal coupling. Publishing works only while Moderation can answer. In one process that is always true; across a network it is not.
 
@@ -135,33 +135,64 @@ The codebase already uses the second pattern where availability mattered most: C
 
 ---
 
-## 5. What the database can enforce (next step, not implemented)
+## 5. The database enforces it: one role per module
 
-Schemas name ownership; roles enforce it. The next step is one login role per module, with rights on its own schema only:
+Schemas name ownership; roles enforce it. Every module connects as its own PostgreSQL login role that can use its own schema and nothing else, and a separate owner role runs the migrations. A query from Campaigns into `moderation.campaign_reviews` fails with `42501 permission denied` instead of passing review.
 
-```sql
--- One owner role runs migrations; one runtime role per module.
-CREATE ROLE crowdfunding_migrator LOGIN;                 -- owns every schema, runs `-- migrate`
-CREATE ROLE campaigns_app LOGIN PASSWORD '...';
+### The roles
 
-REVOKE ALL ON SCHEMA public FROM PUBLIC;
-GRANT USAGE ON SCHEMA campaigns TO campaigns_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA campaigns TO campaigns_app;
-ALTER DEFAULT PRIVILEGES FOR ROLE crowdfunding_migrator IN SCHEMA campaigns
-    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO campaigns_app;
--- ... the same for contributions_app, identity_app, moderation_app, notifications_app,
---     campaignupdates_app; audit_app gets INSERT and SELECT on system.audit_records only.
-```
+| Role | Can | Cannot |
+| :--- | :--- | :--- |
+| `crowdfunding_migrator` | Owns every module schema, table and function; `CREATE` on the database and on `public` (the earliest migrations create tables there before `MoveTablesToModuleSchema` moves them). Runs `dotnet run -- migrate`. | Nothing is withheld; it is the DDL role, which is why the application never runs with it. |
+| `campaigns_app`, `contributions_app`, `identity_app`, `moderation_app`, `notifications_app`, `campaignupdates_app` | `USAGE` on its own schema; `SELECT, INSERT, UPDATE, DELETE` on its tables; `USAGE, SELECT` on its sequences. | Anything in another module's schema or in `system`; any DDL (`CREATE`, `ALTER`, `DROP`); `TRUNCATE`; `TRIGGER`; writing its schema's `__EFMigrationsHistory`; owning anything. |
+| `audit_app` | `USAGE` on `system`; `SELECT, INSERT` on `system.audit_records`. | `UPDATE`, `DELETE`, `TRUNCATE` on the audit trail; any module schema. |
 
-The application needs no code change to adopt this: every module already reads its own connection string (`ConnectionStrings:CampaignsDb`, ..., `ConnectionStrings:AuditDb`), so each gets its own credentials. A query from Campaigns into `moderation.campaign_reviews` then fails with `permission denied` instead of passing review. Points to plan for:
+Role names follow the schema (`campaignupdates_app` for the `campaignupdates` schema), for the same reason the schema kept its history-table name.
 
-- **Migrations run as the owner role**, not as the runtime roles, so runtime roles never hold DDL rights. `ALTER DEFAULT PRIVILEGES` keeps grants current as migrations add tables.
-- **Triggers run as the invoking role** (they are not `SECURITY DEFINER`), so `campaigns_app` needs rights on `campaigns.campaign_ledger_entries`, which it has. Nothing in a trigger crosses schemas.
-- **Pool sizing.** One role per module means one connection pool per module per replica. Size `Max Pool Size` per module rather than globally.
-- **Advisory locks stay shared.** They are per database, whatever the role.
-- **The audit writer** connects as `audit_app`, so module roles need no rights on `system`.
+**Cross-cutting tables: one owner, one writer role.** The only shared table is `system.audit_records`. Its owner is the migrator like everything else, and the only runtime role with rights on it is `audit_app`, which `AuditDbContext` uses through `ConnectionStrings:AuditDb`. Module roles have no rights on `system` at all: auditing a Campaigns command does not give `campaigns_app` access to the audit trail, because the audit record is written over the audit connection, not the module's. That same split makes the audit trail append-only for the running application, which the old `REVOKE UPDATE, DELETE ... FROM PUBLIC` could only promise.
 
-It is not implemented here because it changes deployment (secrets per module, role provisioning in the migration job), not code; that belongs with the extraction step.
+**The ledger triggers cannot be bypassed.** `campaigns_app` may append to `campaigns.campaign_ledger_entries` and update `campaigns.campaigns`, and the triggers hold every such write to the rules. It cannot switch them off: `ALTER TABLE ... DISABLE TRIGGER` and `DROP TRIGGER` need ownership, `TRUNCATE` (which does not fire row triggers) is not granted, and `SET session_replication_role = replica` (which skips triggers) needs superuser. The trigger functions run with the caller's rights (they are not `SECURITY DEFINER`) and read only tables in `campaigns`, so the module role's grants are exactly enough.
+
+### Where the grants live
+
+- [`db/init/01-module-roles.sql`](../db/init/01-module-roles.sql) (run as a superuser, idempotent) creates the roles, creates the module schemas owned by the migrator, grants `USAGE` and DML, and sets `ALTER DEFAULT PRIVILEGES FOR ROLE crowdfunding_migrator IN SCHEMA <module>` so every table a later migration creates is granted to the module's role automatically. On a database that was migrated before roles existed, it also hands every existing table and function (in `public` and in the module schemas) to the migrator. It sets no passwords.
+- [`db/init/02-dev-passwords.sql`](../db/init/02-dev-passwords.sql) sets well-known development passwords. Other environments set passwords from their secret store (`ALTER ROLE ... PASSWORD`).
+- One `GrantModuleRole` migration per module grants its role on the tables that `MoveTablesToModuleSchema` moved in from `public`: default privileges apply when a table is created, and those tables were created in `public`. It runs only if the role exists, so the single-superuser setup keeps working.
+
+### Connection strings
+
+Each module already read its own connection string (`ConnectionStrings:{Module}Db`, falling back to `DefaultConnection`), so adopting roles needed no module code: each string now names the module's role. [`MigrationRunner`](../src/API/CrowdFunding.API/Migrations/MigrationRunner.cs) takes the user name and password of `ConnectionStrings:Migrations` and applies them to each module's own connection string, so migrations run as the owner on the same server and database as the module (a module moved to its own database is migrated there). Without `ConnectionStrings:Migrations`, each module migrates with its own credentials, which is the single-superuser setup.
+
+| Environment | Setup |
+| :--- | :--- |
+| Local (`docker compose up -d`) | The compose file mounts `db/init/` into the Postgres entrypoint, which runs both scripts when the data volume is created. `appsettings.Development.json` holds the per-module strings and `Migrations`. An existing volume: `docker compose exec -T crowdfunding-db psql -U postgres -d crowdfundingdb < db/init/01-module-roles.sql`, then the same for `02-dev-passwords.sql` (or `docker compose down -v` to start over). |
+| Tests | `ModuleDatabaseRoles.ProvisionAsync` runs the same two scripts in each Testcontainers database before migrating, and the shared API factory connects every module as its role, so the whole integration suite runs under enforcement. |
+| Deployed | Run `01-module-roles.sql` once per database, set passwords from the secret store, give the migration job `ConnectionStrings:Migrations` and give the application only the module strings. |
+
+**Order.** On a new database: roles script, then `migrate` as the migrator. On a database deployed before roles existed, either order works: the roles script hands every table and function the old owner created (still in `public`, or already moved into a module schema) to the migrator and grants on them, and `GrantModuleRole` grants on whatever `MoveTablesToModuleSchema` moves afterwards. The script assumes a dedicated database: every non-extension object in its `public` schema is treated as this application's. Both upgrade paths are covered by `ModuleSchemaMigrationTests`.
+
+### Connection pools: the math
+
+Npgsql keeps one pool per distinct connection string, and its default ceiling is 100 connections. Seven connection strings (six modules and audit) with default settings could open 700 connections per replica against PostgreSQL's default `max_connections = 100` (3 of them reserved for superusers). So every module string sets `Maximum Pool Size`:
+
+| Pool | Max | Why |
+| :--- | :-: | :--- |
+| Campaigns | 10 | Pledge path: each credit holds a connection for its advisory-locked transaction; outbox, expiry and reservation scavenger workers |
+| Contributions | 10 | Pledge creation, payment webhooks, outbox |
+| Identity | 8 | Every login, refresh and registration |
+| Moderation | 5 | Event-driven reviews, outbox |
+| Notifications | 5 | Event-driven e-mail and preferences |
+| CampaignUpdates | 5 | Webhook subscriptions and the delivery dispatcher |
+| Audit | 3 | One insert per audited command |
+| **Per replica** | **46** | |
+
+The budget is `replicas × 46 + migrator (1-2, only while migrating) + operators and monitoring (about 5) ≤ max_connections − superuser_reserved_connections = 97`. One replica uses about half the server; two replicas (92 + 7 = 99) no longer fit. Before scaling out, either raise `max_connections` (each connection costs server memory), lower the pool ceilings, or put PgBouncer in transaction mode in front of PostgreSQL. Transaction pooling suits this codebase: its locks are transaction-scoped (`pg_advisory_xact_lock`, `FOR UPDATE SKIP LOCKED`) and it uses no session state. A per-role `CONNECTION LIMIT` (`ALTER ROLE campaigns_app CONNECTION LIMIT 20`) adds a server-side cap per module, so one misbehaving module cannot exhaust the server for the others.
+
+### Tests
+
+- [`ModuleDatabaseRoleTests`](../tests/IntegrationTests/CrowdFunding.IntegrationTests/ModuleDatabaseRoleTests.cs): every module role can select, insert, update and delete on every table of its schema; every role is refused (`42501`) on every table of every other schema, including `system`; `campaigns_app` cannot create tables or schemas, truncate or drop the ledger, disable or drop its triggers, set `session_replication_role` or write its migration history, and the append-only trigger still rejects its update; `audit_app` can only append; every module object is owned by the migrator and no runtime role owns anything.
+- [`ModuleSchemaMigrationTests`](../tests/IntegrationTests/CrowdFunding.IntegrationTests/ModuleSchemaMigrationTests.cs) covers both ways an existing database adopts roles: the roles script after the superuser ran the upgrade, and the roles script first, then the upgrade run by the migrator. Either way the migrator ends up owning every table and `campaigns_app` gets its schema and nothing else.
+- Every other test that uses the shared API factory runs with the module roles, so each module doing its own work is proven by the whole suite.
 
 ---
 
@@ -182,7 +213,7 @@ then pointing `ConnectionStrings:ModerationDb` at the new database. The migratio
 | `ConnectionStrings:ModerationDb` falls back to `DefaultConnection` | `ConnectionStrings:ModerationDb` points at `moderation_db` |
 | Contract query `ICampaignReviewStatusReader`, in process | Local read model in Campaigns fed by review events (section 4) |
 | Outbox events delivered by `InProcessMessageBus` | Outbox events delivered by a broker; consumers keep the inbox |
-| Per-module role (next step, section 5) | The service's own database credentials |
+| Per-module role `moderation_app`, owner role `crowdfunding_migrator` (section 5) | The same two roles in the service's database: the runtime role is the service's credentials, the owner role its migration job |
 
 The extraction itself is the upcoming course step:
 

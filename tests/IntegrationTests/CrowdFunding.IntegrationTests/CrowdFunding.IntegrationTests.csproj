@@ -27,6 +27,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The same role scripts docker compose runs; ModuleDatabaseRoles executes them in each container. -->
+    <None Include="..\..\..\db\init\*.sql" LinkBase="db\init" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\..\src\Samples\RosettaStone\CrowdFunding.Samples.RosettaStone.csproj" />
     <ProjectReference Include="..\..\..\src\API\CrowdFunding.API\CrowdFunding.API.csproj" />
     <ProjectReference Include="..\..\..\src\Modules\CampaignUpdates\CrowdFunding.Modules.CampaignUpdates.Domain\CrowdFunding.Modules.CampaignUpdates.Domain.csproj" />

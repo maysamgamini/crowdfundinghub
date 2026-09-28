@@ -40,6 +40,7 @@ public sealed class MultiDatabaseConnectionDecouplingTests : IAsyncLifetime
     {
         await Task.WhenAll(_primaryDb.StartAsync(), _campaignsDb.StartAsync(), _redis.StartAsync());
 
+        ModuleDatabaseRoles.ClearEnvironment();
         Environment.SetEnvironmentVariable("ConnectionStrings__DefaultConnection", _primaryDb.GetConnectionString());
         Environment.SetEnvironmentVariable("ConnectionStrings__CampaignsDb", _campaignsDb.GetConnectionString());
         Environment.SetEnvironmentVariable("ConnectionStrings__Redis", _redis.GetConnectionString());

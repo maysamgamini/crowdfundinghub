@@ -93,14 +93,14 @@ The design favours one deployable, one database and strong consistency where mon
 | Dimension | One database, shared schema (before 2026-09-28) | Schema per module (this repo) | Database per module |
 | :--- | :--- | :--- | :--- |
 | Operations | One instance to back up, patch and fail over | Same | N instances |
-| Boundary enforcement | Convention plus architecture tests; raw SQL could still join across modules | Ownership visible in the database and checked by `ModuleSchemaOwnershipTests`; per-module roles (not yet provisioned) can block cross-module access | Physically impossible to join |
+| Boundary enforcement | Convention plus architecture tests; raw SQL could still join across modules | Ownership visible in the database, checked by `ModuleSchemaOwnershipTests`, and enforced by per-module roles that PostgreSQL refuses outside their schema | Physically impossible to join |
 | Noisy neighbour | Shared I/O, WAL and connections | Same | Isolated |
 | Point-in-time restore | All modules together | All modules together | Per module |
 | Extraction effort | Move tables by name; migrations already separate | `pg_dump -n <schema>` (this repo) | None |
 
-**Cost.** The database is a shared failure domain and I/O budget. Every module connects with the same role, so PostgreSQL does not yet refuse a cross-schema query.
+**Cost.** The database is a shared failure domain and I/O budget. One role per module means one connection pool per module per replica (46 connections), so scaling out needs a pooler or a larger `max_connections`.
 
-**Choose otherwise.** Per-module database roles are the cheap next step for enforcement (section 5 of [data-ownership.md](data-ownership.md)). Separate databases make sense when a module is extracted or its load starts hurting the others.
+**Choose otherwise.** Per-module roles are in place (section 5 of [data-ownership.md](data-ownership.md)). Separate databases make sense when a module is extracted or its load starts hurting the others.
 
 ### 2.3 Polling outbox with a wake-up signal vs. CDC
 
@@ -283,7 +283,7 @@ The numbers below are defaults from the code, not load-test results. Measure bef
 
 ## 4. Remaining limitations
 
-1. Schemas are per module, but database roles are not: every module can still read every schema. See [2.2](#22-one-database-one-dbcontext-per-module).
+1. One connection pool per module per replica: a second replica needs PgBouncer or a larger `max_connections`. See [2.2](#22-one-database-one-dbcontext-per-module).
 2. No broker consumer: RabbitMQ publishing works, cross-process delivery and module extraction are not implemented on this branch. See [2.5](#25-in-process-bus-with-publish-only-rabbitmq).
 3. The outbox wake-up signal is in-process; other replicas rely on the 5-second sweep. CDC was considered and not implemented.
 4. Rate limiting and the outbox signal are per instance; there is no distributed rate limiter.
@@ -302,7 +302,7 @@ The numbers below are defaults from the code, not load-test results. Measure bef
 
 Move when a measurement says so, not on a schedule.
 
-1. **Harden the monolith.** Per-module database roles (schemas are done); retention jobs for processed-events and dead-letter tables; alerts on due-outbox-row count, dead-letter inserts and connection-pool usage; a distributed rate limiter or gateway limits once there are several replicas; KEK rotation or KMS wrapping.
+1. **Harden the monolith.** A connection pooler before scaling out (schemas and per-module roles are done); retention jobs for processed-events and dead-letter tables; alerts on due-outbox-row count, dead-letter inserts and connection-pool usage; a distributed rate limiter or gateway limits once there are several replicas; KEK rotation or KMS wrapping.
 2. **Extract a module (the next course step).** Add a broker consumer with the inbox on the receiving side, give Moderation its own host and database via `ConnectionStrings:ModerationDb`, and route traffic with the Strangler Fig pattern. The proof of concept is on branch `future/microservices-extraction`.
 3. **Stream events.** Replace the polling workers with CDC when event volume or the number of independent consumers justifies a broker. Outbox rows, `EventId` identity and inbox stay the same.
 4. **Relieve hot campaigns.** If one campaign's lock becomes the bottleneck, batch credits or shard the snapshot while keeping the append-only ledger as the source of truth.
@@ -314,7 +314,7 @@ Move when a measurement says so, not on a schedule.
 | Area | Chosen | Main alternative | Why | Accepted cost |
 | :--- | :--- | :--- | :--- | :--- |
 | System boundary | Modular monolith | Microservices | One deployable; boundaries enforced by architecture tests | No failure or resource isolation |
-| Persistence | One database, per-module DbContexts and schemas | Database per module | Simple operations; a module's data leaves with `pg_dump --schema` | One role for all modules; shared I/O |
+| Persistence | One database, per-module DbContexts, schemas and roles | Database per module | Simple operations; the database refuses cross-module access; a module's data leaves with `pg_dump --schema` | Shared I/O; one pool per module per replica |
 | Event dispatch | SKIP LOCKED outbox, commit signal, 5 s sweep | CDC | PostgreSQL only; immediate in-process dispatch | Three writes per event; cross-replica latency up to 5 s |
 | Delivery semantics | At least once + inbox and idempotent consumers | Exactly-once transport | Correctness where the side effect happens | Every consumer needs an idempotency key |
 | Transport | In-process bus; RabbitMQ publish-only | Full broker with consumers | Works with no broker | No cross-process delivery yet |
