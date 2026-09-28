@@ -1,10 +1,10 @@
 ﻿# Dependency Injection
 
 ## Purpose
-Registers Identity services, handlers, validators, and infrastructure components with the dependency injection container.
+Registers Identity application handlers and validators with the dependency injection container.
 
 ## Files
-- `IdentityApplicationDependencyInjection.cs`: Dependency injection registration entry point for the surrounding layer.
+- `IdentityApplicationDependencyInjection.cs`: `AddIdentityApplication`, the registration entry point for the Identity application layer.
 
 ## Child Folders
 - None.

@@ -1,126 +1,103 @@
-# The Blueprint: Designing Monoliths for Frictionless Microservices Decomposition
+# Blueprint: Designing a Monolith for Later Decomposition
 
-> **The Architectural Rule of Thumb:**  
-> *"If you cannot build a clean, well-bounded Modular Monolith in a single process, you cannot build a successful Microservices system across a network. Distributed systems magnify every flaw in your boundary design by an order of magnitude."*
+> **Rule of thumb:** if you cannot keep clean boundaries between modules in one process, you will not keep them across a network. Distribution magnifies every boundary flaw.
+
+> **Status on this branch (`feature/clean-arch-course`):** microservice extraction is **not implemented here**. Moderation runs as an in-process module of the monolith. Extraction is the upcoming course step; a working proof of concept (standalone Moderation host, JWKS-validated auth, a Strangler Fig compose topology, extraction boundary tests) is preserved on branch `future/microservices-extraction`. Section 2 describes what this branch already has; section 3 is the plan for the next step.
 
 ---
 
-## 1. The Monolith-First Strategy (Why Monoliths Come First)
+## 1. Monolith first
 
-Decomposing a system into microservices too early introduces severe operational penalties:
-- Distributed transactions (lack of ACID guarantees).
-- Network latency and serialization overhead.
-- Distributed tracing complexity and partial failure modes.
-- Deployment choreography and version synchronization across teams.
+Splitting into services too early adds distributed transactions (or their absence), network latency and serialization, partial failures, tracing across processes, and coordinated deployments. Building a modular monolith first lets the domain and module boundaries settle while everything is still one process and one debugger session.
 
-The **Monolith-First Strategy** dictates that a system should be built as an **in-process Modular Monolith**, allowing the business domain and bounded contexts to stabilize rapidly. However, **the monolith must be engineered with the strict decoupling constraints of microservices**, so that when scale or team boundaries demand decomposition, services can be extracted with near-zero refactoring.
+The condition is that the monolith follows the constraints a split would need, so a later extraction changes hosting, wiring and data location, and leaves business logic alone.
 
 ```mermaid
 graph LR
-    subgraph MonolithBoundaries["In-Process Monolith Boundaries"]
-        ModA["Module A<br/>(Own Schema, Own DbContext)"]
-        ModB["Module B<br/>(Own Schema, Own DbContext)"]
-        Contracts["A.Contracts<br/>(DTOs & Events Only)"]
-        ModB -. "References ONLY Contracts" .-> Contracts
-        ModA -- "Implements" --> Contracts
+    subgraph Now["In-process (this branch)"]
+        ModA["Module A<br/>(own DbContext, own tables)"]
+        ModB["Module B<br/>(own DbContext, own tables)"]
+        Contracts["A.Contracts<br/>(commands, queries, events)"]
+        ModB -. "references only" .-> Contracts
+        ModA -- "implements" --> Contracts
     end
 
-    subgraph ServiceExtraction["Frictionless Physical Extraction"]
-        SvcA["Service A Container"]
-        SvcB["Service B Container"]
-        NugetPkg["A.Contracts (NuGet Package)"]
-        SvcB -. "References NuGet" .-> NugetPkg
-        Broker["Kafka / RabbitMQ"]
-        SvcA -- "Publishes Events" --> Broker
-        Broker -- "Consumes Events" --> SvcB
+    subgraph Later["After extraction (planned)"]
+        SvcA["Service A"]
+        SvcB["Service B"]
+        Pkg["A.Contracts (package)"]
+        Broker["Message broker"]
+        SvcB -. "references" .-> Pkg
+        SvcA -- "publishes" --> Broker
+        Broker -- "delivers" --> SvcB
     end
 ```
 
 ---
 
-## 2. The 6 Non-Negotiable Architectural Prerequisites
+## 2. Six prerequisites, and where this codebase stands
 
-To extract a microservice from a monolith without rewriting business logic, the monolithic architecture must adhere to **six core disciplines**:
+### 2.1 Cross-module access only through Contracts assemblies
+- **Rule:** a module never references another module's Domain, Application or Infrastructure assembly.
+- **Here:** every module has a Contracts project (for Campaigns: the `AddContributionToCampaign` command, the `CampaignCreated`/`Published`/`Cancelled`/`Succeeded`/`Failed` application events, and a `CampaignStatusContract` enum). Other modules reference only that.
+- **Why it matters later:** an extracted module's Contracts project can be packed and consumed as a package reference instead of a project reference. Callers that used in-process commands would still need a transport (HTTP or messaging) behind them; that part is not free.
 
-### 1. Zero Direct Domain Coupling via Dedicated Contracts Assemblies
-- **The Rule:** Module A (`Contributions`) must **never** reference the domain or infrastructure assemblies of Module B (`Campaigns`).
-- **The Implementation:** Module B publishes a lightweight contract assembly (`CrowdFunding.Modules.Campaigns.Contracts.csproj`) containing **only**:
-  - Request/Response DTO records.
-  - Integration event records (`CampaignPublishedApplicationEvent`).
-  - Read interfaces (`ICampaignContributionAvailabilityReader`).
-- **Why It Matters for Microservices:** When extracting Module B into a microservice, `Campaigns.Contracts` is simply packed as a NuGet package (`dotnet pack`) and published to a private registry. Downstream consumers change their `<ProjectReference>` to a `<PackageReference>` with zero code edits!
+### 2.2 One DbContext and one set of tables per module
+- **Rule:** each module owns its tables and is the only code that touches them.
+- **Here:** one DbContext per module, each with its own migrations and its own migration history table in a per-module schema (`campaigns`, `contributions`, `identity`, `moderation`, `notifications`, `campaignupdates`). Each module resolves its own connection string, `ConnectionStrings:{Module}Db`, falling back to `DefaultConnection` (see `MultiDatabaseConnectionDecouplingTests`).
+- **Limitation:** the module tables themselves live in PostgreSQL's `public` schema, distinguished by ownership and naming (`campaigns`, `contributions`, `campaign_reviews`, `campaigns_outbox_messages`, ...). This is not strict schema-per-module isolation. Moving a module's data to its own database is a data migration of its named tables, plus a configuration change.
 
-### 2. Physical Database Schema Isolation (Schema-per-Module)
-- **The Rule:** Each module must own a dedicated PostgreSQL schema (`identity`, `campaigns`, `contributions`, `moderation`).
-- **The Implementation:** Each module has its own independent EF Core `DbContext` registered in its own infrastructure layer:
+### 2.3 No foreign keys across modules
+- **Rule:** a table never has a foreign key to another module's table.
+- **Here:** [`ContributionConfiguration.cs`](../../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Infrastructure/Persistence/Configurations/ContributionConfiguration.cs) stores `CampaignId` and `ContributorId` as plain required columns, with no relationship to the Campaigns or Identity tables.
   ```csharp
-  // In CampaignsDbContext
-  modelBuilder.HasDefaultSchema("campaigns");
-  ```
-- **Why It Matters for Microservices:** In legacy monoliths, tables from different domains are lumped into `public`, and developers write cross-domain SQL joins. By isolating schemas:
-  - Database migrations for Module A never collide with Module B.
-  - Migrating to **Database-per-Service** is a physical operational task (`pg_dump` the `campaigns` schema and restore to a dedicated server), requiring **zero modifications to EF Core entity configurations**.
-
-### 3. Absolute Elimination of Cross-Schema Database Foreign Keys
-- **The Rule:** Foreign key constraints across module boundaries are strictly forbidden.
-- **The Implementation:** In [`ContributionConfiguration.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Infrastructure/Persistence/Configurations/ContributionConfiguration.cs):
-  ```csharp
-  // Stores primitive Guid scalar; NO foreign key to campaigns.campaigns table!
   builder.Property(x => x.CampaignId).IsRequired();
   builder.Property(x => x.ContributorId).IsRequired();
   ```
-- **Why It Matters for Microservices:** A physical SQL foreign key constraint ties two tables to the same database engine. If `contributions` had a foreign key to `campaigns`, splitting PostgreSQL into two independent database servers would immediately fail.
+- **Why it matters later:** a foreign key forces both tables into the same database. Without it, consistency across modules is maintained by events and read models.
 
-### 4. Asynchronous Event-Driven Decoupling via the Transactional Outbox
-- **The Rule:** Cross-module state changes must be propagated asynchronously via domain events, never through distributed transactions.
-- **The Implementation:** When a payment confirms in `Contributions`, the event is saved to `contributions.contributions_outbox_messages` in the **same database transaction** as the entity mutation.
-- **Why It Matters for Microservices:** Two-Phase Commit (2PC) does not scale and is unsupported across cloud databases. The outbox pattern guarantees **At-Least-Once Delivery** without dual-write race conditions. When extracted to microservices, the outbox table is tailed by Debezium to stream directly into Apache Kafka.
+### 2.4 Cross-module changes through a transactional outbox
+- **Rule:** a module announces state changes by writing events in the same transaction as the change, never by a dual write.
+- **Here:** Campaigns, Contributions and Moderation each have an outbox table (for example `contributions_outbox_messages`) written in the same transaction as the aggregate change. `ModuleOutboxProcessor<TDbContext>` claims rows with `FOR UPDATE SKIP LOCKED`, deletes them on success, retries with back-off and dead-letters after five attempts; a post-commit signal wakes it immediately. Consumers that must not apply an event twice use the inbox (`IIdempotentConsumer`). Delivery is at-least-once.
+- **Limitation:** the in-process message bus is the working mode. `RabbitMqMessageBus` can publish CloudEvents envelopes, but there is no broker consumer, so cross-process delivery does not exist on this branch.
 
-### 5. Asymmetric Cryptography (ES256 ECDSA + RFC 7517 JWKS Discovery)
-- **The Rule:** Never use symmetric HMAC secrets (`HS256`) in an architecture intended for microservices.
-- **The Implementation:** In [`JwksEndpoint.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Security/JwksEndpoint.cs):
-  - Identity issues JWTs signed with a private elliptic-curve key (NIST P-256 / ES256).
-  - Public keys are published at standard `/.well-known/jwks.json`.
-- **Why It Matters for Microservices:** If symmetric HMAC is used, extracting a service forces you to share the private secret string with every microservice. With ES256 and JWKS, extracted microservices download the public keys once, cache them, and **verify incoming user JWT tokens locally with zero network calls to the Identity service and zero knowledge of private keys**.
+### 2.5 Asymmetric token signing with JWKS
+- **Rule:** do not sign tokens with a shared symmetric secret (HS256) if services will verify them.
+- **Here:** Identity signs ES256 (ECDSA P-256) JWTs and publishes the public keys at `/.well-known/jwks.json` ([`JwksEndpoint.cs`](../../src/API/CrowdFunding.API/Security/JwksEndpoint.cs)). Private signing keys are encrypted at rest with AES-256-GCM.
+- **Why it matters later:** an extracted service fetches and caches the public keys and verifies tokens locally, without holding any private key. Revocation still needs a shared check; see the security-stamp note in [`key-mental-models-for-students.md`](../04-architect-gold-notes/key-mental-models-for-students.md).
 
-### 6. Automated Compile-Time Architecture Tests (`NetArchTest`)
-- **The Rule:** Human code review cannot prevent architectural rot; boundary integrity must be automated in CI.
-- **The Implementation:** In [`ModuleDependencyTests.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/tests/ArchitectureTests/CrowdFunding.ArchitectureTests/):
+### 2.6 Architecture tests in CI
+- **Rule:** boundaries are checked by the build, not by code review.
+- **Here:** [`tests/ArchitectureTests/CrowdFunding.ArchitectureTests/`](../../tests/ArchitectureTests/CrowdFunding.ArchitectureTests/README.md) inspects compiled assembly references by reflection (`Assembly.GetReferencedAssemblies()`; no NetArchTest). `ModuleBoundaryConventionTests` checks that every module has the four layers, that cross-module references go only to Contracts, that Domain assemblies reference only `BuildingBlocks.Domain`, and that Contracts reference no module internals. Per-module dependency tests, `ReplicatedReadModelBoundaryTests` and `ApiHostDependencyTests` add more specific rules.
   ```csharp
-  var result = Types.InAssembly(typeof(Campaign).Assembly)
-      .ShouldNot()
-      .HaveDependencyOnAny(
-          "CrowdFunding.Modules.Contributions.Domain",
-          "CrowdFunding.Modules.Identity.Domain",
-          "CrowdFunding.Modules.Moderation.Domain")
-      .GetResult();
+  var violations = ModuleAssemblies
+      .SelectMany(source => ReferencedModuleAssemblies(source.Assembly)
+          .Where(target => target.Module != source.Module && target.Layer != "Contracts")
+          .Select(target => $"{source.Name} -> {target.Name}"))
+      .ToList();
 
-  Assert.True(result.IsSuccessful);
+  Assert.Empty(violations);
   ```
-- **Why It Matters for Microservices:** Guarantees that no developer accidentally introduces an illegal module dependency that would block service extraction later.
 
 ---
 
-## 3. The Strangler Fig Extraction Pattern
+## 3. The extraction plan (next course step, not implemented on this branch)
 
-When the time arrives to extract a module (e.g. `Moderation` or `Identity`), the architecture enables the **Strangler Fig Pattern** without system downtime:
+The plan uses the Strangler Fig pattern: put a routing layer in front, move one route prefix at a time to the new service, and keep the monolith serving everything else.
 
 ```mermaid
 graph TD
-    Client["Client Traffic"] --> Gateway["API Gateway / Reverse Proxy (YARP / Envoy)"]
-    
-    subgraph DecomposedSystem["System Deployment"]
-        Gateway -- "Route /api/campaigns/*" --> Monolith["Monolith Host"]
-        Gateway -- "Route /api/contributions/*" --> Monolith
-        Gateway -- "Route /api/moderation/* (Strangled)" --> ModService["Extracted Moderation Microservice"]
-    end
-
-    Monolith -- "Outbox / Kafka" --> Broker["Kafka / RabbitMQ"]
-    Broker -- "CampaignCreatedEvent" --> ModService
+    Client["Client"] --> Gateway["Reverse proxy / gateway"]
+    Gateway -- "/api/campaigns/*, /api/identity/*, ..." --> Monolith["Monolith host"]
+    Gateway -- "/api/moderation/*" --> ModService["Moderation service"]
+    Monolith -- "outbox -> broker" --> Broker["Message broker"]
+    Broker -- "CampaignCreated" --> ModService
 ```
 
-1. **Step 1 (Standalone Host):** Create `CrowdFunding.Moderation.Service` referencing the existing `Moderation.Application` and `Moderation.Infrastructure` projects.
-2. **Step 2 (Database Pointing):** Point `ModerationDbContext` to a dedicated PostgreSQL database container.
-3. **Step 3 (Traffic Routing):** In the API Gateway (e.g., YARP), route `/api/moderation/*` to the new container. The monolith no longer handles moderation HTTP traffic.
-4. **Step 4 (Async Ingestion):** The extracted moderation service consumes `CampaignCreated` events from the message broker instead of in-process dispatchers.
-5. **Step 5 (Clean Up):** Remove `AddModerationInfrastructure` from the monolith's `Program.cs`.
+1. **Standalone host.** Create a Moderation host that references the existing Moderation Contracts, Application and Infrastructure projects and validates tokens against the monolith's JWKS endpoint.
+2. **Own database.** Point `ConnectionStrings:ModerationDb` at a separate database and move the Moderation tables.
+3. **Route traffic.** Route `/api/moderation/*` to the new host at the gateway.
+4. **Asynchronous delivery.** Deliver `CampaignCreated` and the other events Moderation consumes through a broker. This needs the broker consumer that this branch does not have.
+5. **Clean up.** Remove the Moderation module registration from the monolith host.
+
+What the proof of concept on `future/microservices-extraction` demonstrates is that steps 1 to 3 need no changes to Moderation's domain or application code. Steps 4 and 5 involve real work (a broker consumer, the monolith's outbound Moderation events, and deployment), so treat "extraction without rewrites" as applying to business logic, not to the system as a whole. The step-by-step runbook is [`deconstruction-walkthrough.md`](../03-engineering-spec-and-roadmap/deconstruction-walkthrough.md).

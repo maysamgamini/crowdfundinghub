@@ -1,822 +1,572 @@
-# CrowdFundingHub Architecture & Component Rationalization Guide
+# CrowdFunding Hub: Architecture and Library Reference
 
-> **Document Classification:** Core Architectural Reference & Technology Selection Rationale  
-> **Target System:** `CrowdFundingHub` Modular Monolith  
-> **Target Framework:** .NET 10.0 (C# 14 / ASP.NET Core 10.0)  
-> **Database Engine:** PostgreSQL 16+ (Npgsql 10.0)  
-> **Primary References:** [`DEV_GUIDELINES.md`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/DEV_GUIDELINES.md), [`outbox-architecture.md`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/docs/outbox-architecture.md), [`improvement.md`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/improvement.md)
+This document describes how the codebase is structured today and why each library is in it.
+Every statement here is checked against the code on this branch. Where a capability is planned
+rather than implemented, the text says so.
 
----
+- Runtime: .NET 10, C# 14, ASP.NET Core 10
+- Database: PostgreSQL 16 (EF Core 10.0.11, Npgsql 10.0.3); Redis for caching, the SignalR
+  backplane and token revocation
+- Solution file: [`CrowdFunding.slnx`](../CrowdFunding.slnx); package versions:
+  [`Directory.Packages.props`](../Directory.Packages.props)
+- Related documents: [`README.md`](../README.md), [`DEV_GUIDELINES.md`](../DEV_GUIDELINES.md),
+  [`outbox-architecture.md`](outbox-architecture.md), [`append-only-ledger.md`](append-only-ledger.md),
+  [`minimal-apis-vs-controllers.md`](minimal-apis-vs-controllers.md),
+  [`TRADE_OFFS_AND_LIMITATIONS.md`](TRADE_OFFS_AND_LIMITATIONS.md), [`PLATFORM_SHORTCOMINGS.md`](PLATFORM_SHORTCOMINGS.md)
 
-## Table of Contents
+## Contents
 
-1. [Executive Summary & System Topology](#1-executive-summary--system-topology)
-2. [Architectural Style & Core Paradigms](#2-architectural-style--core-paradigms)
-   - [2.1 Modular Monolith Architecture & Boundary Enforcement](#21-modular-monolith-architecture--boundary-enforcement)
-   - [2.2 Clean Architecture & Layer Responsibilities](#22-clean-architecture--layer-responsibilities)
-   - [2.3 CQRS & Dispatcher Pattern](#23-cqrs--dispatcher-pattern)
-   - [2.4 Transactional Outbox Pattern & Event-Driven Choreography](#24-transactional-outbox-pattern--event-driven-choreography)
-   - [2.5 PostgreSQL Concurrency Primitives & Financial Integrity](#25-postgresql-concurrency-primitives--financial-integrity)
-   - [2.6 Poly-Pattern Architecture & The Pedagogical Rosetta Stone](#26-poly-pattern-architecture--the-pedagogical-rosetta-stone)
-   - [2.7 Autonomous Microservice Extraction & The Strangler Fig Pattern](#27-autonomous-microservice-extraction--the-strangler-fig-pattern)
-   - [2.8 Asynchronous Replicated Read Models & Pluggable Message Bus](#28-asynchronous-replicated-read-models--pluggable-message-bus)
-3. [Component & Library Catalog](#3-component--library-catalog)
-   - [3.1 .NET 10 & ASP.NET Core](#31-net-10--aspnet-core)
-   - [3.2 Entity Framework Core 10 + Npgsql](#32-entity-framework-core-10--npgsql)
-   - [3.3 Mapster](#33-mapster)
-   - [3.4 FluentValidation](#34-fluentvalidation)
-   - [3.5 Asymmetric ES256 ECDSA & Microsoft.IdentityModel](#35-asymmetric-es256-ecdsa--microsoftidentitymodel)
-   - [3.6 Serilog Compact JSON & OpenTelemetry](#36-serilog-compact-json--opentelemetry)
-   - [3.7 OpenMeter & CloudEvents v1.0](#37-openmeter--cloudevents-v10)
-   - [3.8 Testcontainers.PostgreSql](#38-testcontainerspostgresql)
-   - [3.9 NetArchTest](#39-netarchtest)
-   - [3.10 Coverlet](#310-coverlet)
-   - [3.11 ASP.NET Core SignalR](#311-aspnet-core-signalr)
-   - [3.12 OpenTelemetry Distributed Tracing & W3C Traceparent Propagation](#312-opentelemetry-distributed-tracing--w3c-traceparent-propagation)
-4. [End-to-End Architectural Workflows & Data Flows](#4-end-to-end-architectural-workflows--data-flows)
-   - [4.1 Concurrent Pledge Ingestion & Financial Settlement Flow](#41-concurrent-pledge-ingestion--financial-settlement-flow)
-   - [4.2 Asymmetric ES256 Token Issuance & Edge Verification Flow](#42-asymmetric-es256-token-issuance--edge-verification-flow)
-5. [Operational Guardrails & Cross-Cutting Infrastructure](#5-operational-guardrails--cross-cutting-infrastructure)
-   - [5.1 Deterministic Migration Execution vs. Runtime Migration Hazards](#51-deterministic-migration-execution-vs-runtime-migration-hazards)
-   - [5.2 Out-of-Band Administrative Seeding](#52-out-of-band-administrative-seeding)
-   - [5.3 RFC 9457 Problem Details & Sanitized Error Pipeline](#53-rfc-9457-problem-details--sanitized-error-pipeline)
-   - [5.4 Partitioned Rate Limiting](#54-partitioned-rate-limiting)
-6. [Architectural Decision Records (ADR) Summary Matrix](#6-architectural-decision-records-adr-summary-matrix)
+1. [System overview](#1-system-overview)
+2. [Solution layout](#2-solution-layout)
+3. [Dependency rules and architecture tests](#3-dependency-rules-and-architecture-tests)
+4. [HTTP request pipeline](#4-http-request-pipeline)
+5. [Command and query pipeline](#5-command-and-query-pipeline)
+6. [Errors](#6-errors)
+7. [Persistence](#7-persistence)
+8. [Messaging: outbox, signal, inbox, bus](#8-messaging-outbox-signal-inbox-bus)
+9. [Security](#9-security)
+10. [Observability](#10-observability)
+11. [API documentation](#11-api-documentation)
+12. [The Rosetta Stone sample](#12-the-rosetta-stone-sample)
+13. [Moderation and microservice extraction](#13-moderation-and-microservice-extraction)
+14. [Library reference](#14-library-reference)
+15. [Known limitations](#15-known-limitations)
 
 ---
 
-## 1. Executive Summary & System Topology
+## 1. System overview
 
-`CrowdFundingHub` is an enterprise-grade crowdfunding platform engineered for high-concurrency pledge processing, multi-tenant modular isolation, and auditable financial integrity. 
-
-Rather than adopting a distributed microservices topology prematurely—which introduces network latency, distributed transaction orchestration overhead (Sagas, 2PC), and deployment complexity—the system is structured as a **Modular Monolith** adhering strictly to **Clean Architecture** and **Command Query Responsibility Segregation (CQRS)**.
-
-### High-Level System Architecture Diagram
+CrowdFunding Hub is a modular monolith: one deployable ASP.NET Core host that composes six
+business modules. Each module follows Clean Architecture internally (Contracts, Domain,
+Application, Infrastructure) and owns its own DbContext and tables. Modules talk to each other
+only through their Contracts assemblies: commands and queries for synchronous calls, and
+application events delivered through a per-module transactional outbox for asynchronous work.
 
 ```mermaid
 graph TB
-    subgraph ClientTier["Client & Ingestion Tier"]
-        WebClients["Web / Mobile Browsers"]
-        EdgeProxy["API Gateway / Edge Proxy"]
+    Client["Web / mobile client"] -->|HTTPS| Edge
+    Client -->|WebSocket| Hub["SignalR hub /hubs/campaigns"]
+
+    subgraph Host["CrowdFunding.API (single process)"]
+        Edge["Middleware: forwarded headers, exception handler,<br/>correlation id, CORS, authentication,<br/>rate limiter, authorization"]
+        Endpoints["Minimal API endpoints<br/>+ ModerationController (comparison)"]
+        Dispatch["ICommandDispatcher / IQueryDispatcher<br/>validation -> audit -> handler"]
+        Mods["Modules: Identity, Campaigns, Contributions,<br/>Moderation, CampaignUpdates, Notifications"]
+        Outbox["Outbox processors<br/>(Campaigns, Contributions, Moderation)"]
+        Bus["IMessageBus (InProcess by default)"]
+        Hub
+        Edge --> Endpoints --> Dispatch --> Mods
+        Outbox --> Bus --> Mods
     end
 
-    subgraph APILayer["API Host (CrowdFunding.API)"]
-        Controllers["ASP.NET Core Controllers<br/>(Thin Transport / Content Negotiation)"]
-        JWKSEndpoint["JWKS Endpoint<br/>(/.well-known/jwks.json)"]
-        SignalRHub["CampaignHub (SignalR)<br/>(Real-Time Backer & Funding Stream)"]
-        OutboxWorker["OutboxProcessorBackgroundService<br/>(PeriodicTimer Polling)"]
-        RateLimiter["Partitioned Rate Limiter"]
-    end
-
-    subgraph CoreBuildingBlocks["Shared Building Blocks"]
-        BBApp["BuildingBlocks.Application<br/>(Dispatchers, Event Contracts, Metering Abstractions)"]
-        BBDomain["BuildingBlocks.Domain<br/>(BaseEntity, AdvisoryLockKey, Money VO)"]
-        BBInfra["BuildingBlocks.Infrastructure<br/>(OutboxClaimQuery, OpenMeterClient)"]
-    end
-
-    subgraph BoundedModules["Bounded Context Modules (Independent Monolith Modules)"]
-        subgraph ModCampaigns["Campaigns Module"]
-            CampApp["Application (Commands/Queries)"]
-            CampDom["Domain (Campaign Aggregate)"]
-            CampInfra["Infrastructure (CampaignsDbContext)"]
-        end
-
-        subgraph ModContrib["Contributions Module"]
-            ContApp["Application (Make/Confirm Pledge)"]
-            ContDom["Domain (Contribution Aggregate)"]
-            ContInfra["Infrastructure (ContributionsDbContext)"]
-        end
-
-        subgraph ModIdent["Identity Module"]
-            IdApp["Application (User Auth / Claims)"]
-            IdDom["Domain (User Aggregate)"]
-            IdInfra["Infrastructure (IdentityDbContext, ES256 Keystore)"]
-        end
-
-        subgraph ModMod["Moderation Module"]
-            ModApp["Application (Review Workflows)"]
-            ModDom["Domain (CampaignReview Aggregate)"]
-            ModInfra["Infrastructure (ModerationDbContext)"]
-        end
-
-        subgraph ModNotif["Notifications Module"]
-            NotifApp["Application (Event Consumers)"]
-        end
-
-        subgraph ModUpdates["CampaignUpdates Module"]
-            UpdatesApp["Application (Creator Posts)"]
-        end
-    end
-
-    subgraph DataTier["PostgreSQL 16 Storage (Physical Database)"]
-        CampSchema["Campaigns Tables<br/>(campaigns, ledger, outbox)"]
-        ContSchema["Contributions Tables<br/>(contributions, outbox)"]
-        IdentSchema["Identity Tables<br/>(users, signing_keys)"]
-        ModSchema["Moderation Tables<br/>(reviews, outbox)"]
-        DeadLetter["Dead-Letter Table<br/>(dead_letter_events)"]
-    end
-
-    subgraph ExternalTier["External Cloud Services"]
-        OpenMeterSvc["OpenMeter Cloud / Cluster<br/>(CloudEvents v1.0 Usage Ingestion)"]
-    end
-
-    WebClients -->|HTTPS REST| EdgeProxy
-    WebClients -->|WSS WebSockets| SignalRHub
-    EdgeProxy --> RateLimiter
-    RateLimiter --> Controllers
-    EdgeProxy -.->|Fetch Public Keys| JWKSEndpoint
-
-    Controllers --> BBApp
-    BBApp --> CampApp & ContApp & IdApp & ModApp
-
-    CampApp --> CampDom & CampInfra
-    ContApp --> ContDom & ContInfra
-    IdApp --> IdDom & IdInfra
-    ModApp --> ModDom & ModInfra
-
-    CampInfra --> CampSchema
-    ContInfra --> ContSchema
-    IdInfra --> IdentSchema
-    ModInfra --> ModSchema
-
-    OutboxWorker -->|Claim Batches via SKIP LOCKED| CampSchema & ContSchema & ModSchema
-    OutboxWorker -->|Publish Domain Events| ModNotif & UpdatesApp
-    OutboxWorker -->|Dead-Letter Terminal Failures| DeadLetter
-    OutboxWorker -->|Push Realtime Balance Updates| SignalRHub
-    ContApp -.->|Confirmed Pledge Event| OpenMeterSvc
+    Mods -->|state + outbox rows, same transaction| PG[("PostgreSQL 16<br/>one DbContext and table set per module")]
+    Outbox -->|claim FOR UPDATE SKIP LOCKED| PG
+    Host --- Redis[("Redis<br/>cache, SignalR backplane,<br/>revoked security stamps")]
+    Host -.->|OTLP, when configured| Aspire["OpenTelemetry collector<br/>(Aspire dashboard in docker-compose)"]
+    Host -.->|HTTP| Ext["OpenMeter, e-mail provider,<br/>outbound webhooks"]
 ```
+
+[`docker-compose.yml`](../docker-compose.yml) runs the local dependencies: PostgreSQL 16, Redis
+and the .NET Aspire dashboard (UI on `http://localhost:18888`, OTLP on host port 4317). The API
+itself runs with `dotnet run` (development URL `http://localhost:5076`).
 
 ---
 
-## 2. Architectural Style & Paradigms
+## 2. Solution layout
 
-### 2.1 Modular Monolith Architecture & Boundary Enforcement
+```text
+src/
+  API/CrowdFunding.API/                  Composition root and HTTP host
+  BuildingBlocks/
+    CrowdFunding.BuildingBlocks.Domain/          BaseEntity, Money, AdvisoryLockKey, domain exceptions
+    CrowdFunding.BuildingBlocks.Application/     dispatchers, pipeline behaviors, events, IMessageBus,
+                                                 IIdempotentConsumer, application exceptions, audit
+    CrowdFunding.BuildingBlocks.Infrastructure/  outbox processor and signal, inbox, message buses,
+                                                 exception classifier, audit store, cache
+                                                 invalidation, OpenMeter client
+  Modules/{Identity,Campaigns,Contributions,Moderation,CampaignUpdates,Notifications}/
+    CrowdFunding.Modules.{Module}.Contracts/        public commands, queries, events, DTOs
+    CrowdFunding.Modules.{Module}.Domain/           aggregates, entities, value objects, invariants
+    CrowdFunding.Modules.{Module}.Application/      handlers, validators, ports
+    CrowdFunding.Modules.{Module}.Infrastructure/   DbContext, migrations, repositories, adapters
+  Samples/RosettaStone/                  Separate runnable host for the three-tier comparison
+tests/
+  UnitTests/CrowdFunding.UnitTests/
+  ArchitectureTests/CrowdFunding.ArchitectureTests/
+  IntegrationTests/CrowdFunding.IntegrationTests/   (Testcontainers: PostgreSQL, Redis, RabbitMQ)
+```
 
-The solution is divided into six distinct Bounded Contexts:
-1. **[`Campaigns`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns)**: Owns campaign creation, editing, publishing, financial target definitions, and balance accumulation.
-2. **[`Contributions`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions)**: Owns backer pledge lifecycle, payment state transitions (`Pending`, `Confirmed`, `Failed`), and payment gateway callbacks.
-3. **[`Identity`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Identity)**: Owns user credentials, PBKDF2 hashing, roles/permissions, ES256 asymmetric cryptographic keys, and token issuance.
-4. **[`Moderation`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Moderation)**: Owns campaign audit, manual compliance review, and approval/rejection workflows.
-5. **[`Notifications`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Notifications)**: Owns email, SMS, and backer notification dispatching upon domain event triggers.
-6. **[`CampaignUpdates`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/CampaignUpdates)**: Owns creator project updates, backer comments, and progress broadcasts.
+The six modules:
 
-#### Module Boundaries & Encapsulation Invariants
-- **Database Context Isolation**: Each module maintains its own dedicated EF Core DbContext ([`CampaignsDbContext`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Persistence/DbContexts/CampaignsDbContext.cs), [`ContributionsDbContext`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Infrastructure/Persistence/DbContexts/ContributionsDbContext.cs), [`IdentityDbContext`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Persistence/DbContexts/IdentityDbContext.cs), [`ModerationDbContext`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Moderation/CrowdFunding.Modules.Moderation.Infrastructure/Persistence/DbContexts/ModerationDbContext.cs)). Cross-context joins or entity navigation properties crossing module boundaries are forbidden at compile-time and runtime.
-- **Contract Decoupling**: Modules expose public contracts strictly via dedicated `.Contracts` assemblies (e.g., [`CrowdFunding.Modules.Campaigns.Contracts`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Contracts) or [`CrowdFunding.Modules.Contributions.Contracts`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Contracts)). Internal entity definitions (`Campaign`, `Contribution`) never escape their owning module.
-- **Zero API-to-Domain Dependencies**: The [`CrowdFunding.API`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API) project does **NOT** reference any module's `.Domain` assembly. Controllers interact exclusively with Application command/query models and Mapster DTOs.
-- **Automated NetArchTest Boundary Verification**: Dependency direction and encapsulation rules are checked continuously via automated architectural unit tests in [`CrowdFunding.ArchitectureTests`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/tests/ArchitectureTests/CrowdFunding.ArchitectureTests).
+| Module | Owns |
+| :--- | :--- |
+| [Identity](../src/Modules/Identity) | Users, PBKDF2 password hashes, roles and permissions, refresh tokens, security stamps, ES256 signing keys, token issuance |
+| [Campaigns](../src/Modules/Campaigns) | Campaign lifecycle (draft, publish, cancel, expire), reward tiers and reservations, the append-only funding ledger |
+| [Contributions](../src/Modules/Contributions) | Pledges, payment confirmation and failure, Stripe webhook reconciliation, refunds, a local read model of active campaigns |
+| [Moderation](../src/Modules/Moderation) | Campaign reviews, the media-analysis webhook, the approve and reject workflow |
+| [CampaignUpdates](../src/Modules/CampaignUpdates) | Outbound webhook subscriptions and signed delivery (`pledge.confirmed`) |
+| [Notifications](../src/Modules/Notifications) | Notification preferences, unsubscribe, e-mail notifications driven by events |
+
+Every module has exactly these four projects; `ModuleBoundaryConventionTests` fails if one is
+missing.
+
+---
+
+## 3. Dependency rules and architecture tests
 
 ```mermaid
 graph LR
-    subgraph AllowedBoundary["Permitted Dependency Flow"]
-        API["API Layer<br/>(Controllers)"] -->|Dispatches| App["Application Layer<br/>(Commands / Queries)"]
-        App -->|Mutates| Dom["Domain Layer<br/>(Aggregates / Invariants)"]
-        Infra["Infrastructure Layer<br/>(EF Core / DbContext)"] -->|Implements & Depends On| Dom
-        Infra -->|Implements Interfaces Of| App
-        API -->|Registers DI Services Of| Infra
-    end
-
-    subgraph ForbiddenBoundary["Prohibited Violations (Blocked by Architecture Tests)"]
-        API -.->|ILLEGAL REFERENCE| Dom
-        Dom -.->|ILLEGAL REFERENCE| App
-        Dom -.->|ILLEGAL REFERENCE| Infra
-        ModA["Module A Domain"] -.->|ILLEGAL CROSS-REFERENCE| ModB["Module B Domain"]
-    end
-
-    style ForbiddenBoundary fill:#ffebee,stroke:#c62828,stroke-width:2px;
-    style AllowedBoundary fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
+    API["CrowdFunding.API"] --> Infra["Module.Infrastructure"]
+    API --> App["Module.Application"]
+    API --> Con["Module.Contracts"]
+    Infra --> App --> Dom["Module.Domain"]
+    App --> Con
+    App --> OtherCon["Other module's Contracts"]
+    Dom --> BBD["BuildingBlocks.Domain"]
+    App --> BBA["BuildingBlocks.Application"]
+    Infra --> BBI["BuildingBlocks.Infrastructure"]
+    BBI --> BBA --> BBD
 ```
+
+Rules:
+
+- A module references another module only through that module's Contracts assembly.
+- A Domain assembly references no CrowdFunding assembly other than BuildingBlocks.Domain.
+- A Contracts assembly references no module internals (Domain, Application, Infrastructure).
+- BuildingBlocks never reference a module.
+- The API host is the composition root: it references each module's Infrastructure (to register
+  it) and Application and Contracts (to dispatch commands and queries). Endpoints work with
+  Contracts and Application types, not domain entities.
+- The API host does not reference the Rosetta Stone sample.
+
+The tests in [`tests/ArchitectureTests/CrowdFunding.ArchitectureTests`](../tests/ArchitectureTests/CrowdFunding.ArchitectureTests)
+enforce these rules with plain reflection over compiled assemblies
+(`Assembly.GetReferencedAssemblies()` and type inspection). No architecture-testing library such
+as NetArchTest is used.
+
+| Test class | What it checks |
+| :--- | :--- |
+| `ModuleBoundaryConventionTests` | Every module has all four layers; cross-module references go only to Contracts; Domain references only BuildingBlocks.Domain; Contracts reference no module internals. A new module is covered without a new test class. |
+| `{Module}ModuleDependencyTests` (one per module) | The module's specific allowed and forbidden references |
+| `ReplicatedReadModelBoundaryTests` | Contributions does not call Campaigns synchronously to check whether a campaign accepts pledges; it uses its own replicated read model |
+| `ApiHostDependencyTests` | The API does not reference the sample; the API exposes Minimal APIs with exactly one controller |
+
+Because the checks read assembly metadata, a forbidden project reference fails the tests as soon
+as it is added, before anyone writes code against it.
 
 ---
 
-### 2.2 Clean Architecture & Layer Responsibilities
+## 4. HTTP request pipeline
 
-The codebase enforces strict separation of concerns across four concentric architectural tiers:
+The order in [`Program.cs`](../src/API/CrowdFunding.API/Program.cs):
 
 ```mermaid
-graph TD
-    subgraph CleanArch["Clean Architecture Onion Layers"]
-        subgraph LayerAPI["API Layer (External Transport)"]
-            C_API["Routing, HTTP Status Codes, RFC 9457 Problem Details,<br/>JWT Authentication Middleware, Swagger/OpenAPI Specs,<br/>Mapster DTO Mapping, SignalR Hubs"]
-            subgraph LayerApp["Application Layer (Use Case Orchestration)"]
-                C_APP["Command / Query Handlers, Dispatcher Pipeline,<br/>FluentValidation Rules, Transaction Boundary Orchestration,<br/>ICurrentUser Access Verification, Application Event Contracts"]
-                subgraph LayerDom["Domain Layer (Core Enterprise Business Logic)"]
-                    C_DOM["Aggregates (Campaign, Contribution, User),<br/>Value Objects (Money), Domain Invariants,<br/>Pure Domain Events, Zero External Dependencies"]
-                end
-            end
-        end
-        subgraph LayerInfra["Infrastructure Layer (External Adapters & Persistence)"]
-            C_INFRA["EF Core DbContexts, PostgreSQL Fluent Configurations,<br/>Database Migrations, Repositories, Advisory Lock Transactions,<br/>ES256 Keystore Storage, OpenMeter Ingestion Client"]
-        end
-    end
-
-    LayerAPI --> LayerApp
-    LayerApp --> LayerDom
-    LayerInfra --> LayerDom
-    LayerInfra --> LayerApp
-    LayerAPI --> LayerInfra
+flowchart LR
+    A[UseForwardedHeaders] --> B[UseExceptionHandler] --> C[CorrelationIdMiddleware] --> D[UseHttpsRedirection] --> E[UseCors]
+    E --> F[UseAuthentication] --> G[UseRateLimiter] --> H[UseAuthorization] --> I["Endpoints, controller, hub"]
 ```
 
-#### Layer Responsibilities Breakdown
+1. **Forwarded headers** run first so everything later sees the real client IP and scheme. Only
+   loopback and the proxies in `ForwardedHeaders:KnownProxies` / `KnownNetworks` are trusted
+   ([`EdgeSecurityConfiguration.cs`](../src/API/CrowdFunding.API/Security/EdgeSecurityConfiguration.cs)).
+2. **Exception handler**: [`GlobalExceptionHandler`](../src/API/CrowdFunding.API/Observability/GlobalExceptionHandler.cs)
+   turns exceptions into RFC 9457 problem details (see [section 6](#6-errors)).
+3. **Correlation id**: [`CorrelationIdMiddleware`](../src/API/CrowdFunding.API/Observability/CorrelationIdMiddleware.cs)
+   uses the current trace id (else an incoming `X-Correlation-Id`, else a new id), pushes it into
+   Serilog's `LogContext` and returns it in the `X-Correlation-Id` response header.
+4. **CORS**: a default policy with an explicit origin list from `Cors:AllowedOrigins` and
+   credentials allowed, so the SignalR client can connect.
+5. **Authentication** runs before the rate limiter so rate-limit policies can partition by the
+   caller's `sub` claim.
+6. **Rate limiter** (see [section 9](#9-security)).
+7. **Authorization**: one policy per permission constant (`PermissionConstants.All`), each
+   requiring an authenticated user with a matching `permission` claim.
+8. **Endpoints**: Minimal APIs in [`Endpoints/`](../src/API/CrowdFunding.API/Endpoints)
+   (`IdentityEndpoints`, `CampaignEndpoints`, `RewardTierEndpoints`, `ContributionEndpoints`,
+   `WebhookSubscriptionEndpoints`, `NotificationEndpoints`, `InboundWebhookEndpoints`), using
+   `TypedResults` and named routes for `CreatedAtRoute`. One MVC controller,
+   [`ModerationController`](../src/API/CrowdFunding.API/Controllers/ModerationController.cs)
+   (`/api/moderation/reviews`), is kept on purpose so the two styles can be compared; see
+   [`minimal-apis-vs-controllers.md`](minimal-apis-vs-controllers.md). Request and response
+   mapping is explicit code; there is no mapping library.
 
-| Layer | Project Namespace | Responsibilities & Boundary Invariants | Key Types & Files |
+Health checks (`/health/live`, `/health/ready`) and the JWKS document (`/.well-known/jwks.json`)
+are anonymous and excluded from rate limiting. The SignalR hub is at `/hubs/campaigns` and uses
+a Redis backplane when `ConnectionStrings:Redis` is set.
+
+Host commands: `dotnet run -- migrate` applies every module's migrations and exits (for CI and
+init jobs); `dotnet run -- seed-admin <email> <password> <displayName>` creates the first
+administrator. In Development and Testing, migrations also run at startup.
+
+---
+
+## 5. Command and query pipeline
+
+The dispatchers are small in-house types in
+[`BuildingBlocks.Application/Messaging`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Application/Messaging),
+not MediatR. Handlers are registered by assembly scan at startup, and the dispatcher resolves
+the handler from the scoped DI container.
+
+Commands pass through `ICommandPipelineBehavior<TCommand, TResult>` implementations, which wrap
+the handler in registration order (first registered is outermost):
+
+```mermaid
+sequenceDiagram
+    participant E as Endpoint
+    participant D as CommandDispatcher
+    participant V as ValidationPipelineBehavior
+    participant A as AuditLoggingPipelineBehavior
+    participant H as Command handler
+    participant T as Module transaction executor
+    participant DB as PostgreSQL
+
+    E->>D: SendAsync(command)
+    D->>V: HandleAsync
+    V->>V: run every FluentValidation validator for the command
+    alt invalid
+        V-->>E: throw RequestValidationException (400)
+    end
+    V->>A: next()
+    A->>H: next()
+    H->>T: ExecuteAsync(...)
+    T->>DB: BEGIN, optional pg_advisory_xact_lock, changes + outbox rows, COMMIT
+    H-->>A: result
+    A->>DB: write audit record (if [AuditableAction] or caller is Admin)
+    A-->>E: result
+```
+
+- **Validation** ([`ValidationPipelineBehavior`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Application/Validation/ValidationPipelineBehavior.cs))
+  is outermost, so an invalid command is rejected before auditing or the handler. Endpoints do
+  not validate by hand. Queries go through `IQueryDispatcher` and are not validated by the
+  pipeline.
+- **Audit** ([`AuditLoggingPipelineBehavior`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Application/Audit/AuditLoggingPipelineBehavior.cs))
+  writes an audit record after the handler succeeds, for commands marked `[AuditableAction]` or
+  executed by an Admin. A failed audit write fails the request. Audit records live in their own
+  `AuditDbContext`.
+- **Transactions** are owned by per-module transaction executors in each module's
+  Infrastructure (for example [`CampaignTransactionExecutor`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Transactions/CampaignTransactionExecutor.cs)).
+  They open the transaction, optionally take an advisory lock, and turn the aggregate's domain
+  events into outbox rows before commit.
+
+---
+
+## 6. Errors
+
+- Domain code throws subclasses of `DomainException` from
+  [`BuildingBlocks.Domain/Exceptions`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Domain/Exceptions):
+  `BusinessRuleViolationException` (400) and `DomainConflictException` (409). It does not use
+  `InvalidOperationException` or `ArgumentException` for business outcomes.
+- Application code throws `NotFoundException` (404), `ResourceConflictException` (409),
+  `ConcurrencyConflictException` (409), `UnauthenticatedException` (401),
+  `ForbiddenAccessException` (403) and `RequestValidationException` (400 with an `errors` map).
+- [`ExceptionClassifier`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/ErrorHandling/ExceptionClassifier.cs)
+  maps these to status codes. Npgsql connection-pool exhaustion and PostgreSQL errors 53300 and
+  57P03 become 503 with `Retry-After: 2`. Anything else is a generic 500; framework, EF Core and
+  Npgsql messages are never returned to the client.
+- `GlobalExceptionHandler` writes `application/problem+json` with a `traceId`. Malformed JSON
+  and unbindable parameters also become a 400 problem response, because
+  `RouteHandlerOptions.ThrowOnBadRequest` is enabled in every environment.
+
+---
+
+## 7. Persistence
+
+**One DbContext per module.** Identity, Campaigns, Contributions, Moderation, CampaignUpdates
+and Notifications each have their own DbContext, migrations and repositories; audit has
+`AuditDbContext`. There are no foreign keys between modules and no cross-context joins.
+
+**Tables live in the `public` schema.** Module tables are distinguished by ownership and naming
+(`campaigns`, `campaign_ledger_entries`, `campaigns_outbox_messages`, `contributions`,
+`contributions_processed_events`, `users`, `refresh_tokens`, `campaign_reviews`, and so on). Only
+each module's EF migrations history table is in a per-module schema (`identity`, `campaigns`,
+`contributions`, `moderation`, `campaignupdates`, `notifications`; audit uses `system`). This is
+not strict schema-per-module isolation; moving the tables into per-module schemas is a
+remaining limitation.
+
+**Per-module connection strings.** Each module resolves `ConnectionStrings:{Module}Db` and falls
+back to `ConnectionStrings:DefaultConnection`
+([`ConfigurationExtensions`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Configuration/ConfigurationExtensions.cs)),
+so a module can be pointed at its own database without code changes once its tables and data
+are moved there.
+
+**Concurrency primitives:**
+
+| Primitive | Where | Purpose |
+| :--- | :--- | :--- |
+| `xmin` row version | `Campaign`, `Contribution`, `RewardTier`, `RewardTierReservation`, `RefreshToken` | Optimistic concurrency: EF Core adds `AND xmin = @x` to updates; a mismatch becomes `ConcurrencyConflictException` (409) |
+| `pg_advisory_xact_lock` | `CampaignTransactionExecutor`, keyed by [`AdvisoryLockKey.FromGuid`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Domain/Common/AdvisoryLockKey.cs) (a 64-bit fold of the GUID) | Serializes writers on one campaign (pledge credit vs cancel, ledger SUM) and on one reward tier (slot reservation). Released at commit or rollback |
+| `FOR UPDATE SKIP LOCKED` | [`OutboxClaimQuery`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxClaimQuery.cs) | Lets several outbox workers claim disjoint batches |
+| `INSERT ... ON CONFLICT DO NOTHING` | Ledger appends, inbox claims | Idempotency under redelivery |
+
+**Append-only campaign ledger.** `campaign_ledger_entries` records every change to a campaign's
+funding: `Pledge` (positive), `Refund` (negative) and `OpeningBalance`. A trigger rejects
+`UPDATE` and `DELETE`; a unique key on `(ContributionId, Kind)` with `ON CONFLICT DO NOTHING`
+makes a redelivered pledge a no-op; a CHECK constraint ties sign to kind.
+`Campaign.RecordPledge` (published campaigns only, positive amount, same currency) and
+`RecordRefund` produce entries, and
+[`CampaignLedger`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Persistence/Repositories/CampaignLedger.cs)
+recomputes `campaigns.raised_amount` as the SUM of entries; a second trigger rejects any
+`raised_amount` that differs from that SUM. A cancelled or completed campaign credits nothing
+(`Credited = false`), and refunds append compensating entries, so the raised amount of a
+cancelled or failed campaign drops as refunds land. See [`append-only-ledger.md`](append-only-ledger.md).
+
+---
+
+## 8. Messaging: outbox, signal, inbox, bus
+
+See [`outbox-architecture.md`](outbox-architecture.md) for the full treatment.
+
+```mermaid
+flowchart LR
+    subgraph Tx["One database transaction"]
+        H[Handler changes aggregate] --> R[(module tables)]
+        H --> O[(module outbox table)]
+    end
+    Tx -->|after commit| S["OutboxCommitSignalInterceptor<br/>notifies OutboxSignal (single slot)"]
+    S --> P["ModuleOutboxProcessor<br/>(plus 5 s fallback sweep)"]
+    P -->|claim FOR UPDATE SKIP LOCKED| O
+    P --> B["IMessageBus"]
+    B -->|InProcess, default| EH["IEventHandler of T in other modules"]
+    B -.->|RabbitMQ, publish only| X[(exchange)]
+    EH --> I["IIdempotentConsumer (inbox)"]
+    P -->|after 5 failed attempts| DL[(dead-letter table)]
+```
+
+**Transactional outbox.** Campaigns, Contributions and Moderation each have an outbox table and a
+[`ModuleOutboxProcessor<TDbContext>`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Outbox/ModuleOutboxProcessor.cs)
+hosted service. The transaction executor writes outbox rows in the same transaction as the state
+change. The processor claims batches with `FOR UPDATE SKIP LOCKED`, reclaims `Processing` rows
+whose lease (`LockedUntilUtc`) expired (counting that as an attempt), deletes rows on success,
+reschedules a failed row after a fixed 10-second delay (`RetryDelay`), and moves a row to the dead-letter table after five attempts.
+A failed pass is logged and does not stop the service. `IOutboxDispatcher.DrainAsync` exists for
+tests and diagnostics.
+
+**Wake-up signal.** [`OutboxCommitSignalInterceptor`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Outbox/OutboxCommitSignalInterceptor.cs)
+notifies [`OutboxSignal<TDbContext>`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Outbox/OutboxSignal.cs)
+(a single-slot channel that drops extra writes) after a transaction that wrote outbox rows
+commits, so events are dispatched right away. The 5-second poll is only a fallback sweep. The
+signal is in-process: other replicas pick up the rows on their next sweep.
+
+**Inbox.** [`IIdempotentConsumer`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Application/Inbox/IIdempotentConsumer.cs)`.ExecuteOnceAsync(eventId, consumerName, effect)`
+claims `(eventId, consumerName)` with `INSERT ... ON CONFLICT DO NOTHING` inside the effect's
+transaction, so the effect and the claim commit or roll back together. Tables:
+`contributions_processed_events` and `campaign_updates_processed_events`. It is used by Stripe
+webhook reconciliation (keyed by the Stripe event id) and by the `pledge.confirmed` webhook
+fan-out. `BaseApplicationEvent.EventId` is stable and serialized; it equals the outbox row id and
+the CloudEvents `id`.
+
+**Message bus.** `IMessageBus` has two implementations, selected by `Messaging:Provider`:
+
+- `InProcessMessageBus` (default, `InProcess`): calls the registered `IEventHandler<T>`
+  implementations in the same process. This is the working mode.
+- `RabbitMqMessageBus` (`RabbitMQ`): publishes a CloudEvents envelope to RabbitMQ. It is
+  publish-only; there is no RabbitMQ consumer in the codebase, so cross-process event delivery
+  is not implemented.
+
+Delivery to external systems (outbound webhooks from CampaignUpdates) is at-least-once, and
+receivers must deduplicate. Each delivery is signed with HMAC-SHA256 in the
+`X-CrowdFunding-Signature` header (`t={unix},v1={hex}` over `"{t}.{body}"`).
+
+Contributions keeps a replicated read model of active campaigns (`active_campaigns_cache`),
+updated from Campaigns events, so accepting a pledge does not call the Campaigns module.
+
+---
+
+## 9. Security
+
+**Tokens.** Access tokens are JWTs signed with ES256 (ECDSA P-256). Verification uses only the
+public keys, which are also published at `/.well-known/jwks.json`
+([`JwksEndpoint`](../src/API/CrowdFunding.API/Security/JwksEndpoint.cs)); a verifier holding the
+JWKS cannot forge tokens. Validation checks issuer, audience, signature and lifetime with zero
+clock skew. `MapInboundClaims = false`: claims keep their issued names, and the user's identity
+comes from the `sub` claim only (`CustomClaimTypes.Subject`, `Email`, `Role`, `Permission`,
+`SecurityStamp`, `DisplayName`).
+
+**Signing keys at rest.** Private keys are stored in `identity_signing_keys`, encrypted with
+AES-256-GCM by [`SigningKeyProtector`](../src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Services/SigningKeyProtector.cs).
+The key comes from `SigningKeyEncryption:Key` (environment variable `SigningKeyEncryption__Key`,
+base64, 32 bytes); startup fails without it. The key id is bound as associated data, and legacy
+plaintext rows are re-encrypted on warm-up.
+
+**Refresh tokens.** 256-bit random tokens stored as SHA-256 hashes. Every refresh revokes the
+presented token and issues a new one (rotation). Presenting an already-revoked token is treated
+as theft: every session of the account is revoked and the security stamp is rotated.
+
+**Revocation.** Each access token carries the user's security stamp. On every authenticated
+request, `OnTokenValidated` checks a Redis-backed revocation store
+([`RedisSecurityStampRevocationStore`](../src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Services/RedisSecurityStampRevocationStore.cs)),
+so logout and refresh-token reuse invalidate access tokens that have not yet expired.
+
+**Rate limiting** ([`RateLimitingConfiguration`](../src/API/CrowdFunding.API/RateLimiting/RateLimitingConfiguration.cs)):
+fixed windows, configurable under `RateLimiting:{Global|Auth|Payment|Webhook}`.
+
+| Policy | Default | Partition |
+| :--- | :--- | :--- |
+| Global limiter | 300 per 60 s | `sub` if authenticated, else client IP |
+| `auth-strict` | 10 per 60 s | client IP |
+| `payment-strict` | 20 per 60 s | `sub`, else client IP |
+| `webhook-strict` | 200 per 60 s | client IP |
+
+A rejected request gets 429 as RFC 9457 problem details with a `traceId` and `Retry-After`.
+Limits are held in memory, so they apply per instance.
+
+**Inbound webhooks.** Stripe payment webhooks and the moderation media-analysis callback are
+verified by signature (`StripeWebhookSignatureVerifier`, `CloudFunctionSignatureVerifier`)
+before any command runs.
+
+**CORS.** Explicit origin list from `Cors:AllowedOrigins`; no wildcard.
+
+---
+
+## 10. Observability
+
+- **Logs**: Serilog with compact JSON (CLEF) output, enriched from the log context (including
+  the correlation id), machine name and environment name
+  ([`LoggingConfiguration`](../src/API/CrowdFunding.API/Observability/LoggingConfiguration.cs)).
+  Logs are not exported through OpenTelemetry.
+- **Traces**: OpenTelemetry instrumentation for ASP.NET Core, HttpClient, EF Core, Npgsql and
+  the `CrowdFunding.Outbox` activity source.
+- **Metrics**: ASP.NET Core, HttpClient, Npgsql and `System.Runtime`.
+- **Export**: the OTLP exporter is enabled only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set
+  (`appsettings.Development.json` sets `http://localhost:4317`, the Aspire dashboard from
+  docker-compose). See [`OpenTelemetryConfiguration`](../src/API/CrowdFunding.API/Observability/OpenTelemetryConfiguration.cs).
+- **Health checks**: `/health/live` (the process is up; no dependencies checked) and
+  `/health/ready` (one check per module DbContext plus the audit DbContext).
+
+---
+
+## 11. API documentation
+
+In Development and Testing the host serves the OpenAPI document generated by the built-in
+`Microsoft.AspNetCore.OpenApi` package at `/openapi/v1.json` and the Scalar UI at `/scalar/v1`
+([`OpenApiConfiguration`](../src/API/CrowdFunding.API/Documentation/OpenApiConfiguration.cs)).
+Neither is mapped in other environments. Swashbuckle is not used.
+
+---
+
+## 12. The Rosetta Stone sample
+
+[`src/Samples/RosettaStone`](../src/Samples/RosettaStone/README.md) implements one use case,
+"create a campaign", three ways so they can be compared side by side:
+
+| Tier | Endpoint | Shape |
+| :--- | :--- | :--- |
+| 1. Minimal API CRUD | `POST /rosetta/v1/campaigns/tier1-minimal-api` | One file, manual validation, direct `DbSet.Add` |
+| 2. Pragmatic CQRS | `POST /rosetta/v1/campaigns/tier2-pragmatic-cqrs` | Command, handler and endpoint using the shared dispatcher abstractions and FluentValidation; no aggregate or outbox |
+| 3. Rich domain model + outbox | `POST /api/campaigns` (the production endpoint) | Aggregate, domain events, outbox, validation and audit pipeline |
+
+The sample is its own host (`dotnet run --project src/Samples/RosettaStone`, Scalar UI at
+`http://localhost:5090/scalar/v1`) with its own DbContext and `rosetta` schema. The production
+API does not reference it (`ApiHostDependencyTests`). All three tiers return the same RFC 9457
+validation-problem shape, which an integration test verifies.
+
+---
+
+## 13. Moderation and microservice extraction
+
+On this branch Moderation is an in-process module of the monolith, like the other five. It has
+its own DbContext, outbox and Contracts, and other modules reach it only through
+`CrowdFunding.Modules.Moderation.Contracts` and events, which keeps a later extraction possible.
+
+Extracting a module into its own service is the upcoming step of the course; it is not
+implemented on this branch. A working proof of concept (a standalone Moderation host,
+JWKS-validated authentication, a Strangler Fig deployment topology and extraction boundary tests)
+is preserved on the branch `future/microservices-extraction`. On this branch, two gaps would
+have to close for a real extraction: the RabbitMQ bus has no consumer, and module tables share
+the `public` schema.
+
+---
+
+## 14. Library reference
+
+Versions are taken from [`Directory.Packages.props`](../Directory.Packages.props) (central
+package management; projects reference packages without versions).
+
+### Web host and API
+
+| Package | Version | Used in | Why |
 | :--- | :--- | :--- | :--- |
-| **API** | `CrowdFunding.API` | Translates HTTP requests to commands/queries; validates bearer tokens; enforces authorization policies; maps results to JSON contracts via Mapster; hosts WebSockets. | [`CampaignsController.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Controllers/CampaignsController.cs)<br/>[`Program.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Program.cs)<br/>[`CampaignHub.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/RealTime/CampaignHub.cs) |
-| **Application** | `CrowdFunding.Modules.*.Application`<br/>`CrowdFunding.BuildingBlocks.Application` | Orchestrates use cases; enforces authorization via [`ICurrentUser`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Application/Security/ICurrentUser.cs); coordinates database transactions; dispatches domain events to Outbox. | [`CreateCampaignCommand.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Application/Features/Campaigns/Commands/CreateCampaign/CreateCampaignCommand.cs)<br/>[`CommandDispatcher.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Application/Messaging/CommandDispatcher.cs) |
-| **Domain** | `CrowdFunding.Modules.*.Domain`<br/>`CrowdFunding.BuildingBlocks.Domain` | Pure domain logic. Enforces aggregate state transitions and business invariants; raises domain events; encapsulates value objects. Pure C# with zero infrastructure or framework dependencies. | [`Campaign.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs)<br/>[`Contribution.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Domain/Aggregates/Contribution.cs)<br/>[`Money.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Domain/ValueObjects/Money.cs) |
-| **Infrastructure** | `CrowdFunding.Modules.*.Infrastructure`<br/>`CrowdFunding.BuildingBlocks.Infrastructure` | Implements persistence via EF Core and Npgsql; executes PostgreSQL concurrency locks; manages signing keys; talks to OpenMeter API. | [`CampaignConfiguration.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Persistence/Configurations/CampaignConfiguration.cs)<br/>[`CampaignTransactionExecutor.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Transactions/CampaignTransactionExecutor.cs) |
+| ASP.NET Core (shared framework) | 10.0 | API, sample | Host, Minimal APIs, DI, rate limiting, CORS, forwarded headers, SignalR, health checks, problem details. All built in, so these concerns need no third-party packages. |
+| Microsoft.AspNetCore.Authentication.JwtBearer | 10.0.11 | API | Bearer token validation with a custom signing-key resolver and the `OnTokenValidated` revocation check |
+| Microsoft.AspNetCore.OpenApi | 10.0.11 | API, sample | Built-in OpenAPI document generation (replaced Swashbuckle) |
+| Scalar.AspNetCore | 2.17.2 | API, sample | Interactive API reference UI over the OpenAPI document |
+| Microsoft.AspNetCore.SignalR.StackExchangeRedis | 10.0.11 | API | Redis backplane so SignalR broadcasts reach clients connected to any instance |
+| MessagePack | 3.1.8 | API | Referenced directly so the SignalR Redis backplane's transitive MessagePack dependency resolves to this version |
 
----
+### Data access and caching
 
-### 2.3 CQRS & Dispatcher Pattern
-
-The system rigorously separates state-mutating operations (**Commands**) from read-only projections (**Queries**).
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Backer as Backer / HTTP Client
-    participant Controller as CampaignsController
-    participant Dispatcher as CommandDispatcher
-    participant Invoker as DispatcherInvoker
-    participant Validator as CreateCampaignCommandValidator
-    participant Handler as CreateCampaignCommandHandler
-    participant TxExecutor as CampaignTransactionExecutor
-    participant DB as PostgreSQL 16 (Npgsql)
-
-    Backer->>Controller: POST /api/campaigns (JSON Body)
-    Note over Controller: Maps HTTP request to CreateCampaignCommand via Mapster
-    Controller->>Dispatcher: SendAsync(command, ct)
-    Dispatcher->>Invoker: InvokeAsync(ICommandHandler<TCommand, TResult>)
-    Invoker->>Handler: Handle(command, ct)
-    Handler->>TxExecutor: ExecuteAsync(action, ct)
-    TxExecutor->>DB: BEGIN TRANSACTION
-    Handler->>DB: Load Aggregate / Enforce Invariants
-    Handler->>DB: Save Aggregate Changes
-    TxExecutor->>DB: DomainEventAccessor.GetDomainEvents() -> Insert OutboxMessages
-    TxExecutor->>DB: COMMIT TRANSACTION
-    Handler-->>Controller: Return CreateCampaignResult
-    Controller-->>Backer: 201 Created (Location Header + JSON DTO)
-```
-
-#### Why CQRS with a Custom Dispatcher over MediatR?
-1. **Zero External Dependency Overhead**: Heavyweight mediator packages introduce assembly scanning reflection overhead, external licensing risks, and pipeline complexity.
-2. **Minimal Dynamic Dispatch Allocations**: As implemented in [`DispatcherInvoker.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Application/Messaging/DispatcherInvoker.cs#L8-L46), the dispatch pipeline relies on cached reflection `MethodInfo` invocations directly bound to scoped Microsoft DI service lifetimes.
-3. **Explicit Query Paths**: Query handlers avoid initializing change-tracking aggregate roots, instead executing optimized projections (`Select(...)` or read-only services) directly to response DTOs.
-
----
-
-### 2.4 Transactional Outbox Pattern & Event-Driven Choreography
-
-#### The Dual-Write Dilemma
-In an event-driven system, when an aggregate changes state (e.g., a pledge is confirmed) and an integration event must be published, committing to the database and publishing to an event broker sequentially creates an unsolvable distributed failure:
-- If the database commits but the network or broker fails before publishing, the event is lost forever.
-- If the event is published first but the database rollback occurs, downstream systems process phantom mutations.
-
-#### The Resolution: Atomic Outbox Insertion
-`CrowdFundingHub` resolves this via the **Transactional Outbox Pattern**:
-1. Within [`CampaignTransactionExecutor.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Transactions/CampaignTransactionExecutor.cs#L60-L75), domain events raised during the aggregate's business execution are intercepted via `DomainEventAccessor.GetDomainEvents(_dbContext)`.
-2. Each domain event is transformed into an [`OutboxMessage`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxMessage.cs) row containing:
-   - Unique Message ID (`Guid`)
-   - Fully qualified `EventType` and schema `Version`
-   - Canonical UTF-8 JSON `Payload`
-   - Initial status `Pending`
-   - Creation timestamp `CreatedAtUtc` and scheduled execution time `ScheduledAtUtc`
-3. The outbox rows are committed in the **exact same ACID database transaction** as the aggregate's state change. If the transaction rolls back, no outbox entry exists; if it commits, durability is absolute.
-
-```mermaid
-flowchart TD
-    subgraph TxBoundary["Atomic Database Transaction Boundary"]
-        Cmd[Handler Mutates Aggregate] --> SaveAgg[INSERT/UPDATE campaigns]
-        Cmd --> GetEvents[DomainEventAccessor Extracts Events]
-        GetEvents --> SaveOutbox[INSERT campaigns_outbox_messages<br/>(Status = Pending)]
-        SaveAgg -.->|Same Transaction Commit| DB[(PostgreSQL 16 Engine)]
-        SaveOutbox -.->|Same Transaction Commit| DB
-    end
-
-    subgraph BackgroundWorker["OutboxProcessorBackgroundService (PeriodicTimer)"]
-        DB -->|Atomic Claim via FOR UPDATE SKIP LOCKED| ClaimBatch["Claim Batch<br/>(Status = Processing, LockedUntilUtc)"]
-        ClaimBatch --> CheckType{EventType in Registry?}
-        
-        CheckType -->|No / Corrupted Payload| DeadLetter["Mark DeadLetter &<br/>INSERT dead_letter_events"]
-        CheckType -->|Yes| PublishEvt["IEventPublisher.PublishAsync()"]
-        
-        PublishEvt -->|Success| Processed["Mark Processed<br/>(ProcessedAtUtc = now)"]
-        PublishEvt -->|Failure & Attempts < 5| RetryPending["Increment Attempts<br/>Exponential Backoff Delay<br/>Status = Pending"]
-        PublishEvt -->|Failure & Attempts >= 5| DeadLetter
-    end
-
-    PublishEvt --> SignalR["Broadcast Real-Time Pledges<br/>(CampaignHub)"]
-    PublishEvt --> OpenMeter["Ingest Usage CloudEvents<br/>(OpenMeterClient)"]
-    PublishEvt --> NotifModule["Notifications Consumer<br/>(Email / In-App Alerts)"]
-```
-
-#### Outbox Schema & Status Transitions
-
-```
-[Pending] ──────(Claim via SKIP LOCKED)─────► [Processing]
-   ▲                                              │
-   │                                              │
-(Failure & Attempts < Max)              (Publish Success)
-   │                                              │
-   └───────(Exponential Backoff)                  ▼
-                                            [Processed]
-                                                  
-(Failure & Attempts >= Max OR Unknown Type)
-   │
-   ▼
-[DeadLetter] ───► Recorded in `dead_letter_events` table for operator review
-```
-
----
-
-### 2.5 PostgreSQL Concurrency Primitives & Financial Integrity
-
-Crowdfunding platforms face violent concurrency spikes: popular campaigns can experience dozens of backers pledging within milliseconds. Without concurrency safeguards, applications suffer:
-- **Lost Updates**: Two concurrent transactions read balance $1,000; Tx1 adds $50 and commits $1,050; Tx2 adds $25 and commits $1,025. The $50 from Tx1 is silently erased!
-- **Double Credit on Redelivery**: An at-least-once outbox worker retries a confirmed pledge, applying it multiple times to the aggregate.
-- **Time-of-Check to Time-of-Use (TOCTOU) Races**: A creator cancels a campaign at the exact microsecond a backer's payment confirmation arrives.
-
-To eliminate financial corruption, `CrowdFundingHub` employs a layered defense of **three PostgreSQL concurrency primitives**:
-
-```mermaid
-graph TD
-    subgraph RequestPipeline["Pledge Ingestion Pipeline"]
-        Req["Pledge Confirmed Event Arrives"] --> LockKey["Derive 64-bit Advisory Key<br/>AdvisoryLockKey.FromGuid(campaignId)"]
-        LockKey --> AdvisoryLock["Acquire Transaction-Scoped Advisory Lock<br/>SELECT pg_advisory_xact_lock(@key)"]
-    end
-
-    subgraph CriticalSection["Inside Serialized Critical Section"]
-        AdvisoryLock --> Reload["Reload Campaign Inside Lock Boundary"]
-        Reload --> CheckStatus{"Campaign Status == Published?"}
-        CheckStatus -->|No (Cancelled/Draft)| Abort["Throw InvalidOperationException<br/>(Transaction Aborted, Zero Funds Accepted)"]
-        CheckStatus -->|Yes| LedgerGuard["Insert into campaign_contributions_ledger<br/>Unique Constraint: (campaign_id, contribution_id)"]
-        
-        LedgerGuard -->|Duplicate Key Conflict| NoOp["Idempotent No-Op<br/>(Contribution already recorded)"]
-        LedgerGuard -->|Unique Insert Succeeds| ApplyFunds["Aggregate.ApplyConfirmedContribution()<br/>RaisedAmount = RaisedAmount + Amount"]
-        
-        ApplyFunds --> EFSave["DbContext.SaveChangesAsync()"]
-    end
-
-    subgraph DBEngine["PostgreSQL Engine Concurrency Guard"]
-        EFSave --> XminCheck["Optimistic Concurrency Check:<br/>WHERE id = @id AND xmin = @xmin"]
-        XminCheck -->|Match| CommitTx["COMMIT Transaction<br/>(Advisory Lock Auto-Released)"]
-        XminCheck -->|Mismatch (Concurrent Out-of-Band Writer)| ThrowConcurrency["Throw DbUpdateConcurrencyException"]
-        ThrowConcurrency --> RetryLoop["Retry Handler with Exponential Backoff + Jitter<br/>(Max 5 Attempts)"]
-    end
-```
-
-#### Detailed Primitive Mechanics
-
-| Primitive | Mechanism | Technical Implementation | Failure Mode Prevented |
+| Package | Version | Used in | Why |
 | :--- | :--- | :--- | :--- |
-| **`pg_advisory_xact_lock`** | Transaction-scoped mutually exclusive lock on a 64-bit integer. | [`CampaignTransactionExecutor.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Transactions/CampaignTransactionExecutor.cs#L48-L58):<br/>`SELECT pg_advisory_xact_lock(@key)` | Serializes concurrent writers targeting the same campaign; closes the TOCTOU window between status checks and balance updates. |
-| **`AdvisoryLockKey.FromGuid`** | 64-bit entropy XOR folding of a 128-bit UUID. | [`AdvisoryLockKey.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Domain/Common/AdvisoryLockKey.cs#L14-L26):<br/>`high ^ low` | Eliminates 32-bit `Guid.GetHashCode()` collision hazards (which cause false lock contention across unrelated campaigns). |
-| **PostgreSQL `xmin` System Column** | Built-in MVCC transaction ID acting as a row-version concurrency token. | [`CampaignConfiguration.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Persistence/Configurations/CampaignConfiguration.cs#L76-L78) & [`ContributionConfiguration.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Infrastructure/Persistence/Configurations/ContributionConfiguration.cs#L64-L66):<br/>`builder.Property<uint>("xmin").IsRowVersion();` | Detects stale writes and out-of-band updates. EF Core issues `WHERE id = @p0 AND xmin = @p1`. |
-| **`FOR UPDATE SKIP LOCKED`** | Non-blocking row-level lock acquisition for batch processing. | [`OutboxClaimQuery.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxClaimQuery.cs#L28-L45):<br/>`WITH claimable AS (SELECT ... FOR UPDATE SKIP LOCKED) UPDATE ... RETURNING *` | Allows multiple background worker replicas to poll the same outbox table concurrently, claiming disjoint batches with zero duplicate processing. |
-| **Ledger Unique Constraint** | Append-only idempotency table with unique compound index. | `campaign_contributions_ledger`: `UNIQUE(campaign_id, contribution_id)` | Prevents duplicate balance inflation when at-least-once outbox deliveries or network retries re-execute. |
+| Microsoft.EntityFrameworkCore (+ .Relational, .Design) | 10.0.11 | Module Infrastructure, BuildingBlocks.Infrastructure | One DbContext per module, migrations, change tracking. Raw SQL is used where PostgreSQL features matter (`SKIP LOCKED` claims, `ON CONFLICT`, advisory locks, the ledger SUM). |
+| Npgsql.EntityFrameworkCore.PostgreSQL | 10.0.3 | Module Infrastructure, sample | PostgreSQL provider: `xmin` row versions, per-module migration history schemas |
+| Npgsql | 10.0.3 | API | ADO.NET driver, referenced directly to pin its version; its exceptions drive the 503 classification |
+| StackExchange.Redis | 3.1.31 | BuildingBlocks.Infrastructure | Redis pub/sub for distributed cache invalidation (for example signing keys and cached campaign reads) |
+| Microsoft.Extensions.Caching.StackExchangeRedis | 10.0.11 | Identity and Campaigns Infrastructure | `IDistributedCache` for revoked security stamps and cached campaign reads |
+
+### Messaging, security, validation, HTTP
+
+| Package | Version | Used in | Why |
+| :--- | :--- | :--- | :--- |
+| FluentValidation | 12.1.1 | Module Application, BuildingBlocks.Application, sample | Declarative validators, run by `ValidationPipelineBehavior` before every command handler |
+| RabbitMQ.Client | 7.1.2 | BuildingBlocks.Infrastructure, integration tests | `RabbitMqMessageBus` (publish-only) |
+| System.IdentityModel.Tokens.Jwt | 8.22.0 | Identity Infrastructure | ES256 token creation |
+| Microsoft.Extensions.Http.Resilience | 10.9.0 | BuildingBlocks.Infrastructure, Notifications Infrastructure | Standard resilience handler (retries, timeouts, circuit breaker) for the OpenMeter and e-mail HTTP clients |
+| Microsoft.Extensions.DependencyInjection (+ .Abstractions), Microsoft.Extensions.Configuration | 10.0.11 | Application and Infrastructure projects, unit tests | Module registration extensions outside the web SDK |
+
+### Observability
+
+| Package | Version | Why |
+| :--- | :--- | :--- |
+| Serilog.AspNetCore | 10.0.0 | Structured logging host integration |
+| Serilog.Formatting.Compact | 3.0.0 | Compact JSON (CLEF) output |
+| Serilog.Enrichers.Environment | 3.0.1 | Machine and environment names on every event |
+| OpenTelemetry.Extensions.Hosting | 1.18.0 | Tracing and metrics setup |
+| OpenTelemetry.Instrumentation.AspNetCore, OpenTelemetry.Instrumentation.Http | 1.18.0 | Incoming request and outgoing HttpClient spans and metrics |
+| OpenTelemetry.Instrumentation.EntityFrameworkCore | 1.18.0-beta.1 | EF Core spans (the package is still published as a beta) |
+| Npgsql.OpenTelemetry | 10.0.3 | Npgsql command spans |
+| OpenTelemetry.Exporter.OpenTelemetryProtocol | 1.18.0 | OTLP export, enabled only when an endpoint is configured |
+
+### Testing
+
+| Package | Version | Why |
+| :--- | :--- | :--- |
+| xunit, xunit.runner.visualstudio | 2.9.3, 3.1.4 | Test framework for all three test projects |
+| Microsoft.NET.Test.Sdk | 17.14.1 | `dotnet test` integration |
+| coverlet.collector | 6.0.4 | Cross-platform coverage (`--collect:"XPlat Code Coverage"`) |
+| Microsoft.AspNetCore.Mvc.Testing | 10.0.11 | `WebApplicationFactory<Program>` for in-memory API hosts |
+| Testcontainers.PostgreSql, Testcontainers.Redis, Testcontainers.RabbitMq | 4.14.0 | Real PostgreSQL, Redis and RabbitMQ in containers, because `xmin`, advisory locks, `SKIP LOCKED`, triggers and `ON CONFLICT` cannot be tested on an in-memory provider |
+| Microsoft.AspNetCore.SignalR.Client | 10.0.11 | Hub tests |
+| Microsoft.Extensions.Caching.Memory | 10.0.11 | In-memory cache in tests |
+
+Not used: MediatR (in-house dispatchers), AutoMapper and Mapster (explicit mapping), Swashbuckle
+(built-in OpenAPI), NetArchTest (reflection-based architecture tests).
+
+In-house components instead of libraries: the command and query dispatchers, the outbox
+processor and signal, the inbox, the CloudEvents envelope, and the OpenMeter client
+([`OpenMeterClient`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Metering/OpenMeterClient.cs)),
+which sends usage events as CloudEvents over HTTP.
 
 ---
 
-### 2.6 Poly-Pattern Architecture & The Pedagogical Rosetta Stone
-
-To prove that enterprise software should not enforce a single dogmatic architecture across all use cases, `CrowdFundingHub` includes a living reference implementation: **The Pedagogical Rosetta Stone** ([`src/Samples/RosettaStone/`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Samples/RosettaStone/README.md)).
-
-Mapped under the `/rosetta/v1/campaigns` route group, the Rosetta Stone demonstrates three distinct architectural paradigms solving the exact same business requirement ("Create a Campaign"):
-
-```mermaid
-graph TD
-    Client["Client / Swagger"] --> RouteGroup["/rosetta/v1/campaigns"]
-
-    RouteGroup --> T1["Tier 1: Minimal API CRUD<br/>(1 file, 48 lines)"]
-    RouteGroup --> T2["Tier 2: Pragmatic CQRS<br/>(3 files, 91 lines)"]
-    RouteGroup --> T3["Tier 3: Rich DDD + Outbox<br/>(14 files, 960 lines)"]
-
-    T1 --> RosettaDB[("Rosetta Schema<br/>(RosettaStoneDbContext)")]
-    T2 --> RosettaDB
-    T3 --> CampDB[("Campaigns Schema<br/>(CampaignsDbContext)")]
-```
-
-1. **Tier 1 (Minimal API CRUD):** 1 file, 48 lines. Direct `DbContext` write, manual validation, zero indirection. Ideal for 70% of low-risk, internal data maintenance.
-2. **Tier 2 (Pragmatic CQRS):** 3 files, 91 lines. Uses the identical `ICommandDispatcher` / `ICommandHandler` abstractions as production modules, with FluentValidation, but writes directly to `DbContext` without aggregate roots or outboxes.
-3. **Tier 3 (Rich DDD + Transactional Outbox):** 14 files, 960 lines. The production pipeline (`POST /api/campaigns`) employing full aggregates, domain events, outbox dispatching, and auditing.
-
-Both Tier 1 and Tier 2 return identical RFC 9457 `application/problem+json` validation error shapes, verified by unit and integration tests.
-
----
-
-### 2.7 Autonomous Microservice Extraction & The Strangler Fig Pattern
-
-In [`services/CrowdFunding.Moderation.Service/`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/services/CrowdFunding.Moderation.Service/README.md), the codebase provides physical proof of the **Strangler Fig Pattern** in action:
-
-- The `Moderation` module was extracted into an autonomous, standalone ASP.NET Core Web API host.
-- It references existing, untouched modular assemblies:
-  - `CrowdFunding.Modules.Moderation.Contracts`
-  - `CrowdFunding.Modules.Moderation.Application`
-  - `CrowdFunding.Modules.Moderation.Domain`
-  - `CrowdFunding.Modules.Moderation.Infrastructure`
-- **Lines of business logic rewritten:** Exactly **ZERO**.
-- The service features its own `Dockerfile`, executes independent schema migrations via `dotnet run -- migrate`, and authenticates requests using decentralized public JWKS discovery (`/.well-known/jwks.json`) over HTTP.
-
----
-
-### 2.8 Asynchronous Replicated Read Models & Pluggable Message Bus
-
-#### Eliminating Synchronous Cross-Module Queries
-In earlier iterations, `Contributions` executed a synchronous in-process query via `ICampaignContributionAvailabilityReader` to verify if a campaign was active before accepting pledges. When moving toward microservices, this synchronous call creates a **Distributed Monolith** (if Campaigns is down, Contributions cannot accept pledges).
-
-In [`TICKET-023`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/qa-tickets/TICKET-023-ASYNCHRONOUS-REPLICATED-READ-MODELS.md), this was replaced with **Event-Carried State Transfer**:
-- `Contributions` maintains its own local `contributions.campaign_read_models` table.
-- When `CampaignPublishedApplicationEvent` or `CampaignCancelledApplicationEvent` fires, a background consumer updates this local read model.
-- Pledge validation checks the local read model in 0.1ms, ensuring **100% autonomous availability**.
-
-#### Pluggable `IMessageBus` Abstraction
-In [`TICKET-024`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/qa-tickets/TICKET-024-PLUGGABLE-MESSAGE-BUS-RABBITMQ-KAFKA.md), the monolith decoupled event delivery from in-process memory via `IMessageBus`:
-- `InMemoryMessageBus`: Uses `System.Threading.Channels` for ultra-fast, zero-infrastructure local execution.
-- `RabbitMQMessageBus`: Pluggable distributed broker implementation for cluster deployments.
-
----
-
-## 3. Component & Library Catalog
-
-Every library integrated into `CrowdFundingHub` was selected following rigorous architectural analysis. Below is the comprehensive rationalization matrix:
-
-### 3.1 .NET 10 & ASP.NET Core
-
-- **Package/Runtime:** `Microsoft.NETCore.App 10.0`, `Microsoft.AspNetCore.App 10.0`
-- **Location:** [`CrowdFunding.API.csproj`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/CrowdFunding.API.csproj#L3-L7)
-
-#### Problem It Solves
-Provides a cloud-native, high-throughput asynchronous execution runtime and web host with native support for dependency injection, HTTP/2 & HTTP/3 transports, high-performance thread pooling, and memory-efficient cryptographic routines.
-
-#### Why Chosen Over Alternatives
-- **vs. .NET 8 / 9:** .NET 10 introduces cutting-edge Dynamic Profile-Guided Optimization (PGO), enhanced tiering compilations, reduced GC heap allocation overhead, and zero-allocation span-based string parsing.
-- **vs. Node.js / TypeScript:** Node's single-threaded event loop degrades under intensive cryptographic operations (PBKDF2 key derivation, ES256 signature verification) without offloading to worker threads. .NET 10 leverages native thread pool scaling across multi-core CPUs with zero event loop lag.
-- **vs. Go:** While Go offers low memory footprints, its ORM and enterprise architectural ecosystem is fragmented. It lacks an out-of-the-box equivalent to EF Core's change-tracking, migration engine, and expressive architectural testing frameworks.
-- **vs. Java (Spring Boot):** JVM cold-start latency and base memory overhead (typically 400MB–800MB baseline RSS) severely hinder container autoscale responsiveness. ASP.NET Core boots in <80ms with a <75MB memory footprint.
-
----
-
-### 3.2 Entity Framework Core 10 + Npgsql
-
-- **Package/Runtime:** `Microsoft.EntityFrameworkCore 10.0.5`, `Npgsql.EntityFrameworkCore.PostgreSQL 10.0.1`
-- **Location:** [`CrowdFunding.BuildingBlocks.Infrastructure.csproj`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/CrowdFunding.BuildingBlocks.Infrastructure.csproj#L9-L10)
-
-#### Problem It Solves
-Bridges object-oriented domain models (aggregates, entities, value objects) with PostgreSQL relational tables, managing schema migrations, change tracking, and SQL query translation.
-
-#### Why Chosen Over Alternatives
-- **vs. Dapper (Micro-ORM):** Dapper requires writing raw SQL strings for every entity property, provides no built-in schema migration pipeline, lacks unit-of-work transaction management, and cannot intercept domain events during `SaveChangesAsync`. EF Core 10 allows raw SQL where micro-optimization is required (e.g., [`OutboxClaimQuery`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxClaimQuery.cs)) while handling complex aggregate persistence automatically.
-- **vs. EF Core with SQL Server:** SQL Server is proprietary, expensive to license, and lacks PostgreSQL's lightweight native concurrency primitives. SQL Server `ROWVERSION` requires extra storage columns, lacks native `pg_advisory_xact_lock` transaction semantics, and its `READPAST` locking hint does not match PostgreSQL's clean `SKIP LOCKED` CTE syntax.
-- **PostgreSQL-Specific Advantages:**
-  - Native `xmin` system column support without consuming additional storage.
-  - Zero-friction JSONB mapping for flexible metadata storage.
-  - Native transaction-scoped advisory locks via `ExecuteSqlInterpolatedAsync`.
-
----
-
-### 3.3 Mapster
-
-- **Package/Runtime:** `Mapster 10.0.6`, `Mapster.DependencyInjection 10.0.6`
-- **Location:** [`CrowdFunding.API.csproj`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/CrowdFunding.API.csproj#L10-L11), [`CampaignsMappingConfig.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Mapping/CampaignsMappingConfig.cs)
-
-#### Problem It Solves
-Automates transformation between external HTTP Request/Response DTO contracts and internal Application Commands, Queries, and Results without polluting domain models.
-
-#### Why Chosen Over Alternatives
-- **vs. AutoMapper:** AutoMapper relies heavily on runtime reflection and IL generation, generating measurable allocation overhead and latency during high-throughput requests. Furthermore, AutoMapper has undergone licensing changes and increased complexity. Mapster generates near-zero allocation, direct-assignment IL code that executes at speeds comparable to hand-written code (typically 3x–4x faster than AutoMapper).
-- **vs. Manual Hand-Written Extension Methods:** Hand-written mapping (`req.ToCommand()`) causes massive code duplication, high maintenance burden across dozens of endpoints, and high risk of omitting newly introduced properties during refactoring. Mapster provides fluent configuration (`TypeAdapterConfig`) with compile-time validation capabilities.
-
----
-
-### 3.4 FluentValidation
-
-- **Package/Runtime:** `FluentValidation 11.x`
-- **Location:** Applied across Application projects, e.g., [`CreateCampaignCommandValidator.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Application/Features/Campaigns/Commands/CreateCampaign/CreateCampaignCommandValidator.cs)
-
-#### Problem It Solves
-Provides a fluent, strongly typed, declarative validation engine to reject malformed requests before they enter application handlers or trigger database transactions.
-
-#### Why Chosen Over Alternatives
-- **vs. System.ComponentModel.DataAnnotations (`[Required]`, `[StringLength]`):**
-  - DataAnnotations force validation attributes directly onto DTO properties, coupling contracts to framework attributes.
-  - Cannot handle cross-property rules (e.g., verifying `DeadlineUtc > DateTime.UtcNow`).
-  - Cannot inject services or perform asynchronous validation checks.
-  - Difficult to test in isolation without spinning up full MVC model state binders.
-- **vs. Relying Solely on Domain Aggregate Exceptions:** If inputs are only checked in the Domain layer, invalid requests throw exceptions (`ArgumentException`, `InvalidOperationException`). Exceptions in .NET incur expensive stack-trace generation overhead. FluentValidation operates as an outer defensive shield, returning clean RFC 9457 HTTP 400 Problem Details before any domain logic executes.
-
----
-
-### 3.5 Asymmetric ES256 ECDSA & Microsoft.IdentityModel
-
-- **Package/Runtime:** `Microsoft.AspNetCore.Authentication.JwtBearer 10.0.5`, `System.IdentityModel.Tokens.Jwt`
-- **Location:** [`Program.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Program.cs#L110-L121), [`EfSigningKeyStore.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Services/EfSigningKeyStore.cs), [`JwksEndpoint.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Security/JwksEndpoint.cs)
-
-#### Problem It Solves
-Provides cryptographically secure authentication token issuance and verification without sharing private signing keys across verification boundaries.
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Client as API Client / Edge Proxy
-    participant Auth as Identity Module (Token Issuer)
-    participant Keystore as EfSigningKeyStore (Postgres)
-    participant JWKS as GET /.well-known/jwks.json
-    participant API as Protected API Resource
-
-    Note over Auth,Keystore: Module Boot / Key Rotation
-    Keystore->>Keystore: Generate ECDSA P-256 Key Pair<br/>Store Private Key in DB
-    
-    Client->>Auth: POST /api/identity/login (Credentials)
-    Auth->>Auth: Verify PBKDF2 Password Hash
-    Auth->>Keystore: Fetch Active Private Signing Key
-    Auth->>Client: Return JWT Token (Signed with ES256, Header kid: '...')
-
-    par Token Verification
-        Client->>API: GET /api/campaigns (Authorization: Bearer <JWT>)
-        API->>JWKS: Fetch Public Key Set (JWKS)
-        JWKS-->>API: Return Public ECDSA Parameters (crv: P-256, x, y, kid)
-        API->>API: Verify Token Signature using Public Key ONLY
-        API-->>Client: 200 OK (Authorized Response)
-    end
-```
-
-#### Why Chosen Over Alternatives
-- **vs. Symmetric HMAC-SHA256 (`HS256`):** Symmetric tokens require the *exact same shared secret* to sign tokens and to verify them. If an API gateway, edge proxy, or downstream microservice needs to validate user identity, the secret key must be distributed to it. If any verifying node is compromised, attackers can forge arbitrary administrative tokens. With asymmetric **ES256 (ECDSA P-256)**, the private key is quarantined inside the Identity module database; verifiers require only the public JWKS exposed at [`/.well-known/jwks.json`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Security/JwksEndpoint.cs).
-- **vs. RSA (`RS256`):** RSA keys require large key sizes (2048 to 4096 bits) to maintain modern security levels, bloating HTTP Authorization headers and consuming high CPU cycles during signature generation. ES256 uses a 256-bit elliptic curve key that offers equivalent security to RSA 3072-bit with a fraction of the computational and payload overhead.
-- **vs. External Identity Providers (Auth0, Okta, Keycloak):** Avoids external network latency (100ms–300ms per token hop), vendor lock-in, and per-user SaaS subscription expenses, keeping authentication self-contained within the modular monolith.
-
----
-
-### 3.6 Serilog Compact JSON & OpenTelemetry
-
-- **Package/Runtime:** `Serilog.AspNetCore 9.0.0`, `Serilog.Formatting.Compact 3.0.0`, `Serilog.Enrichers.Environment 3.0.1`
-- **Location:** [`LoggingConfiguration.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Observability/LoggingConfiguration.cs), [`CorrelationIdMiddleware.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Observability/CorrelationIdMiddleware.cs)
-
-#### Problem It Solves
-Provides structured, machine-parseable log telemetry and correlates log events across asynchronous execution boundaries, database queries, and background processes using W3C distributed trace standards.
-
-#### Why Chosen Over Alternatives
-- **vs. Default Microsoft Console Logger:** Default console logging prints unstructured, human-readable text blocks that cannot be reliably queried or indexed by log management platforms (Datadog, Elasticsearch, Grafana Loki, AWS CloudWatch). String formatting in the default logger also incurs GC memory allocations.
-- **Compact JSON Format (CLEF):** Formats log events as compact single-line JSON (`{"@t":"...","@m":"...","@l":"..."}`), minimizing disk I/O and network bandwidth while guaranteeing 100% field extraction.
-- **W3C Trace & Correlation ID Integration:** As implemented in [`CorrelationIdMiddleware.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Observability/CorrelationIdMiddleware.cs#L23-L36), every incoming request extracts or generates a trace identifier (`Activity.Current?.TraceId`), embeds it in Serilog's `LogContext`, and returns it in the `X-Correlation-Id` HTTP response header.
-
----
-
-### 3.7 OpenMeter & CloudEvents v1.0
-
-- **Package/Runtime:** Custom Ingestion Client adhering to CNCF CloudEvents v1.0
-- **Location:** [`CloudEvent.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Application/Metering/CloudEvent.cs), [`OpenMeterClient.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Metering/OpenMeterClient.cs), [`PledgeConfirmedMeteringEventHandler.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Metering/PledgeConfirmedMeteringEventHandler.cs)
-
-#### Problem It Solves
-Tracks usage, pledge transaction fees, creator platform levies, and backer engagement metrics in real time without bogging down the operational relational database.
-
-#### Why Chosen Over Alternatives
-- **vs. Custom SQL Ledger & Aggregate Counters:** Calculating platform fees and running aggregate analytics queries inside the operational PostgreSQL cluster causes disk I/O bottlenecks and lock contention against transactional pledging.
-- **vs. Direct Synchronous Stripe Billing Calls:** Calling external billing APIs synchronously inside command handlers introduces 200ms–800ms of external HTTP latency, exposes the system to third-party downtime, and prevents batch reconciliation.
-- **Why OpenMeter:** OpenMeter is a purpose-built, open-source metering engine powered by ClickHouse. It handles millions of event ingestions per second, provides real-time windowed aggregations, and natively integrates with Stripe.
-- **Why CloudEvents v1.0:** Conforms to the Cloud Native Computing Foundation (CNCF) industry standard for event payloads, ensuring portable, vendor-neutral telemetry formatting.
-- **Resilient Background Ingestion:** Ingestions are dispatched asynchronously via [`OpenMeterClient.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Metering/OpenMeterClient.cs#L27-L51) using `Microsoft.Extensions.Http.Resilience` (retries, timeouts, circuit breakers). Failures are logged and contained so that external metering hiccups never block core pledge processing.
-
----
-
-### 3.8 Testcontainers.PostgreSql
-
-- **Package/Runtime:** `Testcontainers.PostgreSql 4.1.0`
-- **Location:** [`CrowdFunding.IntegrationTests.csproj`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/tests/IntegrationTests/CrowdFunding.IntegrationTests/CrowdFunding.IntegrationTests.csproj#L15), [`CampaignsPostgresFixture.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/tests/IntegrationTests/CrowdFunding.IntegrationTests/CampaignsPostgresFixture.cs)
-
-#### Problem It Solves
-Executes real database integration tests against genuine, ephemeral PostgreSQL Docker containers spawned automatically during test initialization.
-
-#### Why Chosen Over Alternatives
-- **vs. EF Core InMemory Database Provider:** The InMemory provider is **not** a relational engine:
-  - It does **not** enforce foreign key constraints or table unique indexes.
-  - It does **not** support relational transactions (`BeginTransactionAsync` is a no-op).
-  - It does **not** support PostgreSQL concurrency primitives (`xmin` rowversion tokens, `pg_advisory_xact_lock`, `FOR UPDATE SKIP LOCKED`).
-  - It cannot execute raw SQL CTE queries like [`OutboxClaimQuery`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxClaimQuery.cs). Tests passing on InMemory give zero confidence regarding real-world concurrency or data integrity.
-- **vs. SQLite In-Memory:** SQLite lacks PostgreSQL's MVCC concurrency model, system columns (`xmin`), advisory locks, and JSONB capabilities.
-- **vs. Shared Staging / Local Developer PostgreSQL Instance:** Shared databases introduce test pollution, race conditions between parallel CI runners, and dirty state. `Testcontainers.PostgreSql` spins up a clean, isolated `postgres:16-alpine` container per test collection and destroys it upon completion.
-
----
-
-### 3.9 NetArchTest
-
-- **Package/Runtime:** `NetArchTest.Rules`
-- **Location:** [`CrowdFunding.ArchitectureTests`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/tests/ArchitectureTests/CrowdFunding.ArchitectureTests)
-
-#### Problem It Solves
-Automates compilation and reflection-level enforcement of modular architecture boundaries, preventing architectural drift and layer pollution during pull requests.
-
-#### Why Chosen Over Alternatives
-- **vs. Manual Code Reviews:** Architectural decay occurs incrementally. Developers under pressure may accidentally add a direct project reference from the API controller to an internal domain entity or between two modules. Manual code reviews frequently miss these subtle boundary erosions.
-- **vs. Custom Roslyn Analyzers:** Building custom Roslyn analyzers requires complex abstract syntax tree (AST) programming, dedicated packaging, and high maintenance overhead. NetArchTest allows architectural rules to be declared as standard, readable xUnit tests:
-  ```csharp
-  Types.InAssembly(typeof(CampaignsApplicationDependencyInjection).Assembly)
-      .ShouldNot()
-      .HaveDependencyOnAny("CrowdFunding.Modules.Contributions.Domain")
-      .GetResult()
-      .IsSuccessful.Should().BeTrue();
-  ```
-
----
-
-### 3.10 Coverlet
-
-- **Package/Runtime:** `coverlet.collector 6.0.4`
-- **Location:** [`CrowdFunding.ArchitectureTests.csproj`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/tests/ArchitectureTests/CrowdFunding.ArchitectureTests/CrowdFunding.ArchitectureTests.csproj#L11), [`CrowdFunding.IntegrationTests.csproj`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/tests/IntegrationTests/CrowdFunding.IntegrationTests/CrowdFunding.IntegrationTests.csproj#L11)
-
-#### Problem It Solves
-Instruments .NET assemblies during test execution to collect branch and line code coverage metrics across multi-platform environments.
-
-#### Why Chosen Over Alternatives
-- **vs. Visual Studio Code Coverage:** Visual Studio's native coverage tool is proprietary, tightly coupled to Windows, and fails on macOS/Linux development machines and standard GitHub Actions Linux runners.
-- **vs. JetBrains dotCover:** dotCover requires commercial licenses and proprietary CLI agents. Coverlet is fully open-source, integrates natively into `dotnet test --collect:"XPlat Code Coverage"`, and outputs standard Cobertura XML consumed by SonarQube, Codecov, and CI gates.
-
----
-
-### 3.11 ASP.NET Core SignalR
-
-- **Package/Runtime:** Native ASP.NET Core SignalR Framework
-- **Location:** [`Program.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Program.cs#L64-L65), [`CampaignHub.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/RealTime/CampaignHub.cs), [`SignalRCampaignRealtimeNotifier.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/RealTime/SignalRCampaignRealtimeNotifier.cs)
-
-#### Problem It Solves
-Pushes real-time campaign funding progress updates, backer counters, and funding milestones directly to connected web clients over bi-directional channels.
-
-#### Why Chosen Over Alternatives
-- **vs. Raw WebSockets:** Building on raw WebSockets requires manually handling connection lifecycles, ping/pong heartbeats, reconnection buffering, group subscriptions, and transport fallbacks. SignalR provides high-level `Hub` abstractions and connection group management (`Clients.Group(campaignId)`) out of the box.
-- **vs. Server-Sent Events (SSE):** SSE is strictly unidirectional (server-to-client only), lacks native binary message framing, and requires custom client-side connection recovery. SignalR provides automatic transport negotiation (WebSockets -> SSE -> Long Polling).
-- **vs. Third-Party Hosted WebSockets (Pusher, Ably):** Third-party real-time providers add recurring monthly costs, payload size limitations, and network latency. SignalR runs within the host process and can scale horizontally across multiple container replicas using a standard Redis backplane.
-
----
-
-### 3.12 OpenTelemetry Distributed Tracing & W3C Traceparent Propagation
-
-- **Package/Runtime:** `System.Diagnostics.DiagnosticSource`, `OpenTelemetry.Api`
-- **Location:** [`OutboxMessage.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxMessage.cs), [`TICKET-030`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/qa-tickets/TICKET-030-DISTRIBUTED-TRACING-OPENTELEMETRY-OUTBOX-PROPAGATION.md)
-
-#### Problem It Solves
-When operations span transactional outbox boundaries or extracted microservices, the causal link between the initial HTTP request and the asynchronous background consumer execution is severed, preventing end-to-end distributed latency analysis.
-
-#### Why Chosen Over Alternatives
-- **vs. Proprietary APM Tracing (Datadog/NewRelic Agents):** Vendor agents create runtime lock-in and require proprietary binaries. OpenTelemetry adheres to the **W3C Distributed Tracing Recommendation (`traceparent` header)**.
-- **Outbox Trace Context Preservation:** When an event is captured, the active `Activity.Current?.Id` is recorded in `OutboxMessage.TraceParent`. When the outbox processor claims the row, it initializes an `ActivityContext.Parse(traceParent)`, ensuring that asynchronous background jobs and distributed consumers appear under the **exact same trace span tree** in Jaeger, Tempo, or Datadog.
-
----
-
-## 4. End-to-End Architectural Workflows & Data Flows
-
-### 4.1 Concurrent Pledge Ingestion & Financial Settlement Flow
-
-The following sequence details what happens when a backer confirms a pledge under heavy concurrent traffic:
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Backer as Backer Browser
-    participant API as API Controller / Gateway
-    participant Handler as ConfirmContributionPaymentCommandHandler
-    participant ContTx as ContributionTransactionExecutor
-    participant ContDB as ContributionsDbContext (Postgres)
-    participant OutboxService as OutboxProcessorBackgroundService
-    participant CampHandler as AddContributionToCampaignCommandHandler
-    participant CampTx as CampaignTransactionExecutor
-    participant CampDB as CampaignsDbContext (Postgres)
-    participant SignalR as CampaignHub (WebSockets)
-    participant OpenMeter as OpenMeter (Usage Metering)
-
-    Backer->>API: POST /api/contributions/{id}/confirm-payment
-    API->>Handler: Dispatch ConfirmContributionPaymentCommand
-    Handler->>ContTx: ExecuteAsync(action)
-    ContTx->>ContDB: BEGIN TRANSACTION
-    ContTx->>ContDB: Lock Contribution (xmin verified)
-    ContTx->>ContDB: Update Status = Confirmed
-    ContTx->>ContDB: Map Event -> INSERT contributions_outbox_messages (Status=Pending)
-    ContTx->>ContDB: COMMIT TRANSACTION
-    Handler-->>API: 200 OK (Confirmed)
-    API-->>Backer: Pledge Confirmed Receipt
-
-    Note over OutboxService,ContDB: Background Polling Cycle (PeriodicTimer)
-    OutboxService->>ContDB: Claim Batch via FOR UPDATE SKIP LOCKED
-    ContDB-->>OutboxService: Return Disjoint Claimed Outbox Rows (Status=Processing)
-    
-    OutboxService->>CampHandler: Handle(ContributionPaymentConfirmedApplicationEvent)
-    CampHandler->>CampTx: ExecuteAsync(advisoryLockKey, action)
-    CampTx->>CampDB: BEGIN TRANSACTION
-    CampTx->>CampDB: SELECT pg_advisory_xact_lock(advisoryLockKey)
-    Note over CampTx,CampDB: Critical Section Locked across All Concurrent Workers
-    
-    CampHandler->>CampDB: Reload Campaign Inside Lock
-    CampHandler->>CampDB: INSERT campaign_contributions_ledger (Unique Check)
-    CampHandler->>CampDB: Campaign.ApplyConfirmedContribution(Amount)
-    CampHandler->>CampDB: SaveChangesAsync (Verifies xmin Concurrency Token)
-    CampTx->>CampDB: COMMIT TRANSACTION (Advisory Lock Released)
-
-    par Real-Time Notification & Usage Metering
-        CampHandler->>SignalR: NotifyPledgeReceivedAsync(campaignId, newRaisedAmount)
-        SignalR-->>Backer: WebSocket Broadcast (Live Raised Amount Progress Bar)
-    and OpenMeter Ingestion
-        OutboxService->>OpenMeter: IngestAsync(CloudEvent: crowdfunding.pledge.confirmed)
-    end
-
-    OutboxService->>ContDB: Mark Outbox Row Status = Processed
-```
-
----
-
-### 4.2 Asymmetric ES256 Token Issuance & Edge Verification Flow
-
-The cryptographic lifecycle guaranteeing decoupled token verification:
-
-```mermaid
-flowchart TD
-    subgraph BootPhase["Key Initialization (Identity Module Boot)"]
-        Boot["App Startup / Key Rotation"] --> QueryKey{"Active ECDSA Key in DB?"}
-        QueryKey -->|No| GenKey["ECDsa.Create(ECCurve.NamedCurves.nistP256)"]
-        GenKey --> ExportPrivate["Export PKCS#8 Private Key (Base64)"]
-        ExportPrivate --> SaveDB["INSERT identity_signing_keys<br/>(kid, private_key, created_at, is_active)"]
-        QueryKey -->|Yes| LoadKey["Load Private ECDSA Key into Memory"]
-    end
-
-    subgraph AuthPhase["Authentication & Issuance"]
-        LoginReq["POST /api/identity/login"] --> VerifyPBKDF2["Verify Hash with TimingSafeEquals"]
-        VerifyPBKDF2 --> GenToken["Create JwtSecurityToken<br/>alg: ES256, kid: keyId, Claims: [sub, role, perm]"]
-        GenToken --> SignToken["Sign with ECDsaSecurityKey (Private Half)"]
-        SignToken --> ReturnToken["Return Access Token to Client"]
-    end
-
-    subgraph VerifyPhase["Decoupled Edge / API Verification"]
-        ProtectedReq["Client Calls Protected API with Bearer Token"] --> ExtractKid["Extract 'kid' from Token Header"]
-        ExtractKid --> Resolver["IssuerSigningKeyResolver"]
-        Resolver --> FetchJWKS["GET /.well-known/jwks.json"]
-        FetchJWKS --> MatchKey["Match Public ECDSA Key by kid"]
-        MatchKey --> CryptoVerify{"Cryptographic Signature Valid?"}
-        CryptoVerify -->|No| Deny["401 Unauthorized"]
-        CryptoVerify -->|Yes| Allow["200 OK (Authorize Claims)"]
-    end
-```
-
----
-
-## 5. Operational Guardrails & Cross-Cutting Infrastructure
-
-### 5.1 Deterministic Migration Execution vs. Runtime Migration Hazards
-
-In clustered production environments (e.g., Kubernetes, AWS ECS), running automated database migrations inside `Program.cs` during application startup (`app.Environment.IsDevelopment()` / `Database.Migrate()`) is a catastrophic anti-pattern:
-- When multiple container replicas boot simultaneously, they execute concurrent DDL migrations, causing PostgreSQL schema table locks, migration table deadlocks, and corrupted migration histories.
-
-#### The Remediation: Explicit CLI Migration Runner
-As implemented in [`Program.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Program.cs#L161-L169) and [`MigrationRunner.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Migrations/MigrationRunner.cs):
-```bash
-dotnet run --project src/API/CrowdFunding.API -- migrate
-```
-In production deployments, this command is executed inside an isolated CI/CD deployment pipeline step or a single-run Kubernetes `Job` *before* the application container replicas are rolled out.
-
----
-
-### 5.2 Out-of-Band Administrative Seeding
-
-Public registration endpoints must **never** accept an `IsAdmin` flag or allow arbitrary role assignment. To guarantee secure bootstrap:
-- Initial administrator accounts are provisioned exclusively via the out-of-band CLI seeder in [`AdminSeeder.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Migrations/AdminSeeder.cs):
-```bash
-dotnet run --project src/API/CrowdFunding.API -- seed-admin admin@platform.com P@ssword123! "Super Administrator"
-```
-The seeder runs in an isolated CLI context, hashes credentials with PBKDF2 using 100,000 iterations, and assigns the `Administrator` role with system-wide permissions mapped via [`RolePermissionCatalog.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Identity/CrowdFunding.Modules.Identity.Contracts/Authorization/RolePermissionCatalog.cs).
-
----
-
-### 5.3 RFC 9457 Problem Details & Sanitized Error Pipeline
-
-Uncaught exceptions must never leak raw database connection strings, SQL query text, or framework stack traces to external HTTP clients. 
-- Integrated via [`GlobalExceptionHandler.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Observability/GlobalExceptionHandler.cs):
-  - Concurrency conflicts (`DbUpdateConcurrencyException`, `ConcurrencyConflictException`) map to **HTTP 409 Conflict**.
-  - Validation failures map to **HTTP 400 Bad Request** with per-field error dictionaries.
-  - Access violations (`ForbiddenAccessException`) map to **HTTP 403 Forbidden**.
-  - Unhandled exceptions map to **HTTP 500 Internal Server Error**, returning a sanitized RFC 9457 JSON payload containing only the error type and the active correlation ID (`X-Correlation-Id`) for support tracking.
-
----
-
-### 5.4 Partitioned Rate Limiting
-
-To safeguard against distributed denial-of-service (DDoS) and brute-force credential stuffing:
-- Configured in [`RateLimitingConfiguration.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/RateLimiting/RateLimitingConfiguration.cs) using ASP.NET Core's native Partitioned Rate Limiter:
-  - **Auth Endpoints (`/api/identity/*`)**: Sliding window limit per client IP to mitigate password guessing attacks.
-  - **Pledge Endpoints (`/api/contributions/*`)**: Partitioned by authenticated `UserId` or IP address to prevent algorithmic front-running and credit card testing fraud.
-
----
-
-## 6. Architectural Decision Records (ADR) Summary Matrix
-
-| Decision Area | Selected Technology / Architectural Pattern | Alternatives Evaluated | Deciding Factor / Trade-off Rationale | Primary References |
-| :--- | :--- | :--- | :--- | :--- |
-| **System Architecture** | Modular Monolith (6 Bounded Contexts) | Distributed Microservices; Monolithic Spaghetti | Eliminates distributed transaction failures and network hops while guaranteeing strict boundary isolation via NetArchTest. | [`DEV_GUIDELINES.md`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/DEV_GUIDELINES.md)<br/>[`improvement.md`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/improvement.md) |
-| **Outbox Claiming** | PostgreSQL Native `FOR UPDATE SKIP LOCKED` | Debezium CDC + Kafka; RabbitMQ | Zero extra infrastructure; guarantees zero multi-worker race conditions. Revisit for Debezium when throughput exceeds 5,000 events/sec. | [`outbox-architecture.md`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/docs/outbox-architecture.md)<br/>[`OutboxClaimQuery.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxClaimQuery.cs) |
-| **Financial Concurrency** | `pg_advisory_xact_lock` + `xmin` + Unique Ledger | Pessimistic Table Locks; Optimistic Locking alone | Advisory locks serialize read-modify-write loops to prevent TOCTOU races; `xmin` catches out-of-band updates; ledger blocks duplicate replays. | [`CampaignTransactionExecutor.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Transactions/CampaignTransactionExecutor.cs)<br/>[`AdvisoryLockKey.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Domain/Common/AdvisoryLockKey.cs) |
-| **Integration Testing** | `Testcontainers.PostgreSql` | EF Core InMemory; SQLite In-Memory | Real PostgreSQL semantics required to execute and test `xmin`, `SKIP LOCKED`, advisory locks, and raw SQL CTE queries. | [`CampaignsPostgresFixture.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/tests/IntegrationTests/CrowdFunding.IntegrationTests/CampaignsPostgresFixture.cs)<br/>[`CampaignContributionConcurrencyTests.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/tests/IntegrationTests/CrowdFunding.IntegrationTests/CampaignContributionConcurrencyTests.cs) |
-| **Token Cryptography** | Asymmetric ES256 ECDSA + JWKS | Symmetric HMAC-SHA256 (`HS256`); RSA 2048 | Enables edge verifiers and gateways to authenticate tokens using public JWKS without possessing the master signing secret. | [`JwksEndpoint.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Security/JwksEndpoint.cs)<br/>[`EfSigningKeyStore.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Services/EfSigningKeyStore.cs) |
-| **Object Mapping** | Mapster | AutoMapper; Manual Hand-Written Extensions | Direct IL generation delivers 3x–4x faster performance with minimal allocations compared to AutoMapper, eliminating manual boilerplate. | [`CampaignsMappingConfig.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Mapping/CampaignsMappingConfig.cs) |
-| **Validation Pipeline** | FluentValidation | DataAnnotations; Domain Invariants Only | Keeps DTOs clean; handles complex cross-property validation rules; fails fast with RFC 9457 errors before database transactions open. | [`CreateCampaignCommandValidator.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Application/Features/Campaigns/Commands/CreateCampaign/CreateCampaignCommandValidator.cs) |
-| **Real-Time Streaming** | ASP.NET Core SignalR | Raw WebSockets; Server-Sent Events; Pusher | High-level hub abstractions with automatic transport negotiation and connection groups without third-party SaaS dependency. | [`CampaignHub.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/RealTime/CampaignHub.cs) |
-| **Platform Metering** | OpenMeter + CloudEvents v1.0 | Custom DB Counters; Direct Stripe API calls | Offloads millions of usage events to ClickHouse; avoids transactional DB contention; ensures CNCF interoperability. | [`OpenMeterClient.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Metering/OpenMeterClient.cs)<br/>[`CloudEvent.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Application/Metering/CloudEvent.cs) |
-| **Structured Logging** | Serilog + Compact JSON + OpenTelemetry | Default Console Logger; NLog | Emits standardized single-line CLEF JSON logs; embeds W3C Trace IDs for distributed observability and log correlation. | [`LoggingConfiguration.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Observability/LoggingConfiguration.cs)<br/>[`CorrelationIdMiddleware.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Observability/CorrelationIdMiddleware.cs) |
-| **Architecture Guardrails** | NetArchTest | Manual PR Reviews; Custom Roslyn Analyzers | Compile-time and CI test automation of module boundaries, Clean Architecture layer direction, and encapsulation. | [`CampaignsModuleDependencyTests.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/tests/ArchitectureTests/CrowdFunding.ArchitectureTests/CampaignsModuleDependencyTests.cs) |
-| **Code Coverage** | Coverlet (`coverlet.collector`) | Visual Studio Coverage; dotCover | Cross-platform, open-source code coverage engine integrated directly into `dotnet test` on Linux, macOS, and CI runners. | [`CrowdFunding.ArchitectureTests.csproj`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/tests/ArchitectureTests/CrowdFunding.ArchitectureTests/CrowdFunding.ArchitectureTests.csproj) |
+## 15. Known limitations
+
+These are current, known gaps; [`PLATFORM_SHORTCOMINGS.md`](PLATFORM_SHORTCOMINGS.md) and
+[`TRADE_OFFS_AND_LIMITATIONS.md`](TRADE_OFFS_AND_LIMITATIONS.md) discuss them in depth.
+
+1. Module tables share the `public` schema; only migration history is per schema.
+2. The RabbitMQ bus publishes only; cross-process event delivery (and so extraction) is not
+   implemented on this branch.
+3. The outbox wake-up signal is in-process; other replicas rely on the 5-second sweep. A CDC
+   relay (Debezium) was considered and not implemented.
+4. Rate limits and the outbox signal are per instance; there is no distributed rate limiter.
+5. Queries are not validated by the pipeline, only commands.
+6. The signing-key encryption key cannot be rotated yet (single key; the `ENC:v1` prefix leaves
+   room for versions).
+7. Anonymous one-click unsubscribe trusts a bare user id; it needs a signed, expiring token.
+8. E-mail and metering side effects rely on provider idempotency keys, not the inbox, so a crash
+   between send and commit can repeat them.
+9. Outbound webhooks are at-least-once; receivers must deduplicate.
+10. A refund that arrives before its pledge was credited is a no-op (acceptable because refunds
+    only follow cancellation or failure), and a busy campaign's writes are serialized by its
+    advisory lock.
+11. OpenTelemetry is used for traces and metrics only; logs stay on Serilog.

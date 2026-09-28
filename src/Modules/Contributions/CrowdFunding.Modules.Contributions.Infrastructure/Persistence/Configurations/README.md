@@ -4,7 +4,8 @@
 Contains EF Core entity configuration classes for the Contributions module.
 
 ## Files
-- `ContributionConfiguration.cs`: EF Core entity configuration that shapes table mappings and constraints.
+- `ActiveCampaignCacheConfiguration.cs`: Maps the replicated `ActiveCampaignCache` read model to `active_campaigns_cache`.
+- `ContributionConfiguration.cs`: Maps `Contribution` to `contributions`, with indexes and the `xmin` concurrency token.
 
 ## Child Folders
 - None.

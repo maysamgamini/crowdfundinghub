@@ -48,7 +48,7 @@ jobs:
       # Runs first and separately from the other test suites: a boundary violation should fail
       # fast, in seconds, without waiting on Testcontainers to pull and boot Postgres/Redis for
       # the integration suite.
-      - name: Architectural guardrails (NetArchTest boundary enforcement)
+      - name: Architectural guardrails (assembly-reference boundary rules)
         run: >
           dotnet test tests/ArchitectureTests/CrowdFunding.ArchitectureTests/CrowdFunding.ArchitectureTests.csproj
           --configuration Release --no-build

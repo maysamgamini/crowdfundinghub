@@ -5,7 +5,7 @@ Defines service contracts that the Moderation application layer relies on for ti
 
 ## Files
 - `ICampaignReviewReadService.cs`: Read-model service used by query handlers to fetch denormalized data.
-- `IModerationDateTimeProvider.cs`: Abstraction or implementation for retrieving the current UTC time.
+- `IModerationDateTimeProvider.cs`: Provides the current UTC time to the Moderation module.
 
 ## Child Folders
 - None.

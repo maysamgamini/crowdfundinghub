@@ -1,7 +1,7 @@
 ﻿# Common
 
 ## Purpose
-Defines shared API response shapes used by multiple controllers.
+Defines shared API response shapes used by multiple endpoints.
 
 ## Files
 - `PagedResponse.cs`: Response contract returned by an API endpoint.

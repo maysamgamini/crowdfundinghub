@@ -4,7 +4,7 @@
 Contains repository implementations for the Moderation module.
 
 ## Files
-- `CampaignReviewRepository.cs`: Repository implementation that persists and loads aggregate state.
+- `CampaignReviewRepository.cs`: Implements `ICampaignReviewRepository`.
 
 ## Child Folders
 - None.

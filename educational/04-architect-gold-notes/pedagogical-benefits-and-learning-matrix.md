@@ -1,217 +1,131 @@
-# The Pedagogical Value Catalog: Educational Benefits of the Modular Monolith Architecture
+# Learning Matrix: What the Modular Monolith Teaches
 
-> **Curriculum Document:** Educational Benefits & Pedagogical Analysis  
-> **Target Audience:** Students, Staff/Principal Engineers, Enterprise Architects, University Educators  
-> **Reference System:** `CrowdFundingHub` (.NET 10 / C# 14 / PostgreSQL 16)  
+> **Audience:** senior engineers, tech leads, architects, instructors
+> **Reference system:** CrowdFunding Hub (.NET 10, C# 14, PostgreSQL 16)
+> **How to use this page:** each lesson names the trap, what the codebase does about it, and the code and tests to read.
 
 ---
 
-## 1. Executive Summary: Why Learn in a Modular Monolith?
+## 1. Why learn distributed-systems problems in a modular monolith
 
-A pervasive challenge in software engineering education is **the Distributed Systems Learning Paradox**:
-- If students and engineers are taught distributed systems solely using deployed microservices (Kubernetes, AWS/GCP, Kafka, API Gateways), **80% of their cognitive bandwidth is consumed by DevOps plumbing, Docker networking, YAML configuration, and cloud bills**, rather than core architectural invariants and domain design.
-- If they are taught using a naive monolithic CRUD app, they learn none of the distributed systems challenges (data replication, eventual consistency, the dual-write problem, asymmetric cryptographic verification, idempotent state machines) that define modern enterprise engineering.
+Teaching distributed systems only with deployed microservices spends most of the learner's attention on containers, networking, configuration and cloud cost. Teaching with a plain CRUD monolith avoids that, but also avoids the real problems: replication and eventual consistency, dual writes, token verification across services, idempotent consumers.
 
-**The Educational Breakthrough of `CrowdFundingHub`:**  
-A strictly decoupled **Modular Monolith** provides the ultimate pedagogical laboratory. It allows learners to confront, study, and master the exact mathematical realities of distributed systems—**in a single IDE, with zero cloud expense, sub-second test execution, and single-step deterministic debugging.**
+A modular monolith sits between the two. The problems are present (module boundaries, outbox and inbox, replicated read models, asymmetric tokens), but everything runs in one process, one debugger session and one test run. Integration tests use Testcontainers (PostgreSQL, Redis, RabbitMQ), so they run against real infrastructure without a cloud account.
 
 ```mermaid
 graph TD
-    subgraph TraditionalMicroservices["Traditional Microservices Teaching"]
-        DevOpsOverhead["High DevOps Overhead (K8s, Docker, Cloud Bills)"]
-        NonDeterministic["Non-Deterministic Network Failures & Flaky CI"]
-        SlowFeedback["5-15 Minute Build & Deploy Cycles"]
-        LostFocus["Learners Focus on YAML instead of Domain Logic"]
+    subgraph Deployed["Teaching with deployed microservices"]
+        Ops["Most effort on infrastructure"]
+        Flaky["Network-induced flakiness"]
+        Slow["Slow build and deploy loop"]
     end
 
-    subgraph ModularMonolithPedagogy["CrowdFundingHub Modular Monolith Pedagogy"]
-        SingleIDE["Single IDE & Sub-Second Local Execution"]
-        DeterministicTests["Deterministic Testcontainers (Postgres, Redis, RabbitMQ)"]
-        StepDebugging["Single-Step F5 Debugging Across Boundary Invariants"]
-        PureArchitecture["100% Focus on Architectural Invariants & Decomposition"]
+    subgraph Modular["Teaching with a modular monolith"]
+        OneProc["One process, one debugger"]
+        RealDeps["Testcontainers: real Postgres, Redis, RabbitMQ"]
+        Focus["Effort on boundaries and invariants"]
     end
 
-    TraditionalMicroservices -. "High Friction / High Noise" .-> Failure["Cognitive Overload"]
-    ModularMonolithPedagogy ==> "Deep Mastery / High Signal" ==> Success["Architectural Fluency"]
+    Deployed -. "high noise" .-> Overload["Learners fight tooling"]
+    Modular ==> Fluency["Learners reason about architecture"]
 ```
 
----
-
-## 2. Core Educational Benefits: The 10 Landmark Lessons
-
-### Lesson 1: The Poly-Pattern Spectrum (Breaking Architectural Dogmatism)
-
-#### The Common Trap in Industry
-Engineers frequently succumb to **Architectural Dogmatism**:
-- **Junior/Mid-level dogma:** "Every single table insert must have a 14-file Clean Architecture pipeline (Controller, Request, Mapster, Command, Validator, MediatR Handler, Repository Interface, Repository Implementation, Aggregate Root, Domain Event, EF Configuration, Outbox Message, Outbox Processor, SignalR Broadcast)."
-- **Primitive dogma:** "All abstractions are bad; put 800 lines of raw SQL and inline logic directly into controllers."
-
-#### The Pedagogical Benefit
-Through **The Pedagogical Rosetta Stone** ([`src/Samples/RosettaStone/`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Samples/RosettaStone/README.md)), students can compare three distinct architectural paradigms executing the identical business requirement side by side:
-1. **Tier 1 (Minimal API CRUD):** 1 file, 48 lines. Direct `DbContext` write, zero indirection. Best for 70% of low-risk, simple data entry.
-2. **Tier 2 (Pragmatic CQRS):** 3 files, 91 lines. `ICommandDispatcher` + FluentValidation, direct persistence without aggregates or outbox.
-3. **Tier 3 (Rich DDD + Transactional Outbox):** 14 files, 960 lines. Full domain aggregates, state machines, and outbox event streaming.
-
-**Key Learning Takeaway:**  
-Students learn **Architectural Right-Sizing**: how to evaluate an endpoint by its transactional risk, blast radius, and audit requirements before choosing its pattern, rather than imposing a single pattern universally.
+The limit is equally important to teach: in-process modules never experience real network partitions. The extraction step (next in the course; proof of concept on branch `future/microservices-extraction`) is where those appear.
 
 ---
 
-### Lesson 2: Physical Storage Engine Mechanics vs. Distributed Theory (The MVCC Trap)
+## 2. Lessons
 
-#### The Common Trap in Industry
-Theoretical distributed systems courses teach: *"Insert a row into an outbox table, poll it with a background worker, and update its status from 'Pending' to 'Processed'."*
+### Lesson 1: Choosing a pattern per feature
 
-#### The Pedagogical Benefit
-In [`TICKET-038`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/qa-tickets/TICKET-038-POSTGRESQL-OUTBOX-MVCC-PARTITIONING-DELETE-ON-SUCCESS.md), students discover **Storage Engine Mechanical Sympathy**:
-- PostgreSQL uses Multi-Version Concurrency Control (MVCC). An `UPDATE` does not overwrite data in place; it writes a new tuple and marks the old one dead.
-- Under high throughput (500 events/sec), polling status updates generate **1,500 dead tuples per second**, overwhelming PostgreSQL `autovacuum`, blowing up index B-trees, and evicting cached database pages.
-- Students implement and witness **Immediate Delete-on-Success** (`DELETE FROM outbox WHERE id = @id`) and date range table partitioning, keeping the table heap strictly bounded to pending messages.
+- **Trap:** either every insert gets the full pipeline (endpoint, command, validator, handler, repository interface and implementation, aggregate, event, configuration, outbox), or no abstractions at all.
+- **In this codebase:** the Rosetta Stone sample implements one requirement three ways: Tier 1 (Minimal API CRUD), Tier 2 (pragmatic CQRS), and Tier 3 (the production `POST /api/campaigns`). Its README has the measured file and line counts for each tier.
+- **Read:** [`src/Samples/RosettaStone/README.md`](../../src/Samples/RosettaStone/README.md), [`tests/IntegrationTests/CrowdFunding.IntegrationTests/RosettaStoneParityTests.cs`](../../tests/IntegrationTests/CrowdFunding.IntegrationTests/RosettaStoneParityTests.cs), [`poly-pattern-architecture.md`](../01-architecture-paradigms/poly-pattern-architecture.md).
+- **Takeaway:** decide the tier by two questions: must another module react reliably, and can concurrent writes corrupt the data?
 
-**Key Learning Takeaway:**  
-Architecture patterns cannot be designed in an academic vacuum; a Principal Architect must understand the physical disk and storage engine mechanics of the relational database underneath.
+### Lesson 2: Storage-engine mechanics behind the outbox
 
----
+- **Trap:** an outbox that flips each row `Pending -> Processing -> Processed` and keeps it. In PostgreSQL every update leaves a dead tuple, and a table that never shrinks bloats and slows the claim query.
+- **In this codebase:** `ModuleOutboxProcessor<TDbContext>` claims with `FOR UPDATE SKIP LOCKED`, reclaims rows whose lease expired, deletes rows on success, backs off exponentially, and moves a row to a dead-letter table after five attempts. A post-commit signal wakes the processor; the 5-second poll is only a fallback.
+- **Read:** [`ModuleOutboxProcessor.cs`](../../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Outbox/ModuleOutboxProcessor.cs), [`OutboxCommitSignalInterceptor.cs`](../../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Outbox/OutboxCommitSignalInterceptor.cs), [`OutboxLeanTableE2ETests.cs`](../../tests/IntegrationTests/CrowdFunding.IntegrationTests/OutboxLeanTableE2ETests.cs), [`OutboxSignalE2ETests.cs`](../../tests/IntegrationTests/CrowdFunding.IntegrationTests/OutboxSignalE2ETests.cs), [`docs/outbox-architecture.md`](../../docs/outbox-architecture.md).
+- **Takeaway:** a pattern's cost depends on the storage engine underneath it.
 
-### Lesson 3: The Stateless Token Revocation Dilemma (Decentralized Security)
+### Lesson 3: Revoking stateless tokens
 
-#### The Common Trap in Industry
-Architects adopt asymmetric JWKS (ES256) because it allows downstream microservices to verify JWT access tokens offline without calling the Identity database. However, this creates a dangerous security hole: **stateless tokens cannot be revoked before they expire**. If a user is deactivated or a token is compromised, an attacker has uninterrupted access for up to 60 minutes.
+- **Trap:** adopting JWKS-verified JWTs and discovering that a logged-out or compromised token stays valid until it expires.
+- **In this codebase:** 15-minute ES256 access tokens; refresh token rotation where reuse of a rotated token revokes all of the user's sessions; a Redis security-stamp revocation list checked on every authenticated request.
+- **Read:** [`RefreshAccessTokenCommandHandler.cs`](../../src/Modules/Identity/CrowdFunding.Modules.Identity.Application/Features/Users/Commands/RefreshAccessToken/RefreshAccessTokenCommandHandler.cs), [`RedisSecurityStampRevocationStore.cs`](../../src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Services/RedisSecurityStampRevocationStore.cs), [`RefreshTokenRotationE2ETests.cs`](../../tests/IntegrationTests/CrowdFunding.IntegrationTests/RefreshTokenRotationE2ETests.cs).
+- **Takeaway:** immediate revocation costs a shared lookup per request; decide explicitly where you pay it.
 
-#### The Pedagogical Benefit
-Through [`TICKET-036`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/qa-tickets/TICKET-036-DECENTRALIZED-SESSION-REVOCATION-REFRESH-TOKEN-ROTATION.md), students analyze and implement the exact compromise used by world-class platforms:
-- Short-lived asymmetric JWTs (10–15 minutes) for low-latency offline verification.
-- Refresh Token Rotation (RTR) with automatic reuse detection.
-- Distributed Redis `SecurityStamp` blacklist: downstream services check a sub-millisecond Redis key only when high-security privileges are exercised, preserving 99% of offline performance while enabling instantaneous session revocation globally.
+### Lesson 4: Multiple replicas and cache eviction
 
-**Key Learning Takeaway:**  
-Students learn how to balance the fundamental tension between **stateless verification performance** and **centralized security governance**.
+- **Trap:** treating the monolith as one server. With several replicas, evicting a cache key before commit lets another replica re-cache the old value.
+- **In this codebase:** Campaigns enqueues cache keys during the transaction and `CampaignTransactionExecutor` removes them from Redis only after commit. Per-replica in-memory state (cached signing keys) is invalidated across replicas with Redis Pub/Sub. SignalR uses a Redis backplane.
+- **Read:** [`CampaignTransactionExecutor.cs`](../../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Transactions/CampaignTransactionExecutor.cs), [`CampaignCachePostCommitInvalidationTests.cs`](../../tests/IntegrationTests/CrowdFunding.IntegrationTests/CampaignCachePostCommitInvalidationTests.cs), [`SigningKeyMultiReplicaInvalidationE2ETests.cs`](../../tests/IntegrationTests/CrowdFunding.IntegrationTests/SigningKeyMultiReplicaInvalidationE2ETests.cs), [`SignalRRedisBackplaneE2ETests.cs`](../../tests/IntegrationTests/CrowdFunding.IntegrationTests/SignalRRedisBackplaneE2ETests.cs).
+- **Takeaway:** a monolith must be safe to run as several replicas before it is worth splitting. (Rate limiting and the outbox wake-up signal are still per instance; see [`docs/PLATFORM_SHORTCOMINGS.md`](../../docs/PLATFORM_SHORTCOMINGS.md).)
 
----
+### Lesson 5: Replicated read models instead of synchronous queries
 
-### Lesson 4: Multi-Replica Monolith Scaling & Cache Eviction Races
+- **Trap:** replacing in-process calls with synchronous HTTP calls between services, so one service's outage takes down the others.
+- **In this codebase:** Contributions keeps its own `active_campaigns_cache`, fed by Campaigns' created, published, cancelled, succeeded and failed events, and validates pledges against it. Notifications and CampaignUpdates keep similar local caches (`campaign_title_cache`, `campaign_owner_cache`). An architecture test checks that these read models stay inside their modules.
+- **Read:** [`ReplicatedCampaignEventHandlers.cs`](../../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/ActiveCampaigns/Events/ReplicatedCampaignEventHandlers.cs), [`ReplicatedReadModelResilienceTests.cs`](../../tests/IntegrationTests/CrowdFunding.IntegrationTests/ReplicatedReadModelResilienceTests.cs), [`ReplicatedReadModelBoundaryTests.cs`](../../tests/ArchitectureTests/CrowdFunding.ArchitectureTests/ReplicatedReadModelBoundaryTests.cs).
+- **Takeaway:** autonomy comes from local copies of data, paid for with eventual consistency.
 
-#### The Common Trap in Industry
-Developers often assume that a monolith is a "single server" and use in-memory caches and static singletons freely. When the monolith is deployed across 3 Kubernetes pods behind a load balancer, silent data corruption and split-brain states emerge.
+### Lesson 6: Strangler Fig extraction (next course step)
 
-#### The Pedagogical Benefit
-In [`TICKET-037`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/qa-tickets/TICKET-037-MULTI-REPLICA-DISTRIBUTED-CACHE-INVALIDATION.md), students investigate:
-1. **The Pre-Commit Cache Eviction Race Condition:** If Pod A deletes a Redis cache entry *before* PostgreSQL commits the transaction, Pod B can concurrently read the uncommitted database row and refill Redis with stale data for 30 minutes!
-2. **The Invalidation Pub/Sub Pattern:** How to wire post-commit eviction hooks into `ITransactionExecutor` and broadcast cache purges across replicas using Redis Pub/Sub channels.
+- **Trap:** a big-bang rewrite that freezes feature work for months.
+- **Status:** not implemented on this branch; Moderation is an in-process module. The proof of concept on branch `future/microservices-extraction` adds a standalone Moderation host that references the existing Moderation projects, validates tokens against the monolith's JWKS, runs behind a Strangler Fig routing topology, and is guarded by extraction boundary tests.
+- **Read:** [`monolith-to-microservices-blueprint.md`](../01-architecture-paradigms/monolith-to-microservices-blueprint.md), [`deconstruction-walkthrough.md`](../03-engineering-spec-and-roadmap/deconstruction-walkthrough.md).
+- **Takeaway:** a well-bounded module can be moved to its own host without changing its domain and application code. The surrounding work (a broker consumer, data migration, routing, deployment) is still real work.
 
-**Key Learning Takeaway:**  
-Before a monolith can be broken into microservices, it must first be **cloud-native, multi-replica stateless, and horizontally scalable**.
+### Lesson 7: Cross-cutting behavior in the command pipeline
 
----
+- **Trap:** validation, auditing and logging copied into each handler, and forgotten in the next one.
+- **In this codebase:** `ValidationPipelineBehavior` runs all FluentValidation validators for a command before its handler (outermost behavior; endpoints never validate by hand; queries are not validated by the pipeline). `AuditLoggingPipelineBehavior` records commands marked `[AuditableAction]` in `system.audit_records`. Domain code throws its own exceptions (`BusinessRuleViolationException` for 400, `DomainConflictException` for 409), and `ExceptionClassifier` maps all exceptions to RFC 9457 problem responses in one place.
+- **Read:** [`ValidationPipelineBehavior.cs`](../../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Application/Validation/ValidationPipelineBehavior.cs), [`AuditLoggingPipelineBehavior.cs`](../../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Application/Audit/AuditLoggingPipelineBehavior.cs), [`ExceptionClassifier.cs`](../../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/ErrorHandling/ExceptionClassifier.cs), [`AuditLoggingE2ETests.cs`](../../tests/IntegrationTests/CrowdFunding.IntegrationTests/AuditLoggingE2ETests.cs).
+- **Takeaway:** governance that must apply to every command belongs in the pipeline, not in each handler.
 
-### Lesson 5: Event-Carried State Transfer vs. Synchronous Query Coupling
+### Lesson 8: Architecture tests as fitness functions
 
-#### The Common Trap in Industry
-When splitting a monolith, teams often replace in-memory queries with synchronous HTTP/gRPC calls (`Contributions` calls `Campaigns.GetById`). This creates a **Distributed Monolith** with cascading timeouts and brittle availability (if Campaigns is down, Contributions cannot accept pledges).
+- **Trap:** a clean boundary diagram that erodes under deadline pressure.
+- **In this codebase:** architecture tests inspect compiled assembly references by reflection (no NetArchTest): every module has four layers, cross-module references go only to Contracts, Domain assemblies reference only `BuildingBlocks.Domain`, Contracts reference no internals, and the API host references no sample code and has exactly one controller. They run in CI before unit and integration tests.
+- **Read:** [`ModuleBoundaryConventionTests.cs`](../../tests/ArchitectureTests/CrowdFunding.ArchitectureTests/ModuleBoundaryConventionTests.cs), [`ApiHostDependencyTests.cs`](../../tests/ArchitectureTests/CrowdFunding.ArchitectureTests/ApiHostDependencyTests.cs), [`tests/ArchitectureTests/CrowdFunding.ArchitectureTests/README.md`](../../tests/ArchitectureTests/CrowdFunding.ArchitectureTests/README.md).
+- **Takeaway:** boundaries that are not tested are suggestions.
 
-#### The Pedagogical Benefit
-Through [`TICKET-023`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/qa-tickets/TICKET-023-ASYNCHRONOUS-REPLICATED-READ-MODELS.md), students implement **Asynchronous Replicated Read Models**:
-- The `Contributions` module subscribes to `CampaignPublishedApplicationEvent` and `CampaignCancelledApplicationEvent`.
-- It populates its own local `contributions.campaign_read_models` table.
-- When evaluating a pledge, `Contributions` checks its own local data store in 0.1ms, achieving **100% autonomous uptime** even if the Campaigns module or database is offline.
+### Lesson 9: When the outbox is justified
 
-**Key Learning Takeaway:**  
-Service autonomy is achieved through **asynchronous data replication**, not synchronous remote procedural calls.
+- **Trap:** adding an outbox to writes that only touch internal tables, or leaving it out of writes that call external systems.
+- **In this codebase:** the outbox, inbox and task tables sit where a side effect leaves the database: e-mail, payment webhook reconciliation, media-analysis callbacks, reward-tier inventory, outbound creator webhooks.
+- **Read:** [`justifying-the-outbox-and-complex-crud.md`](../01-architecture-paradigms/justifying-the-outbox-and-complex-crud.md), [`EmailNotificationOutboxE2ETests.cs`](../../tests/IntegrationTests/CrowdFunding.IntegrationTests/EmailNotificationOutboxE2ETests.cs), [`PaymentGatewayWebhookReconciliationE2ETests.cs`](../../tests/IntegrationTests/CrowdFunding.IntegrationTests/PaymentGatewayWebhookReconciliationE2ETests.cs), [`InboxIdempotencyE2ETests.cs`](../../tests/IntegrationTests/CrowdFunding.IntegrationTests/InboxIdempotencyE2ETests.cs), [`MediaAnalysisWebhookE2ETests.cs`](../../tests/IntegrationTests/CrowdFunding.IntegrationTests/MediaAnalysisWebhookE2ETests.cs), [`RewardTierConcurrencyE2ETests.cs`](../../tests/IntegrationTests/CrowdFunding.IntegrationTests/RewardTierConcurrencyE2ETests.cs), [`WebhookSubscriptionE2ETests.cs`](../../tests/IntegrationTests/CrowdFunding.IntegrationTests/WebhookSubscriptionE2ETests.cs).
+- **Takeaway:** the outbox bridges a database transaction and an effect outside it; inside one transaction it is overhead.
 
----
+### Lesson 10: Per-module connection strings
 
-### Lesson 6: The Strangler Fig Pattern in Action (Microservice Extraction Without Rewriting)
+- **Trap:** one hard-coded connection string for the whole application, discovered only when someone tries to move a module's data.
+- **In this codebase:** each module resolves `ConnectionStrings:{Module}Db` (for example `CampaignsDb`) and falls back to `DefaultConnection`. All modules can share one PostgreSQL instance today, and a module can be pointed at another database by configuration alone. Moving its existing data is a separate migration, and because module tables share the `public` schema, that means moving named tables rather than dumping a schema.
+- **Read:** [`ConfigurationExtensions.cs`](../../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Configuration/ConfigurationExtensions.cs), [`MultiDatabaseConnectionDecouplingTests.cs`](../../tests/IntegrationTests/CrowdFunding.IntegrationTests/MultiDatabaseConnectionDecouplingTests.cs).
+- **Takeaway:** decouple deployment topology from code through configuration, and be honest about the data migration that remains.
 
-#### The Common Trap in Industry
-Most migrations fail because teams attempt a "Big Bang Rewrite"—stopping feature development for 12 months to rewrite services from scratch.
+### Lesson 11: Invariants enforced by the database
 
-#### The Pedagogical Benefit
-In [`services/CrowdFunding.Moderation.Service`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/services/CrowdFunding.Moderation.Service/Program.cs) and [`TICKET-029`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/qa-tickets/TICKET-029-MICROSERVICE-EXTRACTION-POC-STANDALONE-SERVICE.md), students see the **Strangler Fig Pattern** executed live:
-- A new standalone ASP.NET Core Web API host is created (`CrowdFunding.Moderation.Service`).
-- It references existing, untouched modular assemblies (`Moderation.Contracts`, `Moderation.Application`, `Moderation.Domain`, `Moderation.Infrastructure`).
-- The standalone service boots up, mounts its own schema, connects to RabbitMQ, and runs independently.
-- **Lines of business logic rewritten: exactly ZERO.**
-
-**Key Learning Takeaway:**  
-A properly architected module is already a microservice in disguise. Extraction should be a deployment packaging exercise, never a business logic rewrite.
-
----
-
-### Lesson 7: Cross-Cutting Governance via Clean Pipeline Behaviors
-
-#### The Common Trap in Industry
-Engineers scatter cross-cutting concerns (audit logging, performance metrics, transaction management, validation) across individual controllers or command handlers, causing code duplication and human error when new endpoints are added.
-
-#### The Pedagogical Benefit
-In [`TICKET-039`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/qa-tickets/TICKET-039-PIPELINE-BEHAVIORS-IMMUTABLE-AUDIT-LOGGING.md), students master the **Decorator Pattern at the Command Dispatcher Level**:
-- An `AuditLoggingPipelineBehavior` intercepts every command flowing through `ICommandDispatcher`.
-- Administrative commands marked with `[AuditableAction]` automatically record actor ID, IP address, User-Agent, and state diffs into an immutable `system.audit_records` table.
-- Individual domain handlers remain 100% pure and focused solely on business invariants.
-
-**Key Learning Takeaway:**  
-Global system governance must be non-invasive, centralized in dispatching pipelines, and completely decoupled from domain aggregates.
+- **Trap:** a mutable running total (`raised_amount`) guarded only by application code, where any missed code path or retry can double-count.
+- **In this codebase:** each pledge and refund appends a row to `campaign_ledger_entries`. A unique key on (contribution, kind) makes credits idempotent; triggers reject any `UPDATE` or `DELETE` of entries and any `raised_amount` that is not the sum of the entries. A per-campaign advisory lock still serializes cancel against pledge.
+- **Read:** [`docs/append-only-ledger.md`](../../docs/append-only-ledger.md), [`CampaignLedger.cs`](../../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Persistence/Repositories/CampaignLedger.cs), [`CampaignLedgerTests.cs`](../../tests/IntegrationTests/CrowdFunding.IntegrationTests/CampaignLedgerTests.cs), [`ContributionConcurrencyTests.cs`](../../tests/IntegrationTests/CrowdFunding.IntegrationTests/ContributionConcurrencyTests.cs).
+- **Takeaway:** when a rule protects money, have the database enforce it, so a bug in code produces an error instead of wrong data.
 
 ---
 
-### Lesson 8: Automated Architectural Fitness Functions (Defending Boundaries)
+## 3. What each role should take away
 
-#### The Common Trap in Industry
-Architects draw beautiful boundary diagrams on whiteboards. Six months later, under sprint pressure, developers reference forbidden projects or write cross-schema SQL joins, degrading the architecture into a "Big Ball of Mud".
-
-#### The Pedagogical Benefit
-In [`CrowdFunding.ArchitectureTests`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/tests/ArchitectureTests/CrowdFunding.ArchitectureTests/README.md) and [`TICKET-040`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/qa-tickets/TICKET-040-ARCHITECTURAL-FITNESS-FUNCTIONS-CI-CD-AUTOMATION.md), students learn how to codify **Evolutionary Architectural Fitness Functions**:
-- `NetArchTest` runs alongside unit tests in CI/CD.
-- Any attempt by a developer to add a reference from `API` to a module's `Domain`, or from one module to another module's `Infrastructure`, **immediately breaks the build**.
-
-**Key Learning Takeaway:**  
-Architecture cannot be governed by human discipline alone; it must be **compiled, tested, and automated as code**.
-
----
-
-### Lesson 9: Concrete Justification for the Transactional Outbox (The Dual-Write Problem)
-
-#### The Common Trap in Industry
-Engineers often add the Transactional Outbox pattern to simple database inserts that only update internal tables, creating unnecessary polling latency and database write amplification.
-
-#### The Pedagogical Benefit
-In [`educational/01-architecture-paradigms/justifying-the-outbox-and-complex-crud.md`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/educational/01-architecture-paradigms/justifying-the-outbox-and-complex-crud.md) and tickets [`TICKET-031`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/qa-tickets/TICKET-031-EXTERNAL-EMAIL-NOTIFICATION-OUTBOX-DELIVERY.md) to [`TICKET-035`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/qa-tickets/TICKET-035-OUTBOUND-CREATOR-WEBHOOK-DISPATCHING-ENGINE.md), students analyze concrete external boundaries that mathematically demand the Outbox:
-- **SendGrid / AWS SES:** Preventing duplicate or dropped financial email receipts.
-- **Stripe Webhook Reconciliation:** Capturing external payment intents and executing compensation sagas.
-- **Serverless Cloud Function AI Safety:** Asynchronously submitting media to serverless lambdas with cryptographic webhook callbacks.
-- **Reward Perk Allocation:** Concurrency state machine protecting limited physical inventories under burst traffic.
-
-**Key Learning Takeaway:**  
-The Outbox pattern exists to bridge **uncoordinated transactional boundaries (Database + Network I/O)**. When used within a single database transaction, it is unnecessary overhead.
-
----
-
-### Lesson 10: Multi-Database Connection Decoupling (Database-Per-Service Topology)
-
-#### The Common Trap in Industry
-Monoliths often share a single hardcoded database connection string. When teams attempt to split databases, they discover that connection strings and transaction managers are tightly coupled to the host.
-
-#### The Pedagogical Benefit
-In [`TICKET-026`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/qa-tickets/TICKET-026-MULTI-DATABASE-CONNECTION-DECOUPLING.md), students study the **Hierarchical Fallback Connection Resolver**:
-- Each module queries its own connection string (e.g. `ConnectionStrings:IdentityDb`, `ConnectionStrings:CampaignsDb`).
-- If not configured, it falls back to the unified `DefaultConnection`.
-- This enables operations to host all schemas on a single PostgreSQL instance during early stages, and migrate individual schemas to independent RDS/PostgreSQL instances tomorrow **simply by updating configuration files, with zero C# code changes**.
-
-**Key Learning Takeaway:**  
-Decouple deployment topologies from application architecture through intelligent configuration hierarchies.
-
----
-
-## 3. Educational Audience Matrix: What Each Role Learns
-
-| Role / Level | Key Pedagogical Takeaways from `CrowdFundingHub` |
+| Role | Takeaways |
 | :--- | :--- |
-| **Senior Students & Junior Developers** | • The transition from naive CRUD to clean separation of concerns.<br/>• Why global variables and cross-table joins create maintenance nightmares.<br/>• How unit, architecture, and integration tests work collaboratively. |
-| **Mid-Level Engineers & Tech Leads** | • The Poly-Pattern Spectrum: knowing when to write a Minimal API vs. CQRS vs. Rich DDD.<br/>• How to eliminate dual writes using Transactional Outbox and Idempotency keys.<br/>• The mechanics of Testcontainers for true-to-production integration testing. |
-| **Staff & Principal Engineers** | • Storage engine mechanics: PostgreSQL MVCC dead tuples, B-tree index bloat, and `autovacuum` defense.<br/>• Asymmetric JWKS token verification vs. decentralized session revocation tradeoffs.<br/>• Multi-replica cache coherence, pre-commit eviction races, and Redis Pub/Sub invalidation. |
-| **Enterprise & Solutions Architects** | • Designing Modular Monoliths that completely eliminate Big-Bang microservice rewrites.<br/>• Evolutionary architectural governance via automated `NetArchTest` fitness functions.<br/>• The business financial economics: saving millions in cloud compute and operational complexity. |
+| **Senior engineers** | Choosing a tier per feature (Rosetta Stone). Dual writes and how the outbox and inbox remove them. Integration tests against real PostgreSQL and Redis with Testcontainers. Minimal APIs next to one controller for comparison ([`docs/minimal-apis-vs-controllers.md`](../../docs/minimal-apis-vs-controllers.md)). |
+| **Tech leads** | Enforcing boundaries with architecture tests. Validation and error mapping in one place. Replicated read models and their consistency cost. |
+| **Staff and principal engineers** | PostgreSQL MVCC and outbox table design. Token revocation trade-offs. Post-commit cache eviction and per-instance state across replicas. Database-enforced invariants for money. |
+| **Architects** | What a modular monolith must have before extraction, what extraction still costs (broker consumer, data migration, routing), and the remaining limitations listed in [`docs/PLATFORM_SHORTCOMINGS.md`](../../docs/PLATFORM_SHORTCOMINGS.md) and [`docs/TRADE_OFFS_AND_LIMITATIONS.md`](../../docs/TRADE_OFFS_AND_LIMITATIONS.md). |
 
 ---
 
-## 4. Summary: The Golden Law of Educational Architecture
+## 4. Summary
 
-> **"Build a Monolith first, but design it with the physical data isolation, asynchronous contracts, and cryptographic decoupling of a distributed system. You will enjoy the operational bliss and fast feedback of a monolith today, while retaining the frictionless power to extract microservices tomorrow."**
+> Build the monolith first, with module-owned data, contract-only references, an outbox for effects that leave the database, and asymmetric tokens. You keep the fast feedback of one process now, and a later extraction becomes a matter of hosting, messaging and data movement rather than rewriting business logic. The next course step tests that claim on the Moderation module.

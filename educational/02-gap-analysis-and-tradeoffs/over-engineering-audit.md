@@ -1,88 +1,88 @@
-# The Over-Engineering Audit: Where We Went Too Far
+# The Over-Engineering Audit: Where the Design Goes Further Than It Must
 
-> **Curriculum Focus:** Technical Debt via Over-Engineering & Accidental Complexity  
-> **Key Lesson:** *"Premature abstraction is as dangerous as premature optimization. Every layer of indirection must justify its existence with a tangible operational benefit."*
-
----
-
-## 1. The 14-File Pipeline: A Case Study in Accidental Complexity
-
-In `CrowdFundingHub`, saving a basic campaign draft (`POST /api/Campaigns`) involves **14 files across 5 distinct assemblies**:
-
-```
-[The Current 14-File Traversal]
-1.  API/Controllers/CampaignsController.cs                       (Transport / Route)
-2.  API/Contracts/Campaigns/CreateCampaignRequest.cs            (API DTO)
-3.  API/Mapping/CampaignsMappingConfig.cs                       (Mapster Profile)
-4.  BuildingBlocks.Application/Dispatchers/ICommandDispatcher.cs (Dispatcher Interface)
-5.  Campaigns.Application/Commands/CreateCampaignCommand.cs      (CQRS Command DTO)
-6.  Campaigns.Application/Commands/CreateCampaignValidator.cs    (FluentValidation)
-7.  Campaigns.Application/Commands/CreateCampaignHandler.cs      (MediatR Handler)
-8.  Campaigns.Application/Abstractions/ICampaignRepository.cs    (Repository Interface)
-9.  Campaigns.Domain/Aggregates/Campaign.cs                     (Domain Aggregate Root)
-10. Campaigns.Domain/Events/CampaignCreatedDomainEvent.cs       (Domain Event)
-11. Campaigns.Infrastructure/Repositories/CampaignRepository.cs (EF Core Repository)
-12. Campaigns.Infrastructure/Configurations/CampaignConfig.cs   (Entity Mapping)
-13. Campaigns.Infrastructure/DbContexts/CampaignsDbContext.cs   (EF DbContext)
-14. BuildingBlocks.Infrastructure/Persistence/OutboxMessage.cs   (Outbox Entity)
-```
-
-### The Architectural Gotchas
-
-#### Gotcha 1: Redundant CQRS Indirection
-Separating commands and queries (`ICommandDispatcher`, `CreateCampaignCommand`, `CreateCampaignCommandHandler`) only makes sense if writes and reads require completely different domain models, independent storage engines, or asynchronous queuing. For a simple create, it introduces **two layers of dispatching indirection** that add zero runtime value.
-
-#### Gotcha 2: Premature DDD Aggregates & Value Objects
-Treating a basic record like a complex transactional aggregate forces unnecessary mapping configurations (`Mapster`) and domain event reflection pipelines where a standard Entity Framework Core entity with private setters would enforce invariants just as effectively.
-
-#### Gotcha 3: Unused Outbox Persistence on Internal-Only Events
-Committing an `OutboxMessage` row to `campaigns.campaigns_outbox_messages` and polling it in the background implies publishing messages to an external distributed broker (like RabbitMQ or Apache Kafka). If the only consumer is an in-process event handler in the Moderation module, this infrastructure is **pure dead weight**.
-
-#### Gotcha 4: The Triple-Mapping Tax
-`CreateCampaignRequest` (API), `CreateCampaignCommand` (Application), and `Campaign` (Domain) declare the **exact same 6 fields**:
-```
-Title, Story, Category, TargetAmount, Currency, DeadlineUtc
-```
-Maintaining three separate classes and Mapster mapping profiles for identical property names is "ceremony for the sake of ceremony."
+> **Curriculum focus:** accidental complexity and the cost of indirection
+> **Key lesson:** every layer of indirection must pay for itself with a concrete benefit. When it stops paying, remove it.
+> **Status:** revised 2026-09-28. Section 1 records what was removed; the rest describes the ceremony that remains and why.
 
 ---
 
-## 2. Hand-Rolled Enterprise Cryptography (ES256 / JWKS)
+## 1. Ceremony removed
 
-In [`EfSigningKeyStore.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Services/EfSigningKeyStore.cs) and [`JwksEndpoint.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Security/JwksEndpoint.cs):
-- 400+ lines of low-level cryptographic key generation (`ECDsa.Create(ECCurve.NamedCurves.nistP256)`).
-- Custom database persistence of private key DER bytes and public key discovery endpoints (`/.well-known/jwks.json`).
+An earlier audit of this codebase listed several layers that added work without adding guarantees. They are gone:
 
-### Why It's Over-Engineering for an Educational Core:
-- In production, security architects use dedicated identity providers (Keycloak, Duende IdentityServer, AWS Cognito, or Auth0) that handle key rotation, JWKS caching, and token signing out of the box.
-- Forcing learners to debug raw elliptic-curve coordinates (`x`, `y`, `crv`) distracts from teaching Clean Architecture and modular boundaries.
-
----
-
-## 3. The 29-Project Assembly Sprawl
-
-Creating 4 projects per module across 6 modules results in **29 `.csproj` projects**.
-
-### The Operational Penalty:
-1. **Slow Compilation:** MSBuild must resolve dependencies, copy DLLs, and compile 29 separate assemblies for every single change.
-2. **Mental Fatigue:** When adding a new property, developers must touch 4 projects.
-3. **Better Educational Alternative:** In modern .NET 10, module boundaries can be enforced cleanly using **1 project per module** with C# `internal` visibility, or using namespace conventions verified by `NetArchTest`.
+| Removed | Replaced by | Why the replacement is enough |
+|---|---|---|
+| Mapster mapping profiles between API contracts and commands | Explicit construction in the endpoint (`new CreateCampaignCommand(request.Title, ...)`) | The mappings were one-to-one. Explicit code is shorter, visible in the debugger and checked by the compiler. |
+| Hand-written validation calls in each controller action | `ValidationPipelineBehavior` in `BuildingBlocks.Application/Validation` | Runs every FluentValidation validator for a command once, before the handler, as the outermost behavior. Endpoints never validate. |
+| MVC controllers for every route | Minimal APIs in `src/API/CrowdFunding.API/Endpoints/`, using `TypedResults` and named routes for `CreatedAtRoute` | Less framework surface per route. One controller, `ModerationController`, is kept on purpose for comparison; see [minimal-apis-vs-controllers.md](../../docs/minimal-apis-vs-controllers.md). |
+| Swashbuckle | Built-in `Microsoft.AspNetCore.OpenApi` (`/openapi/v1.json`) with Scalar UI, Development and Testing only | The framework's own generator; one less third-party dependency. |
+| One central outbox poller in the API host | One `ModuleOutboxProcessor<TDbContext>` per publishing module, woken by a commit signal | Each module owns its outbox; see [outbox-architecture.md](../../docs/outbox-architecture.md). |
 
 ---
 
-## 4. Summary: The Spectrum of Justification
+## 2. The create-campaign pipeline today
+
+`POST /api/campaigns` still touches about fourteen files across five projects:
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ WHEN THE 14-FILE PIPELINE IS UNJUSTIFIED:                                   │
-│ - Basic CRUD operations (lookups, user bio, draft creation).                │
-│ - Single-row updates with no concurrent contention.                         │
-│ - Internal-only workflows where no external microservice listens.           │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ WHEN THE 14-FILE PIPELINE IS FULLY JUSTIFIED:                               │
-│ - Financial state mutations (pledges, ledger balances, refunds).            │
-│ - High-concurrency operations requiring pessimistic advisory locking.       │
-│ - Cross-boundary state synchronization where failure triggers compensating  │
-│   sagas or event streaming to Kafka.                                        │
-└─────────────────────────────────────────────────────────────────────────────┘
+1.  API/Endpoints/CampaignEndpoints.cs                          (route, explicit mapping)
+2.  API/Contracts/Campaigns/CreateCampaignRequest.cs            (API contract)
+3.  BuildingBlocks.Application/Messaging/ICommandDispatcher.cs  (dispatcher)
+4.  BuildingBlocks.Application/Validation/ValidationPipelineBehavior.cs
+5.  Campaigns.Application/.../CreateCampaign/CreateCampaignCommand.cs
+6.  Campaigns.Application/.../CreateCampaign/CreateCampaignCommandValidator.cs
+7.  Campaigns.Application/.../CreateCampaign/CreateCampaignCommandHandler.cs
+8.  Campaigns.Application/Abstractions/Persistence/ICampaignRepository.cs
+9.  Campaigns.Domain/Aggregates/Campaign.cs                     (Campaign.Create)
+10. Campaigns.Domain/Events/CampaignCreatedDomainEvent.cs
+11. Campaigns.Infrastructure/Persistence/Repositories/CampaignRepository.cs
+12. Campaigns.Infrastructure/Transactions/CampaignTransactionExecutor.cs  (domain event -> outbox row)
+13. Campaigns.Infrastructure/Persistence/DbContexts/CampaignsDbContext.cs
+14. BuildingBlocks.Infrastructure/Persistence/OutboxMessage.cs
+```
+
+The same use case in the Rosetta Stone's first tier is one file of about fifty lines ([`src/Samples/RosettaStone`](../../src/Samples/RosettaStone/README.md)). Put the two side by side when teaching.
+
+### Remaining ceremony
+
+**Command dispatching.** The endpoint sends a command through `ICommandDispatcher` rather than calling the handler. The dispatcher now earns part of its cost: it is where the validation pipeline and the audit behavior run, so cross-cutting policy is applied in one place. For a single create with no cross-cutting needs it would be indirection.
+
+**Request and command duplication.** `CreateCampaignRequest` and `CreateCampaignCommand` carry the same six fields (`Title`, `Story`, `Category`, `GoalAmount`, `Currency`, `DeadlineUtc`). The aggregate is not a third copy: `Campaign.Create` also takes the owner and the current time, wraps the goal in `Money` and enforces invariants. The two records let the HTTP contract evolve separately from the application layer. Whether that is worth two types per use case is a legitimate team decision.
+
+**Outbox on create.** Earlier versions of this audit called the outbox "dead weight" because only Moderation listened to `CampaignCreated`. That is no longer true: four modules consume it (Moderation opens a review; Contributions and Notifications update replicated read models; CampaignUpdates records activity). The outbox makes publication atomic with the insert and gives at-least-once delivery after a crash, even in process. For an event with no consumer it would still be unnecessary.
+
+---
+
+## 3. Hand-built ES256 signing and JWKS
+
+Identity generates P-256 keys, stores them in PostgreSQL ([`EfSigningKeyStore.cs`](../../src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Services/EfSigningKeyStore.cs)), encrypts the private keys at rest with AES-256-GCM ([`SigningKeyProtector.cs`](../../src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Services/SigningKeyProtector.cs)) and serves the public set from [`JwksEndpoint.cs`](../../src/API/CrowdFunding.API/Security/JwksEndpoint.cs).
+
+**Why it looks excessive.** Production systems usually delegate key generation, rotation and JWKS publishing to an identity provider (Keycloak, Duende IdentityServer, Cognito, Auth0). Debugging elliptic-curve parameters is not a Clean Architecture lesson.
+
+**Why it stays.** Asymmetric tokens with a JWKS endpoint let any other process validate tokens without a shared secret or a call to Identity. That property is what makes module extraction possible without an auth rewrite. Teach it as a separate topic, after the module structure.
+
+---
+
+## 4. Four projects per module
+
+Six modules with four projects each, plus the API host and three BuildingBlocks projects, give 28 production projects.
+
+**The cost.** More projects to build and navigate, and a placement decision for every new type (`Contracts`, `Application` or `BuildingBlocks`?).
+
+**The benefit.** Boundaries become facts about compiled assembly references, which the architecture tests check by reflection: `Domain` cannot reference EF Core, and one module cannot reference another's internals. A single project per module with `internal` types would give most of the isolation between modules but not the rule that the domain stays free of infrastructure.
+
+---
+
+## 5. Summary
+
+```
+The full pipeline is not justified for:
+- lookups and simple CRUD with no invariants
+- single-row updates without contention
+- events nobody consumes
+
+The full pipeline is justified for:
+- money movements (pledges, ledger entries, refunds)
+- operations serialized by advisory locks
+- state changes that other modules must learn about reliably
 ```

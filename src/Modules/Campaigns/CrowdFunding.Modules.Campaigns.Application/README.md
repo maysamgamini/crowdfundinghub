@@ -7,6 +7,6 @@ Contains the application-layer orchestration for the Campaigns module, including
 - `CrowdFunding.Modules.Campaigns.Application.csproj`: Project file that defines dependencies, target framework, and assembly references for this area.
 
 ## Child Folders
-- `Abstractions`: Contains source files related to Abstractions.
+- `Abstractions`: Ports (persistence, services, transactions) implemented by Infrastructure.
 - `DependencyInjection`: Registers Campaigns services, handlers, validators, and infrastructure components with the dependency injection container.
-- `Features`: Contains source files related to Features.
+- `Features`: Commands, queries, and event handlers for campaigns and reward tiers.

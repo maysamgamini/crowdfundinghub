@@ -1,7 +1,7 @@
 ﻿# Campaign Reviews
 
 ## Purpose
-Contains source files related to Campaign Reviews.
+Contains the campaign review use cases: review creation, human and automated decisions, and review queries.
 
 ## Files
 - No direct files live in this folder; it primarily organizes child folders.

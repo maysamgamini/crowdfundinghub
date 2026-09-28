@@ -1,157 +1,79 @@
-# The Under-Engineering Audit: Where We Didn't Go Far Enough
+# The Under-Engineering Audit: Where the Design Did Not Go Far Enough
 
-> **Curriculum Focus:** Hidden Architectural Traps & Incomplete Boundary Decoupling  
-> **Key Lesson:** *"A monolith that feels clean in-process can still collapse into a fragile Distributed Monolith the moment you put a network between its modules."*
-
----
-
-## 1. The 4 Hidden Microservice Decomposition Roadblocks
-
-While `CrowdFundingHub` enforces excellent static boundary checks via `NetArchTest`, several **runtime patterns** currently lurking in the codebase would create severe friction during microservices extraction:
-
-```mermaid
-graph TD
-    subgraph Roadblocks["4 Hidden Decomposition Roadblocks"]
-        RB1["Roadblock 1: Synchronous Inter-Module Query Coupling<br/>(Contributions calls Campaigns synchronously)"]
-        RB2["Roadblock 2: Outbox Poller Coupled to In-Process Memory<br/>(OutboxProcessor dispatches via IServiceProvider)"]
-        RB3["Roadblock 3: Shared Connection Pool & Physical DB<br/>(All DbContexts share max 100 Postgres connections)"]
-        RB4["Roadblock 4: Shared BuildingBlocks Kernel<br/>(Binary coupling across all module assemblies)"]
-    end
-
-    RB1 --> DM1["Result: Distributed Monolith & Cascading Outages"]
-    RB2 --> DM2["Result: Cannot Stream Events to External Services"]
-    RB3 --> DM3["Result: Pool Starvation Across Service Boundaries"]
-    RB4 --> DM4["Result: Recompile & Deployment Cascades"]
-```
+> **Curriculum focus:** hidden coupling and incomplete decoupling
+> **Key lesson:** a monolith that looks clean in process can still become a distributed monolith once a network sits between its modules.
+> **Status:** revised 2026-09-28. The first audit found four decomposition roadblocks and an incomplete domain lifecycle. Each item below says what the problem was, whether it is resolved, and how. Section 3 lists what is still open.
 
 ---
 
-### Roadblock 1: Synchronous Inter-Module Query Coupling (The Cascading Failure Trap)
+## 1. The four decomposition roadblocks
 
-In [`MakeContributionCommandHandler.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs#L42-L44):
-```csharp
-var campaignAvailability = await _campaignContributionAvailabilityReader
-    .GetCampaignContributionAvailabilityAsync(
-        new GetCampaignContributionAvailabilityQuery(command.CampaignId), 
-        cancellationToken);
-```
+### Roadblock 1: synchronous cross-module query (resolved)
 
-#### The Architectural Trap:
-In the monolith, `_campaignContributionAvailabilityReader` executes an in-process query taking **0.2 milliseconds**.
+**The problem.** `MakeContributionCommandHandler` used to call `ICampaignContributionAvailabilityReader`, an interface implemented by the Campaigns module, to check that a campaign was open before accepting a pledge. In process this was a cheap method call. Across a network it would become a synchronous call: if Campaigns were down or restarting, Contributions could not accept pledges.
 
-When `Contributions` and `Campaigns` are separated into distinct microservices over a network:
-1. This becomes a synchronous HTTP or gRPC call across the cluster.
-2. If `Campaigns` suffers an outage, network partition, or deployment restart, `Contributions` **fails to accept pledges**.
-3. Pledges are blocked by campaign read availability, violating autonomous service availability.
+**How it was resolved.** The reader no longer exists. Contributions keeps a replicated read model, the `active_campaigns_cache` table (entity `ActiveCampaignCache`), which `ReplicatedCampaignEventHandlers` updates from `CampaignCreated`, `CampaignPublished`, `CampaignCancelled`, `CampaignSucceeded` and `CampaignFailed` application events. [`MakeContributionCommandHandler.cs`](../../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs) checks its own table. Notifications (`CampaignTitleCache`) and CampaignUpdates (`CampaignOwnerCache`) use the same technique. `ReplicatedReadModelBoundaryTests` in the architecture tests guard it.
 
-#### The Architectural Solution to Teach:
-Replace synchronous RPC with **Asynchronous Replicated Read Models (Event-Carried State Transfer)**:
-- The `Contributions` service subscribes to `CampaignPublishedApplicationEvent` and `CampaignCancelledApplicationEvent`.
-- `Contributions` maintains a local, lightweight lookup table (`contributions.active_campaigns_cache`).
-- When a contribution arrives, `Contributions` verifies campaign status against its **own local database**, achieving **100% autonomous uptime** even if the Campaigns service is down!
+**The trade-off to teach.** The read model is eventually consistent: a pledge can be accepted in the short window after a campaign closes and before the event arrives. The authoritative check stays in Campaigns, which serializes on the campaign's advisory lock and does not credit a pledge to a campaign that is no longer published (`AddContributionToCampaignResult.Credited` is `false`).
 
-> [!NOTE]
-> **Resolved in Reference Codebase ([`TICKET-023`](../../qa-tickets/TICKET-023-ASYNCHRONOUS-REPLICATED-READ-MODELS.md)):**  
-> `ICampaignContributionAvailabilityReader` was eliminated. The `Contributions` module now replicates published/cancelled campaign state into `contributions.campaign_read_models`, achieving 100% local query autonomy.
+### Roadblock 2: outbox poller hard-wired to in-process dispatch (resolved, with one gap)
 
----
+**The problem.** A single `OutboxProcessorBackgroundService` in the API host read every module's outbox and handed events directly to handlers resolved from the DI container. There was no seam for a broker.
 
-### Roadblock 2: Outbox Poller Coupled to In-Process Memory Dispatching
+**How it was resolved.** That class no longer exists. Campaigns, Contributions and Moderation each run a `ModuleOutboxProcessor<TDbContext>`, which claims rows with `FOR UPDATE SKIP LOCKED`, reclaims expired leases, retries with exponential back-off and dead-letters after five attempts. Processors publish through `IMessageBus`, chosen by `Messaging:Provider`: `InProcessMessageBus` (default) or `RabbitMqMessageBus`, which publishes a CloudEvents envelope. A commit interceptor wakes the processor as soon as a transaction that wrote outbox rows commits; the 5-second poll is only a fallback. See [outbox-architecture.md](../../docs/outbox-architecture.md).
 
-In [`OutboxProcessorBackgroundService.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs#L70):
-```csharp
-await _eventPublisher.PublishAsync(appEvent, stoppingToken);
-```
-The poller reads from PostgreSQL (`FOR UPDATE SKIP LOCKED`) and dispatches directly to `ServiceProviderEventPublisher`—which looks up handlers in the local DI container.
+**What is still missing.** RabbitMQ is publish-only. There is no consumer, so events cannot yet cross a process boundary (section 3).
 
-#### The Architectural Trap:
-The outbox processor has no concept of an external message broker. Extracting a service requires rewriting the background service.
+### Roadblock 3: one connection string for every module (resolved in configuration)
 
-#### The Architectural Solution to Teach:
-Introduce a pluggable **Message Bus Abstraction** (`IMessageBus`) or leverage MassTransit / Wolverine:
-- In Monolith mode: Publishes to in-process memory.
-- In Microservices mode: Publishes to RabbitMQ, Apache Kafka, or AWS SQS with a single configuration flag in `appsettings.json`.
+**The problem.** Every `DbContext` was registered with the same connection string, so all modules shared one database and one connection pool. A surge of pledges could starve login and moderation queries.
 
-> [!NOTE]
-> **Resolved in Reference Codebase ([`TICKET-024`](../../qa-tickets/TICKET-024-PLUGGABLE-MESSAGE-BUS-RABBITMQ-KAFKA.md) & [`TICKET-025`](../../qa-tickets/TICKET-025-MODULAR-OUTBOX-PARTITIONING-AUTONOMOUS-WORKERS.md)):**  
-> `IMessageBus` was implemented with pluggable `InMemoryMessageBus` (local channels) and RabbitMQ support, alongside autonomous per-module outbox workers.
+**How it was resolved.** Each module resolves its connection string with `GetRequiredModuleConnectionString`: it reads `ConnectionStrings:{Module}Db` (for example `ContributionsDb`) and falls back to `DefaultConnection`. Pointing a module at its own database or pool is a configuration change. `MultiDatabaseConnectionDecouplingTests` cover it.
+
+**What to point out.** With the default configuration every module falls back to the same string, and Npgsql pools by connection string, so they still share one pool until an operator sets the module keys.
+
+### Roadblock 4: the shared BuildingBlocks kernel (open by design)
+
+**The problem.** Every module references `BuildingBlocks.Domain`, `BuildingBlocks.Application` and `BuildingBlocks.Infrastructure`. In a multi-team service landscape a shared library forces coordinated rebuilds and releases.
+
+**The current position.** BuildingBlocks holds generic mechanisms (dispatching, validation and audit behaviors, outbox and inbox, error types, value objects such as `Money`), not the concepts of any one bounded context. The lesson is the distinction: generic utilities can ship as versioned packages; domain concepts must not be shared across contexts.
 
 ---
 
-### Roadblock 3: Shared PostgreSQL Host & Connection Pool Contention
+## 2. The crowdfunding lifecycle (resolved)
 
-All DbContexts (`CampaignsDbContext`, `ContributionsDbContext`, `IdentityDbContext`, `ModerationDbContext`) are registered in [`Program.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Program.cs) using the exact same connection string.
+**The problem.** Campaigns stayed published forever unless cancelled, and `ContributionStatus` had no `Refunded` state, so failed or cancelled campaigns never returned money.
 
-#### The Architectural Trap:
-Although schemas are isolated (`campaigns`, `contributions`, etc.), all modules share a single physical connection pool (default: 100 connections). A surge of pledges in `Contributions` will exhaust all available connections, starving authentication (`Identity`) and moderation queries.
-
-#### The Architectural Solution to Teach:
-Demonstrate independent connection string configurations per module, proving that each DbContext can point to a separate physical database container with zero code modifications:
-```json
-"ConnectionStrings": {
-  "IdentityDb": "Host=identity-db;Database=identity;...",
-  "CampaignsDb": "Host=campaigns-db;Database=campaigns;...",
-  "ContributionsDb": "Host=contributions-db;Database=contributions;..."
-}
-```
-
-> [!NOTE]
-> **Resolved in Reference Codebase ([`TICKET-026`](../../qa-tickets/TICKET-026-MULTI-DATABASE-CONNECTION-DECOUPLING.md)):**  
-> Hierarchical connection string resolution was introduced via `GetRequiredModuleConnectionString(...)`, allowing individual modules to connect to independent database servers while falling back to `DefaultConnection`.
-
----
-
-### Roadblock 4: The Shared `BuildingBlocks` Kernel Trap
-
-All modules reference `CrowdFunding.BuildingBlocks.Application.csproj`.
-
-#### The Architectural Trap:
-In microservices, sharing a monolithic "Common" or "BuildingBlocks" library causes **binary coupling**. When Team A changes a shared interface, Teams B, C, and D are forced to recompile, test, and synchronize deployments.
-
-#### The Architectural Solution to Teach:
-Teach the difference between:
-- **Shared Utilities** (generic pagination, clock abstractions) $\rightarrow$ Distributed as versioned internal NuGet packages.
-- **Domain Concepts** $\rightarrow$ Duplicated or independently modeled in each bounded context (Share Nothing Architecture).
-
----
-
-## 2. Incomplete Crowdfunding Domain Lifecycle
-
-The most significant functional blind spot in the codebase is the **unimplemented "All-or-Nothing" crowdfunding lifecycle**:
+**How it was resolved.**
 
 ```mermaid
 stateDiagram-v2
     [*] --> Draft
-    Draft --> InReview: Submit
-    InReview --> Approved: Moderator Approves
-    Approved --> Active: Creator Publishes
-    
-    state "Active (Accepting Pledges)" as Active
-    
-    Active --> Successful: Deadline Reached & Goal Met
-    Active --> Failed: Deadline Reached & Goal NOT Met
-    Active --> Cancelled: Creator Cancels
-    
-    state "Refund Backers (UNIMPLEMENTED!)" as Refund
-    Failed --> Refund
-    Cancelled --> Refund
+    Draft --> Published: Publish (after moderation approval)
+    Published --> Successful: Deadline passed, goal met
+    Published --> Failed: Deadline passed, goal not met
+    Published --> Cancelled: Owner cancels
+    Failed --> RefundBackers
+    Cancelled --> RefundBackers
+    state "Refund succeeded contributions" as RefundBackers
 ```
 
-### The Missing Workflows:
-1. **Automated Campaign Expiration Background Worker:**
-   - There is no background service checking `DeadlineUtc <= DateTime.UtcNow`. Campaigns stay `Active` forever unless manually cancelled.
-2. **Backer Refund State Machine:**
-   - In `Contribution.cs`, the state machine only supports `Pending`, `Succeeded`, and `Failed`. **There is no `Refunded` state**.
-   - If a campaign fails or is cancelled, backers are never refunded.
+- `CampaignExpirationBackgroundService` (Campaigns.Infrastructure) runs every minute, finds published campaigns past their deadline and dispatches `CompleteCampaignCommand` or `FailCampaignCommand`.
+- `CampaignTerminationRefundHandler` (Contributions.Application) handles `CampaignFailedApplicationEvent` and `CampaignCancelledApplicationEvent`, loads `Succeeded` contributions in batches of 100 and calls `Contribution.Refund`, which moves them to `Refunded` and raises `ContributionRefundedApplicationEvent`.
+- Campaigns handles that event by appending a compensating refund entry to the append-only campaign ledger, so `RaisedAmount` of a cancelled or failed campaign falls as refunds land. Reward-tier reservations are released by another handler of the same event. See [append-only-ledger.md](../../docs/append-only-ledger.md).
 
-### Pedagogical Impact:
-The single best real-world demonstration of **Sagas, Event Choreography, and Compensating Transactions** in a microservice system is the **Crowdfunding Refund Workflow**:
-- `Campaigns` service emits `CampaignFailedEvent`.
-- `Contributions` service consumes event, loads all confirmed pledges, mutates state to `RefundInitiated`, and dispatches commands to the payment gateway.
-- Payment gateway webhook confirms refund $\rightarrow$ contribution transitions to `Refunded`.
+This is choreography: no coordinator, each module reacts to events it subscribes to. What it does not include is an outbound refund call to a payment provider; the refund is recorded as domain state.
 
-Leaving this unimplemented deprives architects of seeing how distributed sagas handle eventual consistency in failure scenarios!
+---
 
-> [!NOTE]
-> **Resolved in Reference Codebase ([`TICKET-027`](../../qa-tickets/TICKET-027-DISTRIBUTED-CROWDFUNDING-LIFECYCLE-REFUND-SAGA.md)):**  
-> Both the `CampaignExpirationBackgroundService` (handling `CompleteAsSuccessful` and `ExpireAsFailed`) and the backer refund event choreography (`ContributionStatus.Refunded` and compensation saga) are fully implemented and verified in the codebase.
+## 3. What is still open
+
+1. **No broker consumer.** Events are published to RabbitMQ but nothing consumes them. Until a consumer exists (with the inbox for deduplication), extraction cannot run over a broker.
+2. **One synchronous cross-module read left.** `PublishCampaignCommandHandler` in Campaigns calls `ICampaignReviewStatusReader` (defined in `Moderation.Contracts`) to check that a campaign was approved before publishing. It is the same pattern Roadblock 1 removed from the pledge path and needs the same fix before Moderation can be extracted: a review-status read model in Campaigns fed by `CampaignReviewApproved` and `CampaignReviewRejected` events.
+3. **Shared schema.** Module tables live in the `public` schema, separated by ownership and naming; only the EF migration history table is in a per-module schema. Moving tables into module schemas would make a `pg_dump --schema` split possible.
+4. **Per-instance signal and rate limits.** The outbox wake-up signal and the rate limiter live in memory; other replicas fall back to the 5-second sweep, and limits apply per instance.
+5. **Side effects outside the inbox.** E-mail and metering depend on provider idempotency keys; a crash between the external call and the commit can repeat them. Outbound webhooks are at-least-once.
+6. **Unsigned unsubscribe link.** One-click unsubscribe trusts a bare user id instead of a signed, expiring token.
+7. **Key encryption key rotation.** Signing keys are encrypted at rest with a single configured key that cannot yet be rotated.
+
+The platform-wide list is in [PLATFORM_SHORTCOMINGS.md](../../docs/PLATFORM_SHORTCOMINGS.md).

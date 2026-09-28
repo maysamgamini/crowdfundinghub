@@ -1,10 +1,10 @@
 ﻿# Dependency Injection
 
 ## Purpose
-Registers Notifications services, handlers, validators, and infrastructure components with the dependency injection container.
+Registers the Notifications application layer (preference query and command handlers) with the dependency injection container.
 
 ## Files
-- `NotificationsApplicationDependencyInjection.cs`: Dependency injection registration entry point for the surrounding layer.
+- `NotificationsApplicationDependencyInjection.cs`: Registration entry point for the Notifications application layer.
 
 ## Child Folders
 - None.

@@ -29,11 +29,11 @@ dotnet test CrowdFunding.slnx --collect:"XPlat Code Coverage" --results-director
 
 ### 3. Critical Path Gap Identification
 Check specifically for test coverage on:
-- Background services (`OutboxProcessorBackgroundService`)
-- Middleware & Exception filters (`GlobalExceptionHandler`, `CorrelationIdMiddleware`)
+- Background services (the per-module outbox processors built on `ModuleOutboxProcessor<TDbContext>`, `CampaignExpirationBackgroundService`, `RewardTierReservationScavengerBackgroundService`, `WebhookDispatcherBackgroundService`, `SigningKeyRefreshBackgroundService`)
+- Pipeline components (`GlobalExceptionHandler`, `ExceptionClassifier`, `CorrelationIdMiddleware`, `ValidationPipelineBehavior`, `AuditLoggingPipelineBehavior`)
 - Security & Endpoints (`JwksEndpoint`, `RateLimitingConfiguration`)
 - Edge branches in command validators and event handlers
-- Optimistic locking and concurrency retry loops
+- Optimistic locking (`xmin`) conflicts, the append-only campaign ledger, and inbox idempotency
 
 ## Reporting
-Document coverage findings, gaps, and missing test recommendations under `qa-tickets/`.
+Report coverage findings, gaps, and missing test recommendations in your final report to the caller. Do not create ticket files in the repository.

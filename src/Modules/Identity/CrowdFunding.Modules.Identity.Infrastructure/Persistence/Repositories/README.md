@@ -4,7 +4,8 @@
 Contains repository implementations for the Identity module.
 
 ## Files
-- `UserRepository.cs`: Repository implementation that persists and loads aggregate state.
+- `RefreshTokenRepository.cs`: EF Core implementation of `IRefreshTokenRepository`.
+- `UserRepository.cs`: EF Core implementation of `IUserRepository`.
 
 ## Child Folders
 - None.

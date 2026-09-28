@@ -136,6 +136,8 @@ public sealed class ModerationServiceExtractionSmokeTests : IAsyncLifetime
             builder.UseSetting("OpenMeter:BaseUrl", "https://openmeter.cloud");
             builder.UseSetting("RateLimiting:Auth:PermitLimit", "100000");
             builder.UseSetting("RateLimiting:Payment:PermitLimit", "100000");
+            builder.UseSetting("RateLimiting:Global:PermitLimit", "100000");
+            builder.UseSetting("SigningKeyEncryption:Key", "jtLCVz1aVwU89pIYA7XsdoffmhlWnw/oS5Huy+aSX00=");
         }
     }
 

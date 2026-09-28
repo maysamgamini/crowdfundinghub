@@ -7,4 +7,4 @@ Groups contract-level queries exposed by the Moderation module.
 - No direct files live in this folder; it primarily organizes child folders.
 
 ## Child Folders
-- `GetCampaignReviewStatusByCampaignId`: Contains source files related to Get Campaign Review Status By Campaign Id.
+- `GetCampaignReviewStatusByCampaignId`: The cross-module query, result, and reader interface Campaigns uses to check a campaign's review status before publishing.

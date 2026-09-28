@@ -1,7 +1,7 @@
 ﻿# Contributions
 
 ## Purpose
-Contains source files related to Contributions.
+Contains the contribution use cases: commands, queries, and event handlers.
 
 ## Files
 - No direct files live in this folder; it primarily organizes child folders.

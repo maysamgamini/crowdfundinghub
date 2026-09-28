@@ -1,10 +1,10 @@
 ﻿# Dependency Injection
 
 ## Purpose
-Registers Campaign Updates services, handlers, validators, and infrastructure components with the dependency injection container.
+Registers Campaign Updates application handlers and validators with the dependency injection container.
 
 ## Files
-- `CampaignUpdatesApplicationDependencyInjection.cs`: Dependency injection registration entry point for the surrounding layer.
+- `CampaignUpdatesApplicationDependencyInjection.cs`: `AddCampaignUpdatesApplication`, the registration entry point for the Campaign Updates application layer.
 
 ## Child Folders
 - None.

@@ -26,6 +26,9 @@ Executable architecture tests that inspect compiled assembly references (`Assemb
   - Domain does not reference Application or Infrastructure; Application does not reference other modules' internals.
 - `ReplicatedReadModelBoundaryTests.cs`:
   - Contributions validates pledges against its own replicated campaign snapshot, never a synchronous query into Campaigns.
+- `ApiHostDependencyTests.cs`:
+  - The API host references no teaching sample (the Rosetta Stone sample is its own host).
+  - The API exposes Minimal APIs with exactly one controller, `ModerationController`, kept for comparison.
 - `ModerationModuleDependencyTests.cs`:
   - Enforces that `API` does not directly reference `Moderation.Domain`.
   - Verifies module boundary isolation between `Moderation` and peer business modules.

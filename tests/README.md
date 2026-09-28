@@ -5,16 +5,16 @@ Contains automated test suites designed to safeguard software correctness, enfor
 
 ## Test Strategy & Categories
 1. **Architecture Tests (`tests/ArchitectureTests`)**:
-   - Uses `NetArchTest.Rules` to enforce architectural constraints.
-   - Verifies that `API` does not bypass application boundaries to reference domain models directly.
-   - Asserts that modules only communicate via `Contracts` and cannot depend on each other's internal domain or infrastructure implementations.
+   - Plain xUnit tests that inspect compiled assembly references (`Assembly.GetReferencedAssemblies()`); no third-party rules library.
+   - Verifies that `API` does not bypass application boundaries to reference domain models directly, references no teaching sample, and keeps exactly one controller.
+   - Asserts that every module has the four layers and that modules only communicate via `Contracts`, never through each other's Domain, Application, or Infrastructure assemblies.
 2. **Unit Tests (`tests/UnitTests`)**:
    - Isolated, in-memory tests running in milliseconds.
    - Uses lightweight fakes (`FakeTransactionExecutors`, `TestCurrentUser`, `TestDispatchers`) instead of database connections or network sockets.
-   - Tests business rules, aggregate state transitions, command validators, CQRS handlers, outbox serialization, and OpenMeter CloudEvent mapping.
+   - Tests business rules, aggregate state transitions, command validators, CQRS handlers, the command pipeline (validation and audit behaviors), exception classification, outbox serialization and wake-up signal, webhook signature verification, signing-key encryption, and OpenMeter CloudEvent mapping.
 3. **Integration Tests (`tests/IntegrationTests`)**:
-   - Database-backed integration tests utilizing real PostgreSQL instances via `Testcontainers`.
-   - Exercises end-to-end database migrations, advisory lock concurrency, race conditions during parallel contributions, and outbox idempotency.
+   - Database-backed integration tests utilizing real PostgreSQL, Redis, and RabbitMQ instances via `Testcontainers`.
+   - Exercises the full HTTP pipeline end to end, database migrations, the append-only campaign ledger under concurrency, optimistic concurrency, outbox delivery and wake-up, inbox idempotency, webhooks, and edge hardening (rate limiting, CORS).
 
 ## Running Tests
 - **Run all tests**:

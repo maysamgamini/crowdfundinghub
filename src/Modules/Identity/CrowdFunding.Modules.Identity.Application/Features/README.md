@@ -1,7 +1,7 @@
 ﻿# Features
 
 ## Purpose
-Contains source files related to Features.
+Contains the Identity module's use cases, organized by feature area.
 
 ## Files
 - No direct files live in this folder; it primarily organizes child folders.

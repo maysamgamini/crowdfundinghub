@@ -4,7 +4,7 @@
 Provides automated database schema migration runners and operational account seeding utilities executed at application startup or via dedicated CLI command arguments.
 
 ## Files
-- `MigrationRunner.cs`: Discovers and executes pending Entity Framework Core migrations across all module `DbContext` instances (`IdentityDbContext`, `CampaignsDbContext`, `ContributionsDbContext`, and `ModerationDbContext`). Invoked automatically in the `Development` environment and directly during deployment init-containers via `dotnet run -- migrate`.
+- `MigrationRunner.cs`: Discovers and executes pending Entity Framework Core migrations across all module `DbContext` instances (`CampaignsDbContext`, `ContributionsDbContext`, `IdentityDbContext`, `ModerationDbContext`, `NotificationsDbContext`, `CampaignUpdatesDbContext`) and the shared `AuditDbContext`. Invoked automatically in the `Development` and `Testing` environments and directly during deployment init-containers via `dotnet run -- migrate`.
 - `AdminSeeder.cs`: Seeds the initial administrative user out-of-band via CLI execution (`dotnet run -- seed-admin <email> <password> <displayName>`). Guarantees that administrative privileges are provisioned securely by operators rather than via public API endpoints.
 
 ## Operational Modes

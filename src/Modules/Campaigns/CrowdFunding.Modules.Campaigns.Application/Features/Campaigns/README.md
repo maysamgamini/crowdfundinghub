@@ -1,7 +1,7 @@
 ﻿# Campaigns
 
 ## Purpose
-Contains source files related to Campaigns.
+Contains the campaign lifecycle and funding-ledger use cases.
 
 ## Files
 - No direct files live in this folder; it primarily organizes child folders.

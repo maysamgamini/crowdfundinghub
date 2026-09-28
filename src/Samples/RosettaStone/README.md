@@ -38,6 +38,16 @@ production API returns for Tier 3 when its `ValidationPipelineBehavior` rejects 
 `tests/IntegrationTests/CrowdFunding.IntegrationTests/RosettaStoneParityTests.cs`, which boots
 both hosts against one real Postgres instance and asserts this across all three tiers.
 
+## Project layout
+
+- `Program.cs`: The sample's own host (Scalar UI, migrations on startup, the Rosetta endpoints).
+- `RosettaStoneDependencyInjection.cs`: Registers the `RosettaStoneDbContext`, the Tier 2 handler and the validator.
+- `RosettaStoneEndpoints.cs`: Maps Tier 1 and Tier 2 under `/rosetta/v1/campaigns` with one OpenAPI tag.
+- `RosettaValidationProblem.cs`: Turns a FluentValidation result into the same `Results.ValidationProblem` body Tier 3 returns.
+- `01-MinimalApiCrud/`, `02-PragmaticCqrs/`, `03-RichDomainModel/`: The three tiers (Tier 3's folder is a README that points at the production code).
+- `Persistence/`: `CampaignRecord`, `RosettaStoneDbContext` (schema `rosetta`) and its migrations.
+- `Properties/launchSettings.json`: The launch profile (`http://localhost:5090`) and its connection string.
+
 ## The scorecard
 
 Real numbers from this codebase, not estimates — Tier 1 and Tier 2 are `wc -l` on the files in
@@ -47,19 +57,19 @@ graph today.
 | Dimension | Tier 1: Minimal API | Tier 2: Pragmatic CQRS | Tier 3: Rich DDD + Outbox |
 | :--- | :---: | :---: | :---: |
 | **Files touched** | 1 | 3 | 14 |
-| **Lines of code** | 48 | 91 | 960 total (see note) |
+| **Lines of code** | 49 | 92 | 960 total (see note) |
 | **Assemblies involved** | 1 (`Samples.RosettaStone`) | 2 (`Samples.RosettaStone` + `BuildingBlocks.Application`) | 5 |
 | **Persistence model** | Flat record, direct `DbSet.Add` | Flat record, direct `DbSet.Add` via handler | Aggregate root, private setters, invariants enforced in the constructor/factory |
 | **Validation** | Manual `if` | `FluentValidation`, called explicitly by the endpoint | `FluentValidation`, run by the command pipeline (`ValidationPipelineBehavior`) |
-| **Decomposition effort** | Zero — owns its own `rosetta` schema already | Zero — owns its own `rosetta` schema already | Zero — contracts, events, and the transaction boundary are already extracted (see TICKET-029) |
+| **Decomposition effort** | Zero — owns its own `rosetta` schema already | Zero — owns its own `rosetta` schema already | Low by design — contracts, events, and the transaction boundary are already module-owned; extracting a module into its own service is the next course step and is not implemented on this branch |
 | **Audit / outbox guarantee** | None — a lost write after `SaveChangesAsync` is just gone | None — same as Tier 1 | Guaranteed at-least-once delivery: `CampaignCreatedDomainEvent` → outbox row committed in the *same* transaction as the row it describes |
-| **Concurrency defense** | None needed — single-writer insert, no shared mutable state | None needed — same reason | `xmin` optimistic concurrency + `pg_advisory_xact_lock` on later commands (`AddContribution`, `Publish`, `Cancel`) that mutate this same row |
+| **Concurrency defense** | None needed — single-writer insert, no shared mutable state | None needed — same reason | `pg_advisory_xact_lock` per campaign plus `xmin` optimistic concurrency as a safety net on later commands (`AddContributionToCampaign`, `Publish`, `Cancel`) that mutate this same row; the funding total is an append-only ledger checked by database constraints |
 | **When to choose this tier** | Config, lookups, prototypes, anything with no downstream consumers | Standard CRUD with validation but no cross-module consequences | Financial ledgers, multi-step lifecycles, anything another module's outbox subscriber depends on |
 
 **Note on the 960-line Tier 3 total** (measured when Tier 3's entry point was an MVC controller;
 it is now a Minimal API, see `03-RichDomainModel/README.md`): the endpoint, the `Campaign` aggregate, the repository,
 and the transaction executor are *shared* across every Campaigns write use case (Publish,
-Cancel, AddContribution, ...), not exclusive to `CreateCampaign`. The 14-file, 960-line total is
+Cancel, AddContributionToCampaign, ...), not exclusive to `CreateCampaign`. The 14-file, 960-line total is
 what a reader has to open and understand to trace one request end to end — that cognitive cost
 is real and is exactly what this ticket exists to make visible — but the code you'd actually
 *write* for one more command in an already-justified Tier 3 module is much smaller than 960
@@ -85,5 +95,4 @@ problem. A "no" to both is what Tier 1 or Tier 2 are for, and reaching for Tier 
 architectural dogmatism this sample exists to make expensive and visible.
 
 See also: [`educational/01-architecture-paradigms/poly-pattern-architecture.md`](../../../educational/01-architecture-paradigms/poly-pattern-architecture.md)
-for the narrative version of this argument, and TICKET-028 in `qa-tickets/` for the original
-finding.
+for the narrative version of this argument.

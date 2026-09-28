@@ -9,4 +9,4 @@ Orchestrates the creation or promotion of the system administrator user account 
 - `SeedAdminResult.cs`: Result record indicating the provisioned user ID and whether the account was newly registered or promoted.
 
 ## Security Context
-Standard user registration (`RegisterUserCommand`) unconditionally assigns the `User` role. Administrative privileges can only be granted by existing administrators or through this dedicated CLI command pipeline during infrastructure bootstrapping.
+Standard user registration (`RegisterUserCommand`) assigns only the `Creator` and `Backer` roles and never `Admin`, not even to the first user. `SeedAdminCommandHandler` is the only code that grants `RoleConstants.Admin`, and it is reachable only from the CLI (`dotnet run -- seed-admin <email> <password> <displayName>`).

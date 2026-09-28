@@ -8,6 +8,6 @@ Contains the application-layer orchestration for the Notifications module, inclu
 
 ## Child Folders
 - `Abstractions`: Declares persistence repositories (`INotificationPreferenceRepository`, `ICampaignTitleCacheRepository`) and service contracts (`IEmailNotificationService`, `INotificationsDateTimeProvider`).
-- `DependencyInjection`: Registers Notifications services, handlers, validators, and infrastructure components with the dependency injection container.
-- `Events`: Groups event handlers reacting to outbox messages (e.g. `ContributionPaymentConfirmedNotificationHandler`, `CampaignCancellationNotificationHandler`, `CampaignUpdateNotificationHandler`).
-- `Features`: CQRS slices implementing notification business operations (e.g. `Preferences` with `GetNotificationPreferencesQuery`, `UpdateNotificationPreferencesCommand`, `UnsubscribeCommand`).
+- `DependencyInjection`: Registers the preference query and command handlers with the dependency injection container.
+- `Events`: Event handlers reacting to other modules' application events (`ContributionPaymentConfirmedNotificationHandler` and `ContributionRefundedNotificationHandler` send email; the campaign and review handlers are currently no-ops).
+- `Features`: CQRS slices implementing notification business operations: `Preferences` (the `GetNotificationPreferencesQuery` handler, `UpdateNotificationPreferencesCommand`, `UnsubscribeCommand`) and `ReplicatedCampaigns` (`ReplicatedCampaignTitleEventHandler`, which fills the local campaign title cache).

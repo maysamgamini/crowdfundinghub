@@ -4,7 +4,7 @@
 Defines transaction-boundary abstractions for commands in the Contributions module.
 
 ## Files
-- `IContributionTransactionExecutor.cs`: Infrastructure component that wraps work in a module-specific transaction.
+- `IContributionTransactionExecutor.cs`: Defines the transaction boundary for contribution write operations.
 
 ## Child Folders
 - None.

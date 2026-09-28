@@ -4,8 +4,8 @@
 Contains infrastructure service implementations used by the Contributions module.
 
 ## Files
-- `ContributionReadService.cs`: Read-model service used by query handlers to fetch denormalized data.
-- `SystemDateTimeProvider.cs`: Abstraction or implementation for retrieving the current UTC time.
+- `ContributionReadService.cs`: Implements `IContributionReadService` (read-model queries used by query handlers).
+- `SystemDateTimeProvider.cs`: System clock implementation of `IContributionDateTimeProvider`.
 
 ## Child Folders
 - None.

@@ -4,7 +4,7 @@
 Groups contract-level queries exposed by the Campaigns module.
 
 ## Files
-- No direct files live in this folder; it primarily organizes child folders.
+- None. The folder is currently empty: the Campaigns module exposes no cross-module queries. Contributions validates pledges against its own replicated campaign snapshot (built from Campaigns events) rather than querying Campaigns synchronously.
 
 ## Child Folders
-- `GetCampaignContributionAvailability`: Contains source files related to Get Campaign Contribution Availability.
+- None.

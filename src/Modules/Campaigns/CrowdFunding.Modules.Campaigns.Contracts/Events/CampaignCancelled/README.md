@@ -1,7 +1,7 @@
 ﻿# Campaign Cancelled
 
 ## Purpose
-Contains source files related to Campaign Cancelled.
+The application event published through the outbox when a campaign is cancelled.
 
 ## Files
 - `CampaignCancelledApplicationEvent.cs`: Application event contract published for cross-module reactions.

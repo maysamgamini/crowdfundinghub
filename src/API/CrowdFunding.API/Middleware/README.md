@@ -1,23 +1,27 @@
 # Request Processing Middleware
 
 ## Purpose
-Organizes ASP.NET Core middleware components participating in the HTTP request processing pipeline.
+This folder is intentionally empty: it holds no code, only this README. The API has a single custom middleware class, and it lives next to the rest of the observability code. The folder is kept so a reader looking for "the middleware" finds a map of where each pipeline component is defined and in which order `Program.cs` registers it.
 
-## Architectural Architecture
-Modern ASP.NET Core middleware and cross-cutting pipeline handlers in this application are organized as follows:
-- **Exception Handling**: Migrated to the modern `IExceptionHandler` abstraction located at `src/API/CrowdFunding.API/Observability/GlobalExceptionHandler.cs`, providing RFC 7807 problem details formatting and status code mapping.
-- **Distributed Correlation**: Located at `src/API/CrowdFunding.API/Observability/CorrelationIdMiddleware.cs`, capturing or assigning correlation identifiers for every incoming request and pushing them to Serilog `LogContext`.
-- **Rate Limiting**: Configured in `src/API/CrowdFunding.API/RateLimiting/RateLimitingConfiguration.cs` using ASP.NET Core's built-in `RateLimiter` middleware.
-- **Security & JWKS**: Configured in `src/API/CrowdFunding.API/Security/` and exposed via endpoint routing.
+## Where the Pipeline Components Live
+- **Exception handling**: `../Observability/GlobalExceptionHandler.cs`, an `IExceptionHandler` registered with `AddExceptionHandler` and activated by `app.UseExceptionHandler()`. It classifies the exception with `ExceptionClassifier` (BuildingBlocks.Infrastructure/ErrorHandling) and writes an RFC 9457 `application/problem+json` response with a `traceId`.
+- **Correlation id**: `../Observability/CorrelationIdMiddleware.cs`, the only custom middleware class. It reads or assigns a correlation id for each request, returns it in a response header, and pushes it into the Serilog `LogContext`.
+- **Forwarded headers and CORS**: `../Security/EdgeSecurityConfiguration.cs` configures the built-in `ForwardedHeaders` middleware (trusting loopback plus `ForwardedHeaders:KnownProxies` / `KnownNetworks`) and the default CORS policy from `Cors:AllowedOrigins`.
+- **Rate limiting**: `../RateLimiting/RateLimitingConfiguration.cs` configures the built-in `RateLimiter` middleware (global limiter plus named policies; a rejected request gets a 429 ProblemDetails with `Retry-After`).
+- **Authentication and JWKS**: JWT Bearer options are configured in `Program.cs`; the public key set is served by `../Security/JwksEndpoint.cs`.
+- **Logging**: Serilog is attached to the host in `Program.cs` (`builder.Host.UseCrowdFundingSerilog()`, defined in `../Observability/LoggingConfiguration.cs`); it is not a pipeline middleware.
 
 ## Middleware Execution Pipeline Order
-In `Program.cs`, the pipeline is ordered to guarantee predictable security and error handling:
-1. Serilog Request Logging (`UseCrowdFundingSerilog`)
-2. Exception Handling (`app.UseExceptionHandler()`)
-3. Correlation Tracking (`app.UseMiddleware<CorrelationIdMiddleware>()`)
-4. Health Checks (`/health/live`, `/health/ready`)
-5. JWKS Key Distribution (`/.well-known/jwks.json`)
-6. Rate Limiter (`app.UseRateLimiter()`)
-7. Authentication (`app.UseAuthentication()`)
-8. Authorization (`app.UseAuthorization()`)
-9. Endpoint Routing (Controllers & SignalR Hubs)
+In `Program.cs`, the pipeline is ordered as follows:
+1. Forwarded headers (`app.UseForwardedHeaders()`), first so every later component sees the real client IP and scheme.
+2. Exception handling (`app.UseExceptionHandler()`).
+3. Correlation tracking (`app.UseMiddleware<CorrelationIdMiddleware>()`).
+4. HTTPS redirection (`app.UseHttpsRedirection()`).
+5. CORS (`app.UseCors()`).
+6. Health checks (`/health/live`, `/health/ready`) and JWKS (`/.well-known/jwks.json`), all excluded from rate limiting.
+7. Authentication (`app.UseAuthentication()`), before the rate limiter so policies can partition by the caller's `sub`.
+8. Rate limiter (`app.UseRateLimiter()`).
+9. Authorization (`app.UseAuthorization()`).
+10. Endpoints: Minimal API groups (`MapCrowdFundingEndpoints`), the comparison controller (`MapControllers`), and the SignalR hub (`/hubs/campaigns`).
+
+In Development and Testing, the OpenAPI document and Scalar UI are mapped before this pipeline is built (`MapCrowdFundingOpenApi`).

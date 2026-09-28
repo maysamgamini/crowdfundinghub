@@ -1,19 +1,25 @@
 # CrowdFunding.Moderation.Service (Microservice Extraction PoC)
 
+> **Status on this branch:** not part of the course's current step. Moderation runs as an in-process
+> module of the monolith; microservice extraction is the upcoming course step. This proof-of-concept is
+> preserved on branch `future/microservices-extraction` and is scheduled for removal from this branch.
+> It is not in `CrowdFunding.slnx`, and note that `Messaging:Provider=RabbitMQ` only publishes: no
+> consumer exists yet, so events published by the monolith do not reach this host.
+
 > **Architectural Proof-of-Concept:** Zero-Rewrite Microservice Extraction (Strangler Fig Pattern)  
-> **Resolved By:** [`TICKET-029`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/qa-tickets/TICKET-029-MICROSERVICE-EXTRACTION-POC-STANDALONE-SERVICE.md)  
+> **Origin:** TICKET-029  
 > **Target Framework:** .NET 10.0 (C# 14 / ASP.NET Core)  
-> **Container Runtime:** Docker ([`Dockerfile`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/services/CrowdFunding.Moderation.Service/Dockerfile) multi-stage build, port 8080)  
+> **Container Runtime:** Docker ([`Dockerfile`](Dockerfile) multi-stage build, port 8080)  
 
 ---
 
 ## 1. Executive Purpose & Architectural Significance
 
-[`CrowdFunding.Moderation.Service`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/services/CrowdFunding.Moderation.Service) serves as the live, runnable proof that the `CrowdFundingHub` Modular Monolith achieves **100% friction-free microservice extractability**.
+[`CrowdFunding.Moderation.Service`](.) serves as the live, runnable proof that the `CrowdFundingHub` Modular Monolith achieves **100% friction-free microservice extractability**.
 
 When transitioning an in-process module to an autonomous microservice, the Strangler Fig pattern requires that:
-1. **Zero Domain Logic Rewrites:** The existing domain aggregate ([`CampaignReview`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Moderation/CrowdFunding.Modules.Moderation.Domain/Aggregates/CampaignReview.cs)), application command/query handlers, validation rules, and EF Core entity mappings are reused as-is without code modifications.
-2. **Autonomous Physical Boundary:** The service boots its own independent Web API host ([`Program.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/services/CrowdFunding.Moderation.Service/Program.cs)), mounts its own PostgreSQL schema (`moderation`), and performs its own migrations (`dotnet run -- migrate`).
+1. **Zero Domain Logic Rewrites:** The existing domain aggregate ([`CampaignReview`](../../src/Modules/Moderation/CrowdFunding.Modules.Moderation.Domain/Aggregates/CampaignReview.cs)), application command/query handlers, validation rules, and EF Core entity mappings are reused as-is without code modifications.
+2. **Autonomous Physical Boundary:** The service boots its own independent Web API host ([`Program.cs`](Program.cs)), mounts its own PostgreSQL schema (`moderation`), and performs its own migrations (`dotnet run -- migrate`).
 3. **Decentralized Cryptographic Security:** The service authenticates incoming requests using public JWKS discovery (`/.well-known/jwks.json`) fetched from the Identity issuer over HTTP, completely independent of the monolith host.
 4. **Pluggable Message Bus Integration:** Event communication runs through `IMessageBus` (RabbitMQ in distributed mode or in-memory channel in local mode).
 
@@ -47,7 +53,7 @@ graph TD
 
 ## 2. Assembly References & Layer Topology
 
-This service is purely a **Host Packaging Assembly**. Notice its minimal [`CrowdFunding.Moderation.Service.csproj`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/services/CrowdFunding.Moderation.Service/CrowdFunding.Moderation.Service.csproj) dependencies:
+This service is purely a **Host Packaging Assembly**. Notice its minimal [`CrowdFunding.Moderation.Service.csproj`](CrowdFunding.Moderation.Service.csproj) dependencies:
 
 ```xml
 <ItemGroup>
@@ -71,7 +77,7 @@ This service is purely a **Host Packaging Assembly**. Notice its minimal [`Crowd
 
 ## 3. Configuration & Startup
 
-### Environment Variables & Settings ([`appsettings.json`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/services/CrowdFunding.Moderation.Service/appsettings.json))
+### Environment Variables & Settings ([`appsettings.json`](appsettings.json))
 ```json
 {
   "ConnectionStrings": {

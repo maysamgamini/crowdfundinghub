@@ -4,7 +4,7 @@
 Groups persistence concerns for the Identity module, including EF Core configuration, db contexts, repositories, and migrations.
 
 ## Files
-- No direct files live in this folder; it primarily organizes child folders.
+- `SigningKeyRecord.cs`: Persistence model for an ES256 signing key (`identity_signing_keys`): key id, encrypted private key (`ProtectedPrivateKey`), creation time, and active flag. Retired keys are kept so the JWKS can still verify tokens they signed.
 
 ## Child Folders
 - `Configurations`: Contains EF Core entity configuration classes for the Identity module.

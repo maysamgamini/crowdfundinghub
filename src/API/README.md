@@ -7,4 +7,4 @@ Groups the HTTP API host for the solution.
 - No direct files live in this folder; it primarily organizes child folders.
 
 ## Child Folders
-- `CrowdFunding.API`: Entry-point ASP.NET Core application that wires authentication, modules, mapping, middleware, Swagger, and background processing.
+- `CrowdFunding.API`: Entry-point ASP.NET Core application that wires authentication, modules, Minimal API endpoints, the request pipeline, OpenAPI documentation (built-in `Microsoft.AspNetCore.OpenApi` with the Scalar UI), and the modules' background services.

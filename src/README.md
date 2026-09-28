@@ -9,4 +9,5 @@ Contains all production code for the solution, including the API host, shared bu
 ## Child Folders
 - `API`: Groups the HTTP API host for the solution.
 - `BuildingBlocks`: Holds reusable cross-cutting abstractions shared by multiple modules.
-- `Modules`: Contains the feature modules that implement the business capabilities of the platform.
+- `Modules`: Contains the six feature modules (Identity, Campaigns, Contributions, Moderation, CampaignUpdates, Notifications) that implement the business capabilities of the platform.
+- `Samples`: Teaching samples that run as their own hosts and are never referenced by the API (currently `RosettaStone`, see [`Samples/RosettaStone/README.md`](Samples/RosettaStone/README.md)).

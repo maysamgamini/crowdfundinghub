@@ -4,7 +4,7 @@
 Groups contract-level commands exposed by the Moderation module.
 
 ## Files
-- No direct files live in this folder; it primarily organizes child folders.
+- None. The folder is currently empty: the Moderation module exposes no cross-module commands.
 
 ## Child Folders
 - None.

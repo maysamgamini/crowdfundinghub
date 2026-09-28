@@ -1,7 +1,7 @@
 ﻿# Campaign Created
 
 ## Purpose
-Contains source files related to Campaign Created.
+The application event published through the outbox when a campaign is created.
 
 ## Files
 - `CampaignCreatedApplicationEvent.cs`: Application event contract published for cross-module reactions.

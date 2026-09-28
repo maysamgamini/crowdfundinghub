@@ -6,7 +6,7 @@ namespace CrowdFunding.Modules.Notifications.Application.Abstractions.Services;
 /// <c>IEventHandler&lt;T&gt;</c> running inside the *producing* module's outbox worker
 /// (<c>ModuleOutboxProcessor&lt;TDbContext&gt;</c>), so a thrown exception here is not swallowed:
 /// it propagates back through <c>IMessageBus.PublishAsync</c> to the outbox loop, which already
-/// applies exponential backoff and eventual dead-lettering (TICKET-038) — the exact dual-write
+/// retries after a fixed delay and dead-letters after five attempts (TICKET-038) — the exact dual-write
 /// defense this ticket exists to prove out. Implementations must therefore let transient failures
 /// throw rather than catch-and-log them, or that defense never engages.
 /// </summary>

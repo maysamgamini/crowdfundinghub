@@ -1,10 +1,10 @@
 ﻿# Events
 
 ## Purpose
-Groups event contracts or domain events used by the Notifications module.
+Contains the handlers that react to other modules' application events.
 
 ## Files
-- `NotificationEventHandlers.cs`: Collection of application event handlers for the surrounding module.
+- `NotificationEventHandlers.cs`: One handler class per event: `ContributionPaymentConfirmedNotificationHandler` (pledge receipt) and `ContributionRefundedNotificationHandler` (refund/cancellation alert) send email through `IEmailNotificationService`; `CampaignPublishedNotificationHandler`, `CampaignCancelledNotificationHandler`, `CampaignReviewApprovedNotificationHandler`, and `CampaignReviewRejectedNotificationHandler` are currently no-ops.
 
 ## Child Folders
 - None.

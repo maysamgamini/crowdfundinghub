@@ -4,7 +4,7 @@
 Houses cross-cutting observability, diagnostic endpoints, structured logging, health check implementations, and centralized RFC 9457 problem details exception handling, and OpenTelemetry for the web application.
 
 ## Files
-- `CorrelationIdMiddleware.cs`: ASP.NET Core middleware that resolves or generates a distributed correlation identifier from incoming request headers (`X-Correlation-ID` or W3C `traceparent`). It enriches the Serilog `LogContext` and returns `X-Correlation-ID` on all HTTP responses for distributed tracing.
+- `CorrelationIdMiddleware.cs`: ASP.NET Core middleware that uses the current trace id (`Activity.Current`, so W3C `traceparent` is honored), else the incoming `X-Correlation-Id` header, else a new GUID. It enriches the Serilog `LogContext` and returns `X-Correlation-Id` on all HTTP responses.
 - `DbContextHealthCheck.cs`: Generic `IHealthCheck` implementation for Entity Framework Core contexts (`DbContextHealthCheck<TContext>`). Tests database connectivity via `Database.CanConnectAsync()` for readiness probes.
 - `GlobalExceptionHandler.cs`: Centralized `IExceptionHandler` that writes RFC 9457 `application/problem+json` for every unhandled exception, with a `traceId`. The status and client-safe detail come from `BuildingBlocks.Infrastructure/ErrorHandling/ExceptionClassifier`: validation (400 with `errors`), domain rule violations (400), domain state conflicts and concurrency losses (409), not found (404), 401/403, database overload (503 with `Retry-After`), and a generic 500 for anything else (framework and database messages are never returned).
 - `HealthCheckResponseWriter.cs`: Serializes health check results into structured JSON containing overall status, total execution duration, and individual per-database check results.

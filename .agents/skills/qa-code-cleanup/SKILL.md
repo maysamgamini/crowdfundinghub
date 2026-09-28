@@ -13,8 +13,8 @@ This skill guides the evaluation and identification of areas requiring code clea
 ## Clean-Up Evaluation Areas
 
 ### 1. Code Duplication
-- **Controller Utilities**: Inspect controllers for copy-pasted helper classes (e.g. `ValidationExtensions.AddToModelState` duplicated across controller files). Move shared utilities into `API/Common` or `BuildingBlocks`.
-- **Mapping Logic**: Check for duplicated manual mappings that should use Mapster configs.
+- **Endpoint Utilities**: Inspect the Minimal API endpoint classes (`src/API/CrowdFunding.API/Endpoints/`) and the comparison controller for copy-pasted helpers or validation done by hand; validation belongs to `ValidationPipelineBehavior`. Move shared utilities into `BuildingBlocks`.
+- **Mapping Logic**: Mapping is explicit code (no mapping library); check for the same application-result-to-response mapping duplicated across endpoints.
 - **Transaction Boilerplate**: Audit transaction executor usage and repeated patterns.
 
 ### 2. Code Smells & Antipatterns
@@ -28,4 +28,4 @@ This skill guides the evaluation and identification of areas requiring code clea
 - Verify folder `README.md` completeness across new feature directories.
 
 ## Reporting
-Log identified code clean-up items as tickets under `qa-tickets/` following the standard template.
+Report identified code clean-up items (file path, line, recommended change) in your final report to the caller. Do not create ticket files in the repository.

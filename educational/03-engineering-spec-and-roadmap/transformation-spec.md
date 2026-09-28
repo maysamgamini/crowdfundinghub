@@ -1,155 +1,129 @@
-# Engineering Specification: Transforming the Monolith into a Benchmark Educational Reference
+# Engineering Specification: From Monolith to Decomposition-Ready Reference
 
-> **Document Status:** Ready for Sprint Planning & Implementation  
-> **Target Audience:** Core Engineering Team, Principal Architects  
-> **Objective:** Concrete technical specifications to transform `CrowdFundingHub` into the industry-gold-standard reference for **Monoliths Built for Frictionless Microservices Decomposition**.
+> **Document type:** roadmap, with status per item
+> **Audience:** course authors and engineers extending the codebase
+> **Status:** revised 2026-09-28 against the code. Epics 1, 3 and 4 are done. Epics 2 and 5 are done except for the items marked open. Each item names the code that implements it, which sometimes differs from the names first proposed here.
 
 ---
 
-## 1. Specification Overview & Epics
+## 1. Overview
 
 ```mermaid
 graph TD
-    Epic1["Epic 1: The Pedagogical Rosetta Stone<br/>(1 Feature, 3 Architectural Slices)"]
-    Epic2["Epic 2: Pluggable Messaging & Debezium CDC<br/>(In-Process vs RabbitMQ / Kafka)"]
-    Epic3["Epic 3: Asynchronous Replicated Read Models<br/>(Eliminate Synchronous Inter-Module RPC)"]
-    Epic4["Epic 4: Complete Crowdfunding Lifecycle<br/>(Deadline Worker + Refund Saga)"]
-    Epic5["Epic 5: Containerization & DevOps Automation<br/>(Dockerfile + Full Docker Compose + CI)"]
+    Epic1["Epic 1: Rosetta Stone<br/>(done)"]
+    Epic2["Epic 2: Pluggable message bus<br/>(done; broker consumer and CDC open)"]
+    Epic3["Epic 3: Replicated read models<br/>(done)"]
+    Epic4["Epic 4: Complete crowdfunding lifecycle<br/>(done)"]
+    Epic5["Epic 5: Containers and CI<br/>(done; full compose topology open)"]
 
     Epic1 --> Epic2 --> Epic3 --> Epic4 --> Epic5
 ```
 
+| Epic | Status | Open items |
+|---|---|---|
+| 1. Rosetta Stone | Done | None |
+| 2. Pluggable message bus | Done in part | Broker consumer; Debezium CDC relay; Kafka provider |
+| 3. Replicated read models | Done | None |
+| 4. Crowdfunding lifecycle | Done | Outbound refund call to a payment provider |
+| 5. Containers and CI | Done in part | API, RabbitMQ and CDC services in `docker-compose.yml` |
+
 ---
 
-## 2. Epic 1: The Pedagogical Rosetta Stone (Status: ✅ Completed via [`TICKET-028`](../../qa-tickets/TICKET-028-PEDAGOGICAL-ROSETTA-STONE-POLY-PATTERNS.md))
+## 2. Epic 1: Rosetta Stone (done)
 
-### Problem Statement:
-Learners cannot intuitively understand *why* Clean Architecture or DDD is necessary because there is no baseline comparison in the codebase.
+**Problem.** Learners could not see why the layered design costs what it costs, because the codebase had no simpler baseline.
 
-### Technical Specification:
-Create a dedicated educational namespace: `src/Samples/RosettaStone/` implementing the **same exact feature** (`CreateCampaign`) in **three distinct architectural styles**:
+**What was built.** `src/Samples/RosettaStone` implements "create a campaign" at three levels of ceremony:
 
 ```
 src/Samples/RosettaStone/
 ├── 01-MinimalApiCrud/
-│   └── CreateCampaignMinimalEndpoint.cs (Direct DbContext write, 1 file, 48 lines)
+│   └── CreateCampaignMinimalEndpoint.cs    direct DbContext write, one file
 ├── 02-PragmaticCqrs/
-│   ├── CreateCampaignEndpoint.cs        (Route endpoint)
-│   ├── CreateCampaignCommand.cs         (CQRS command + validator)
-│   └── CreateCampaignCommandHandler.cs  (Direct DbContext write, 3 files, 91 lines)
+│   ├── CreateCampaignEndpoint.cs
+│   ├── CreateCampaignCommand.cs            command and validator
+│   └── CreateCampaignCommandHandler.cs     direct DbContext write, three files
 └── 03-RichDomainModel/
-    └── README.md                        (Pointer to full production 14-file DDD pipeline)
+    └── README.md                           points to the real POST /api/campaigns pipeline
 ```
 
-> [!NOTE]
-> Fully implemented in [`src/Samples/RosettaStone/`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Samples/RosettaStone/README.md) with isolated `rosetta` schema, parity integration tests, and Swagger tag `RosettaStone`.
+The sample is its own runnable host (`dotnet run --project src/Samples/RosettaStone`, Scalar UI at `http://localhost:5090/scalar/v1`) with an isolated `rosetta` schema. The API does not reference it; `ApiHostDependencyTests` check that. Parity is covered by `RosettaStoneParityTests` (integration) and `RosettaStoneTests` (unit). See the [sample README](../../src/Samples/RosettaStone/README.md).
 
 ---
 
-## 3. Epic 2: Pluggable Message Bus & Debezium CDC Specification (Status: ✅ Completed via [`TICKET-024`](../../qa-tickets/TICKET-024-PLUGGABLE-MESSAGE-BUS-RABBITMQ-KAFKA.md) & [`TICKET-025`](../../qa-tickets/TICKET-025-MODULAR-OUTBOX-PARTITIONING-AUTONOMOUS-WORKERS.md))
+## 3. Epic 2: Pluggable message bus (done in part)
 
-### Problem Statement:
-The transactional outbox poller is hardcoded to in-memory dispatching (`ServiceProviderEventPublisher`), preventing students from seeing how events stream to external microservices.
+**Problem.** The outbox poller dispatched in memory only, so there was no seam for a broker.
 
-### Technical Specification:
-1. Define a unified `IMessageBus` interface in `BuildingBlocks.Application`:
+**What was built.**
+
+1. `IMessageBus` in `BuildingBlocks.Application/Messaging`:
    ```csharp
    public interface IMessageBus
    {
-       Task PublishAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default) 
-           where TEvent : IApplicationEvent;
+       Task PublishAsync(object applicationEvent, CancellationToken cancellationToken = default);
    }
    ```
-2. Provide two interchangeable implementations:
-   - `InProcessMessageBus`: Dispatches via `IServiceProvider` (default for local development).
-   - `RabbitMqMessageBus` or `KafkaMessageBus`: Uses MassTransit to serialize CloudEvents v1.0 to an external broker.
-3. Configure `appsettings.json` toggle:
+2. Two implementations in `BuildingBlocks.Infrastructure/Messaging`: `InProcessMessageBus` (default) and `RabbitMqMessageBus`, which uses `RabbitMQ.Client` directly (not MassTransit) and publishes a CloudEvents envelope. `BaseApplicationEvent.EventId` is the outbox row id and the CloudEvents `id`.
+3. Selection by configuration:
    ```json
    "Messaging": {
-     "Provider": "InProcess", // Options: "InProcess", "RabbitMQ", "DebeziumCDC"
-     "RabbitMqHost": "rabbitmq://localhost"
+     "Provider": "InProcess",
+     "RabbitMq": { ... }
    }
    ```
-4. **Debezium CDC Mode:** Add an `unlogged` or append-only mode where the outbox background service is disabled entirely, and a Debezium connector configuration JSON is provided in `docker/debezium/`.
+4. One `ModuleOutboxProcessor<TDbContext>` per publishing module (Campaigns, Contributions, Moderation), replacing the central poller. It claims with `FOR UPDATE SKIP LOCKED`, reclaims expired leases, backs off exponentially and dead-letters after five attempts. A commit interceptor signals it as soon as a transaction that wrote outbox rows commits; the 5-second poll is the fallback. See [outbox-architecture.md](../../docs/outbox-architecture.md).
+5. An idempotent inbox (`IIdempotentConsumer`) with per-module processed-event tables, used where a consumer must run once.
+
+**Open.**
+
+- **Broker consumer.** RabbitMQ is publish-only. A consumer that reads the CloudEvents envelope, deduplicates through the inbox and dispatches to the existing `IEventHandler<T>` implementations is required before any module can run in its own process.
+- **Debezium CDC relay.** Considered as an alternative to the polling processor (tailing the outbox tables from the PostgreSQL WAL); not implemented.
+- **Kafka provider.** Not implemented; only `InProcess` and `RabbitMQ` exist.
 
 ---
 
-## 4. Epic 3: Asynchronous Replicated Read Models (Status: ✅ Completed via [`TICKET-023`](../../qa-tickets/TICKET-023-ASYNCHRONOUS-REPLICATED-READ-MODELS.md))
+## 4. Epic 3: Replicated read models (done)
 
-### Problem Statement:
-[`MakeContributionCommandHandler.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs) calls `ICampaignContributionAvailabilityReader` synchronously, creating a distributed monolith failure cascade.
+**Problem.** `MakeContributionCommandHandler` called `ICampaignContributionAvailabilityReader`, implemented by Campaigns, synchronously on every pledge.
 
-### Technical Specification:
-1. In `contributions` schema, create a new table:
-   ```sql
-   CREATE TABLE contributions.campaign_read_models (
-       campaign_id UUID PRIMARY KEY,
-       currency VARCHAR(3) NOT NULL,
-       is_active BOOLEAN NOT NULL,
-       deadline_utc TIMESTAMP WITH TIME ZONE NOT NULL,
-       updated_at_utc TIMESTAMP WITH TIME ZONE NOT NULL
-   );
-   ```
-2. In `Contributions.Application`, add event consumers for:
-   - `CampaignPublishedApplicationEvent` $\rightarrow$ Inserts/updates `campaign_read_models`.
-   - `CampaignCancelledApplicationEvent` $\rightarrow$ Marks `is_active = false`.
-3. In `MakeContributionCommandHandler`, query `campaign_read_models` locally in the `ContributionsDbContext`.
-4. **Outcome:** Zero synchronous cross-module RPC calls during pledge processing!
+**What was built.**
 
-> [!NOTE]
-> Fully implemented in the `Contributions` module. Synchronous query reader `ICampaignContributionAvailabilityReader` has been completely eliminated.
+1. A Contributions-owned table `active_campaigns_cache` (entity `ActiveCampaignCache`: campaign id, owner id, title, currency, `IsActive`, deadline, updated-at). Like all module tables it lives in the `public` schema; the owning module and the name separate it.
+2. `ReplicatedCampaignEventHandlers` in Contributions handles `CampaignCreated`, `CampaignPublished`, `CampaignCancelled`, `CampaignSucceeded` and `CampaignFailed` application events and keeps the table current.
+3. [`MakeContributionCommandHandler.cs`](../../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs) reads the local table through `IActiveCampaignCacheRepository`. `ICampaignContributionAvailabilityReader` has been deleted.
+4. The same pattern serves Notifications (`CampaignTitleCache`) and CampaignUpdates (`CampaignOwnerCache`). `ReplicatedReadModelBoundaryTests` guard it.
+
+The pledge path makes no synchronous call into another module. Campaigns remains the authority on crediting: it re-checks status under the campaign's advisory lock and does not credit a campaign that has closed.
 
 ---
 
-## 5. Epic 4: Complete Crowdfunding Lifecycle (Deadlines & Refunds) (Status: ✅ Completed via [`TICKET-027`](../../qa-tickets/TICKET-027-DISTRIBUTED-CROWDFUNDING-LIFECYCLE-REFUND-SAGA.md))
+## 5. Epic 4: Complete crowdfunding lifecycle (done)
 
-### Problem Statement:
-Campaigns never complete or fail, and backer pledges cannot be refunded, leaving the core crowdfunding domain half-finished.
+**Problem.** Campaigns never completed or failed, and pledges could not be refunded.
 
-### Technical Specification:
+**What was built.**
 
-#### 1. Background Worker: `CampaignExpirationBackgroundService`
-- Runs in `src/API/CrowdFunding.API/Background/`.
-- Executes every 60 seconds (configurable).
-- Queries:
-  ```csharp
-  var expiredCampaigns = await db.Campaigns
-      .Where(c => c.Status == CampaignStatus.Published && c.DeadlineUtc <= DateTime.UtcNow)
-      .ToListAsync(ct);
-  ```
-- For each expired campaign:
-  - If `CurrentBalance >= TargetAmount`: Dispatches `CompleteCampaignCommand` $\rightarrow$ transitions to `Successful` $\rightarrow$ emits `CampaignSucceededApplicationEvent`.
-  - If `CurrentBalance < TargetAmount`: Dispatches `FailCampaignCommand` $\rightarrow$ transitions to `Failed` $\rightarrow$ emits `CampaignFailedApplicationEvent`.
+1. **Deadline worker.** `CampaignExpirationBackgroundService` in `Campaigns.Infrastructure/BackgroundServices` runs every minute. It asks `ICampaignRepository.GetExpiredPublishedCampaignIdsAsync` for published campaigns past their deadline, reloads each one and dispatches:
+   - `CompleteCampaignCommand` when `RaisedAmount >= GoalAmount` (`Campaign.CompleteSuccessfully`, status `Successful`, `CampaignSucceededDomainEvent`);
+   - `FailCampaignCommand` otherwise (`Campaign.MarkFailed`, status `Failed`, `CampaignFailedDomainEvent`).
+   The domain events become `CampaignSucceededApplicationEvent` and `CampaignFailedApplicationEvent` in the Campaigns outbox.
+2. **Refunds.** `ContributionStatus.Refunded` exists. `CampaignTerminationRefundHandler` handles `CampaignFailedApplicationEvent` and `CampaignCancelledApplicationEvent`, loads `Succeeded` contributions in batches of 100 and calls `Contribution.Refund`, which raises `ContributionRefundedDomainEvent` and, through the outbox, `ContributionRefundedApplicationEvent`.
+3. **Ledger compensation.** Campaigns handles `ContributionRefundedApplicationEvent` by appending a refund entry to the append-only `campaign_ledger_entries` table; `raised_amount` is recomputed as the sum of entries. See [append-only-ledger.md](../../docs/append-only-ledger.md).
 
-#### 2. Refund Workflow in Contributions:
-- Add `Refunded` to `ContributionStatus` enum.
-- Add `ContributionRefundedDomainEvent`.
-- When `CampaignFailedApplicationEvent` or `CampaignCancelledApplicationEvent` arrives:
-  - Contributions module loads all `Succeeded` contributions for the campaign.
-  - Iterates and executes refund commands.
-  - Updates contribution status to `Refunded`.
-  - Publishes `ContributionRefundedApplicationEvent`.
-
-> [!NOTE]
-> Fully implemented with `CampaignExpirationBackgroundService`, `CampaignCompletedSuccessfulDomainEvent`, `CampaignExpiredFailedDomainEvent`, and `RefundContributionCommandHandler`.
+**Open.** The refund is recorded as domain state. There is no outbound refund call to a payment provider.
 
 ---
 
-## 6. Epic 5: Containerization & DevOps Automation (Status: 🔄 In Progress - Tracked via [`TICKET-029`](../../qa-tickets/TICKET-029-MICROSERVICE-EXTRACTION-POC-STANDALONE-SERVICE.md) & [`TICKET-040`](../../qa-tickets/TICKET-040-ARCHITECTURAL-FITNESS-FUNCTIONS-CI-CD-AUTOMATION.md))
+## 6. Epic 5: Containers and CI (done in part)
 
-### Problem Statement:
-The repository requires manual local SDK setup and lacks containerized deployment artifacts and CI/CD pipelines.
+**What was built.**
 
-### Technical Specification:
-1. **Multi-Stage API Dockerfile (`src/API/CrowdFunding.API/Dockerfile`)**:
-   - Stage 1: `mcr.microsoft.com/dotnet/sdk:10.0-alpine` (Restore & Build with caching).
-   - Stage 2: `mcr.microsoft.com/dotnet/aspnet:10.0-alpine` (Lightweight non-root runtime container).
-2. **Comprehensive `docker-compose.yml`**:
-   - `api`: The CrowdFunding API host (ports 8080/8081).
-   - `postgres`: PostgreSQL 16 with logical decoding enabled (`wal_level = logical`).
-   - `redis`: Redis 7 Alpine cache.
-   - `rabbitmq`: RabbitMQ 3.13 Management console (port 15672).
-   - `debezium`: Debezium Connect container tailing Postgres WAL.
-3. **GitHub Actions Workflow (`.github/workflows/ci.yml`)**:
-   - Runs on push to `main` and all Pull Requests.
-   - Steps: `dotnet restore` $\rightarrow$ `dotnet build --no-restore` $\rightarrow$ `dotnet test --collect:"XPlat Code Coverage"` $\rightarrow$ Assert 0 warnings and 0 errors.
+1. **API image.** [`src/API/CrowdFunding.API/Dockerfile`](../../src/API/CrowdFunding.API/Dockerfile) is a two-stage build (`mcr.microsoft.com/dotnet/sdk:10.0` to `mcr.microsoft.com/dotnet/aspnet:10.0`) exposing port 8080.
+2. **Local dependencies.** `docker-compose.yml` runs PostgreSQL 16, Redis 7 and the .NET Aspire dashboard (UI on `http://localhost:18888`, OTLP on port 4317). The API runs with `dotnet run` (`http://localhost:5076`) and applies migrations automatically in Development.
+3. **CI.** [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) runs on pushes and pull requests to `main`: restore, `dotnet format --verify-no-changes`, Release build with `/warnaserror`, then architecture, unit and Testcontainers integration tests, with test reports published.
+
+**Open.**
+
+- `docker-compose.yml` does not run the API, RabbitMQ or a CDC connector, so "clone and `docker compose up`" does not yet start the whole system.
+- A multi-service topology belongs to the extraction step. A proof of concept exists on the branch `future/microservices-extraction`; see [deconstruction-walkthrough.md](deconstruction-walkthrough.md).

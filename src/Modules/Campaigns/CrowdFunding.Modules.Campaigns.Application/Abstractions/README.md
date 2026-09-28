@@ -1,7 +1,7 @@
 ﻿# Abstractions
 
 ## Purpose
-Contains source files related to Abstractions.
+Defines the ports (persistence, services, transactions) the Campaigns application layer depends on; Infrastructure implements them.
 
 ## Files
 - No direct files live in this folder; it primarily organizes child folders.

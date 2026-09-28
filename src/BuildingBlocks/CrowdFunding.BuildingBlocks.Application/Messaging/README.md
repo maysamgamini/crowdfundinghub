@@ -6,12 +6,14 @@ Contains the command and query dispatcher abstractions and their shared registra
 ## Files
 - `CommandDispatcher.cs`: Dispatcher that routes command objects to their registered handlers.
 - `DispatcherInvoker.cs`: Reflection-based helper that invokes strongly typed handlers.
-- `ICommandDispatcher.cs`: Supporting source file for I Command Dispatcher.
-- `ICommandHandler.cs`: Application command handler for I.
-- `IQueryDispatcher.cs`: Supporting source file for I Query Dispatcher.
-- `IQueryHandler.cs`: Application query handler for I.
+- `ICommandDispatcher.cs`: Contract for sending a command to its handler through the pipeline behaviors.
+- `ICommandHandler.cs`: Contract for a command handler (`ICommandHandler<TCommand, TResult>`).
+- `ICommandPipelineBehavior.cs`: Contract for a behavior that wraps command handling (validation, audit logging); behaviors run in registration order, outermost first.
+- `IMessageBus.cs`: Transport abstraction the outbox processors publish application events through (in-process by default, RabbitMQ publish-only as an option).
+- `IQueryDispatcher.cs`: Contract for sending a query to its handler.
+- `IQueryHandler.cs`: Contract for a query handler (`IQueryHandler<TQuery, TResult>`).
 - `QueryDispatcher.cs`: Dispatcher that routes query objects to their registered handlers.
-- `RequestHandlerRegistrationExtensions.cs`: Extension methods that encapsulate repeated registration or configuration logic.
+- `RequestHandlerRegistrationExtensions.cs`: `AddRequestHandlersFromAssemblies` scans assemblies and registers every command and query handler.
 
 ## Child Folders
 - None.

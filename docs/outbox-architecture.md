@@ -1,115 +1,161 @@
-# Outbox architecture: SKIP LOCKED vs. Debezium CDC
+# Outbox and Inbox Architecture
 
-This document records the decision behind the outbox implementation in
-`ModuleOutboxProcessor<TDbContext>` / `OutboxMessage`, and — just as importantly — the point at
-which that decision should be revisited. Keep it up to date if the throughput assumptions below
-change.
+This document describes how an application event travels from a business transaction to its consumers: write, claim, publish, then delete, retry or dead-letter. It also covers the wake-up signal, lease recovery, event identity, the inbox on the consumer side, tracing and test support, and when the design should be replaced by change data capture (CDC).
 
-> **Update (TICKET-024/025/030):** the single, centralized `OutboxProcessorBackgroundService`
-> that used to live in `CrowdFunding.API` and knew about all three module DbContexts by name has
-> been replaced by `ModuleOutboxProcessor<TDbContext>` (`BuildingBlocks.Infrastructure.Outbox`),
-> an abstract `BackgroundService` each module subclasses and registers in its own Infrastructure
-> DI extension (`CampaignsOutboxBackgroundService`, `ContributionsOutboxBackgroundService`,
-> `ModerationOutboxBackgroundService`). The API host no longer references any module's DbContext
-> or outbox table name — three independent workers run on independent `PeriodicTimer`s inside the
-> same process, so a slow or failing module's outbox can no longer starve the others, and
-> extracting a module into its own service moves its outbox engine with it unchanged. Each
-> processor publishes through `IMessageBus` (`InProcessMessageBus` by default; `RabbitMqMessageBus`
-> when `Messaging:Provider = "RabbitMQ"`) instead of calling `IEventPublisher` directly, and
-> restores the W3C `traceparent` captured in `OutboxMessage.Headers` at write time so the
-> dispatch span stays a child of the originating HTTP request in a distributed trace. Everything
-> below about the SKIP LOCKED claim query itself is unchanged — only who owns the polling loop.
+The code lives in [`BuildingBlocks.Infrastructure/Outbox`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Outbox/ModuleOutboxProcessor.cs), [`Persistence`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxClaimQuery.cs) and [`Inbox`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Inbox/EfIdempotentConsumer.cs).
 
-## What problem the outbox solves
+## Why an outbox
 
-In distributed or event-driven systems, updating a database and publishing an event to a message
-broker at the same time creates a "dual-write" dilemma: if the process crashes or the network
-fails after the database commit but before the publish, the two systems fall out of sync forever.
-The transactional outbox pattern solves this by writing the event payload to an outbox table
-inside the *exact same database transaction* as the business-data change. If the transaction
-commits, both the state change and the intent-to-publish are durable together; if it rolls back,
-neither happened. A separate process then reads the outbox table and does the actual publish,
-retrying independently of the original transaction.
+Committing a database change and publishing a message are two writes to two systems. If the process dies between them, the systems disagree for good. The transactional outbox writes the event as a row in the same transaction as the business change: both commit or neither does. A background worker publishes the row afterwards and retries independently of the original request.
 
-Every module's `TransactionExecutor` (`CampaignTransactionExecutor`, `ContributionTransactionExecutor`,
-`ModerationTransactionExecutor`) already does the "write" half of this correctly: domain events
-raised during `action()` are mapped to `OutboxMessage` rows and saved in the same transaction as
-the aggregate change, before commit. This document is about the "read" half — how a background
-process claims and publishes those rows.
+## Who owns what
 
-## The two options
+Three modules produce events: Campaigns, Contributions and Moderation. Each owns:
 
-### Option A — PostgreSQL-native, `FOR UPDATE SKIP LOCKED` (chosen)
+| Piece | Campaigns | Contributions | Moderation |
+| :--- | :--- | :--- | :--- |
+| Outbox table | `campaigns_outbox_messages` | `contributions_outbox_messages` | `moderation_outbox_messages` |
+| Dead-letter table | `campaigns_dead_letter_events` | `contributions_dead_letter_events` | `moderation_dead_letter_events` |
+| Worker | `CampaignsOutboxBackgroundService` | `ContributionsOutboxBackgroundService` | `ModerationOutboxBackgroundService` |
+| Signal | `OutboxSignal<CampaignsDbContext>` | `OutboxSignal<ContributionsDbContext>` | `OutboxSignal<ModerationDbContext>` |
 
-The outbox table is polled directly by one or more instances of `OutboxProcessorBackgroundService`.
-Naively, `SELECT ... WHERE status = 'Pending'` run by two replicas at once returns the *same* rows
-to both, and both then publish and both then try to mark the rows processed — duplicate delivery.
-PostgreSQL's `FOR UPDATE SKIP LOCKED` clause fixes this natively: a `SELECT ... FOR UPDATE SKIP
-LOCKED` (here, structured as an atomic `UPDATE ... FROM (SELECT ... FOR UPDATE SKIP LOCKED) ...
-RETURNING`) locks the rows it selects and instantly skips any row already locked by a concurrent
-claimant, instead of blocking on it or returning it twice. Multiple worker instances can therefore
-poll the same table concurrently and each walks away with a disjoint batch — no external
-coordination needed.
+Each worker derives from `ModuleOutboxProcessor<TDbContext>` and is registered by its module's Infrastructure DI extension. The API host knows no outbox table or DbContext. The three workers run independently, so a slow or failing module cannot starve the others, and a module that is extracted later takes its outbox engine with it.
 
-**How it works here:**
-1. Write: business transaction inserts an `OutboxMessage` row with `Status = Pending` (see
-   `TransactionExecutor.ExecuteInternalAsync`).
-2. Claim: `OutboxProcessorBackgroundService` runs a `WITH claimable AS (SELECT ... WHERE status =
-   'Pending' AND scheduled_at_utc <= now() ORDER BY scheduled_at_utc, id FOR UPDATE SKIP LOCKED
-   LIMIT @batchSize) UPDATE ... SET status = 'Processing' ... RETURNING *` — the claim and the
-   status flip happen as one atomic statement, so there's no window where two workers could both
-   see a row as claimable.
-3. Process: each claimed message is deserialized (via `EventTypeRegistry`, not
-   `Type.GetType(AssemblyQualifiedName)`) and published independently — one message throwing
-   never stops the rest of the batch from being attempted (no `break`).
-4. Resolve: on success the row becomes `Processed`; on failure it either goes back to `Pending`
-   with a backed-off `ScheduledAtUtc` (if under the attempt limit) or to the terminal `DeadLetter`
-   status (if not, or if the event type/payload couldn't be resolved at all) — see
-   `DeadLetterEvent`.
+## 1. Write
 
-**Advantages:**
-- **Zero extra infrastructure.** No Kafka/Redpanda cluster, no Kafka Connect, no schema registry
-  to run, monitor, and keep available. Everything lives in the database this project already
-  depends on.
-- **Zero race conditions across replicas.** `SKIP LOCKED` is a native row-locking primitive —
-  correctness doesn't depend on anything this codebase has to get right about distributed
-  coordination.
-- **Guaranteed consistency.** If the originating business transaction rolls back, the outbox row
-  was never committed either — nothing to reconcile.
+Each module's transaction executor (`CampaignTransactionExecutor`, `ContributionTransactionExecutor`, `ModerationTransactionExecutor`) runs the handler's action inside a transaction. Before commit it collects the domain events raised by tracked aggregates, maps each to a public application event from the module's Contracts project, and adds one `OutboxMessage` per event. A domain event without a mapping throws, so a new event cannot be dropped silently.
 
-**Scalability limits (why this isn't the answer for every scale):**
-- **Table bloat / vacuuming pressure.** Every `UPDATE` on an outbox row (claim, then
-  processed/dead-letter) creates a new MVCC tuple version; a busy table needs `VACUUM` to keep up
-  or dead tuples accumulate and query planning degrades.
-- **Index contention.** The claim query's `WHERE status = 'Pending' ORDER BY scheduled_at_utc`
-  hits the same partial index from every worker on every poll; at high enough frequency this
-  becomes a hot spot even though `SKIP LOCKED` prevents workers from blocking each other on the
-  *rows*.
-- **Polling overhead.** Workers hit the database on a fixed interval whether or not there's
-  anything to do, consuming connection-pool slots and CPU even at zero load.
+[`OutboxMessage.Create`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxMessage.cs) stores:
 
-Net effect: this approach scales well into the **hundreds to low thousands of events/second**
-range for a table like this, which comfortably covers this project's current and near-term
-traffic. It is a deliberate trade of some ceiling headroom for a much smaller, easier-to-operate
-system today.
+- `Id`: the application event's own `EventId` (see [Event identity](#event-identity)).
+- `EventType` and `Version`: a stable discriminator from `EventTypeRegistry`, not a CLR assembly-qualified name, so renaming or moving a class does not orphan stored rows.
+- `Payload`: the event as web-style (camelCase) JSON.
+- `Headers`: the W3C `traceparent` and `tracestate` of `Activity.Current` at write time.
+- `Status = Pending`, `ScheduledAtUtc = OccurredOnUtc`, `Attempts = 0`.
 
-### Option B — Debezium CDC (not chosen, revisit if traffic grows)
+## 2. Wake-up signal
 
-Instead of polling, enable PostgreSQL logical replication (`wal_level=logical`) and point a
-Debezium connector at the outbox table. Debezium tails the write-ahead log directly and streams
-committed inserts to Kafka/Redpanda — the database is never polled, and multiple independent
-consumer groups can subscribe to the same stream without touching Postgres at all.
+Polling alone puts a floor under latency: an event written just after a poll waits a full interval. Instead, each worker waits on an [`OutboxSignal<TDbContext>`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Outbox/OutboxSignal.cs), a bounded channel of capacity one with `DropWrite`. Any number of notifications collapse into one pending wake-up, and a notification sent while the worker is busy is not lost: the worker finds it on its next wait.
 
-| Dimension | SKIP LOCKED (this repo) | Debezium CDC |
+[`OutboxCommitSignalInterceptor<TDbContext>`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Outbox/OutboxCommitSignalInterceptor.cs) is an EF Core `ISaveChangesInterceptor` and `IDbTransactionInterceptor` added to the module's DbContext (`AddOutboxSignal<TDbContext>()` plus `AddOutboxSignalInterceptor<TDbContext>()` in [`OutboxSignalRegistrationExtensions`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Outbox/OutboxSignalRegistrationExtensions.cs)):
+
+- `SavingChanges`: if the context has `Added` outbox rows, remember that context.
+- `SavedChanges`: if there is no explicit transaction, the rows are already committed; notify.
+- `TransactionCommitted`: notify if the context was remembered.
+- `TransactionRolledBack`: forget the context; nothing becomes visible, so there is nothing to wake for.
+
+The worker is therefore woken only after the rows are visible to its claim query. `WaitAsync(pollInterval)` also returns when the interval (5 seconds) elapses, which makes the timer a fallback sweep. The sweep is still needed for rows written by another process (the signal is in-process), rows rescheduled for a retry, and expired leases.
+
+## 3. Claim
+
+[`OutboxClaimQuery.ClaimPendingBatchAsync`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxClaimQuery.cs) claims up to 20 rows in one statement:
+
+```sql
+WITH claimable AS (
+    SELECT "Id" FROM <module>_outbox_messages
+    WHERE ("Status" = Pending    AND "ScheduledAtUtc" <= now())
+       OR ("Status" = Processing AND "LockedUntilUtc" <  now())
+    ORDER BY "ScheduledAtUtc", "Id"
+    FOR UPDATE SKIP LOCKED
+    LIMIT 20
+)
+UPDATE <module>_outbox_messages m
+SET "Attempts" = m."Attempts" + CASE WHEN m."Status" = Processing THEN 1 ELSE 0 END,
+    "Status" = Processing,
+    "LockedBy" = <machine:pid:DbContext>,
+    "LockedUntilUtc" = now() + 30 seconds
+FROM claimable WHERE m."Id" = claimable."Id"
+RETURNING m.*;
+```
+
+- `FOR UPDATE SKIP LOCKED` lets several workers (other replicas, or a test drain) claim concurrently: each gets a disjoint batch and nobody blocks.
+- Selecting and marking happen in one statement, so there is no gap between "found" and "claimed".
+- The claim commits on its own, before publishing. The row is now leased to this worker for 30 seconds.
+- A partial index `ix_<table>_pending` on `(ScheduledAtUtc, Id) WHERE Status = Pending` keeps the common path cheap.
+
+### Lease recovery
+
+If a worker crashes after claiming, its rows stay `Processing`. Once `LockedUntilUtc` has passed, the same claim query picks them up again and counts the abandoned pass as an attempt. A message that kills the process every time therefore still reaches the attempt limit and the dead-letter table instead of looping forever. Reclaiming means a message can be published twice; consumers handle that (see [Inbox](#inbox-the-consumer-side)).
+
+## 4. Publish and resolve
+
+For each claimed row, `ModuleOutboxProcessor` runs:
+
+1. **Resolve.** `TryResolve` looks up `(EventType, Version)` in `EventTypeRegistry` and deserializes the payload. If either fails, the row goes straight to the dead-letter table with the reason: retrying cannot fix it. The rest of the batch continues.
+2. **Publish.** Start a tracing activity (see [Tracing](#tracing-across-the-outbox)) and call `IMessageBus.PublishAsync`.
+3. **Success:** delete the row. The outbox table holds only pending and in-flight work, which keeps the table and its index small and avoids keeping dead tuples of processed rows.
+4. **Failure:** `MarkFailed` increments `Attempts`, records the error, clears the lease and sets the row back to `Pending` with `ScheduledAtUtc = now + 10 s` (a fixed retry delay). At 5 attempts the row is copied to the dead-letter table with the last error and deleted from the outbox.
+
+One `SaveChanges` at the end persists the deletes, retries and dead-letter rows of the batch. A failure of one message never stops the others.
+
+The worker loop catches and logs any exception from a pass (for example, the database being down) and tries again after the fallback interval, so an outage does not stop the host. When a pass claims a full batch, the worker skips the wait and claims again at once, so a backlog drains at database speed rather than 20 rows per interval.
+
+### What "publish" means today
+
+`IMessageBus` has two implementations, selected by `Messaging:Provider`:
+
+- `InProcessMessageBus` (default): calls `IEventPublisher`, which runs every `IEventHandler<T>` for the event in the same process, one after another. This is the working mode.
+- `RabbitMqMessageBus`: wraps the event in a CloudEvents envelope and publishes it to a durable topic exchange, routed by event type. There is no RabbitMQ consumer in this codebase, so cross-process delivery is not implemented on this branch.
+
+In-process handlers share one outbox row. If the second of three handlers throws, the whole message is retried and the first handler runs again. Every handler must therefore be idempotent, which is what the inbox, unique keys and upserts below provide.
+
+## Event identity
+
+Every application event derives from [`BaseApplicationEvent`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Application/Events/BaseApplicationEvent.cs), whose `EventId` is created once and serialized with the payload. `OutboxMessage.Create` uses that `EventId` as the row id, so the outbox row id, the deserialized event's `EventId`, the CloudEvents `id` (and RabbitMQ `MessageId`), and the consumers' processed-event keys all name the same message. Every redelivery carries the same id.
+
+## Inbox: the consumer side
+
+At-least-once delivery means consumers see duplicates: after a lease expiry, after a partial handler failure, or when an external provider retries a webhook. [`IIdempotentConsumer`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Application/Inbox/IIdempotentConsumer.cs) makes a side effect run once per `(eventId, consumerName)`:
+
+```csharp
+await idempotentConsumer.ExecuteOnceAsync(
+    notification.EventId.ToString(),
+    nameof(ContributionPaymentConfirmedActivityHandler),
+    ct => EnqueueDeliveriesAsync(notification, ct),
+    cancellationToken);
+```
+
+[`EfIdempotentConsumer<TDbContext>`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Inbox/EfIdempotentConsumer.cs) opens a transaction (or joins the current one), runs `INSERT ... ON CONFLICT DO NOTHING` on the module's processed-events table (primary key `(EventId, ConsumerName)`), and only runs the effect if the insert added a row. The claim and the effect's writes commit together: if the effect fails, the claim rolls back and a retry runs the effect again; if a concurrent delivery holds the claim, the second one waits on the key and then skips. Consumer names are separate keys, so two handlers of the same event do not block each other.
+
+Current users:
+
+| Consumer | Event id | Table |
 | :--- | :--- | :--- |
-| Infrastructure complexity | None beyond Postgres | Kafka/Redpanda + Kafka Connect + schema registry |
-| Throughput ceiling | Moderate (DB CPU / connection pool / index-write bound) | High (decoupled from the operational database) |
-| Consumer flexibility | One logical worker pool consuming the table | Many independent consumer groups can replay the same stream |
-| Database impact | Write amplification from claim/resolve updates, plus active polling | Low — sequential WAL reads, no polling |
-| Operational cost | Low (nothing new to run) | Higher (a distributed streaming platform to operate) |
+| `ReconcilePaymentWebhookCommandHandler` (Contributions) | Stripe event id | `contributions_processed_events` |
+| `ContributionPaymentConfirmedActivityHandler` (CampaignUpdates, pledge-confirmed webhook fan-out) | `EventId` | `campaign_updates_processed_events` |
 
-**When to switch:** move to Debezium CDC when event volume approaches the thousands-per-second
-range sustained, when multiple independent downstream systems need to consume the same event
-stream without going through this API, or when database write amplification/index contention from
-the outbox table is measurably affecting the primary workload. None of those are true today, so
-Option A stands — but if that changes, this is the section to update first.
+Other consumers are idempotent by construction instead: the campaign ledger's unique `(ContributionId, Kind)` key (see [append-only-ledger.md](append-only-ledger.md)), and upserts into replicated read models such as Contributions' active-campaign cache. E-mail and metering side effects rely on the provider's idempotency key, not the inbox, so exactly-once is not guaranteed across a crash between the external call and the commit.
+
+## Tracing across the outbox
+
+Publishing happens seconds later on a background thread, where `Activity.Current` is empty. To keep one trace from request to consumer:
+
+1. `OutboxMessage.Create` saves the current `traceparent`/`tracestate` in `Headers`.
+2. The worker parses them and starts an `Outbox.Process <EventType>` activity of kind `Consumer` from the `CrowdFunding.Outbox` `ActivitySource` ([`CrowdFundingTelemetry`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Observability/CrowdFundingTelemetry.cs)), with the stored context as parent. Missing or malformed headers produce a new root activity rather than a failure.
+3. Handler work (EF Core, Npgsql, HttpClient spans) nests under that activity, and any outbox rows those handlers write capture it as their parent in turn.
+
+[`OpenTelemetryConfiguration`](../src/API/CrowdFunding.API/Observability/OpenTelemetryConfiguration.cs) registers the `CrowdFunding.Outbox` source with the ASP.NET Core, HttpClient, EF Core and Npgsql instrumentation and exports over OTLP when `OTEL_EXPORTER_OTLP_ENDPOINT` is set. With `docker compose up`, the Aspire dashboard at http://localhost:18888 shows the HTTP request and its outbox dispatch in one trace.
+
+## Test and diagnostic support
+
+`ModuleOutboxProcessor` implements [`IOutboxDispatcher`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Outbox/IOutboxDispatcher.cs):
+
+- `ProcessBatchAsync`: one claim-and-publish pass.
+- `DrainAsync(timeout)`: runs passes until no row is due and none is `Processing` in another worker, or the timeout elapses. Rows rescheduled for a later retry are not waited for.
+
+Because a commit wakes the background worker, that worker may already hold the rows a test just wrote. A single pass would then find nothing and return early; `DrainAsync` also waits for in-flight rows. The integration fixture's [`ProcessOutboxMessagesAsync`](../tests/IntegrationTests/CrowdFunding.IntegrationTests/CrowdFundingApiFactory.cs) finds every `IOutboxDispatcher` among the hosted services and drains each, so tests observe cross-module effects deterministically without knowing which modules exist.
+
+## Polling outbox vs. CDC
+
+The alternative to polling is change data capture: enable logical replication (`wal_level=logical`) and let Debezium stream committed outbox inserts to Kafka or Redpanda.
+
+| Dimension | SKIP LOCKED outbox (this repo) | Debezium CDC |
+| :--- | :--- | :--- |
+| Infrastructure | PostgreSQL only | Kafka/Redpanda, Kafka Connect, usually a schema registry |
+| Latency | Near-immediate for in-process commits (signal); up to 5 s for other replicas and retries | Sub-second after commit |
+| Database writes per event | INSERT, claim UPDATE, DELETE (plus UPDATEs on retry) | INSERT only; rows purged in bulk |
+| Idle load | One claim query per module every 5 s | None; WAL is read sequentially |
+| Consumers | One worker pool per module | Many independent consumer groups; replay by offset |
+| Failure mode | Lease expiry and retry; dead-letter table | A stalled connector makes PostgreSQL retain WAL until the disk fills |
+
+Choose CDC when sustained event volume reaches thousands per second, when several independent systems need to consume and replay the same stream, or when outbox write amplification measurably affects the primary workload. None of these holds today. The outbox rows, `EventId` identity and inbox would carry over unchanged; only the claim-and-publish worker would be replaced by the connector.

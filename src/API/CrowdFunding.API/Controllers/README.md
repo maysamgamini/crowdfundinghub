@@ -4,7 +4,7 @@
 The API is served by Minimal APIs (see [`../Endpoints/`](../Endpoints/README.md)). This folder keeps exactly **one** MVC controller on purpose, so the two hosting styles can be compared on the same codebase, the same pipeline and the same kind of endpoint.
 
 ## Files
-- `ModerationController.cs`: The moderation review queue (`/api/moderation/reviews`): a paged list, a get-by-campaign, and approve/reject actions behind the `moderation:review` permission policy. Its shape matches `Endpoints/CampaignEndpoints.cs`, the Minimal API to read it against.
+- `ModerationController.cs`: The moderation review queue (`/api/moderation/reviews`): a paged list, a get-by-campaign, and approve/reject actions behind the `moderation.review` permission policy (`PermissionConstants.ModerationReview`). Its shape matches `Endpoints/CampaignEndpoints.cs`, the Minimal API to read it against.
 
 ## What stays identical in both styles
 - Validation (`ValidationPipelineBehavior`), auditing, the handlers and the domain: the controller and the endpoints dispatch the same commands and queries.

@@ -1,234 +1,206 @@
-# Architect's Gold Notes: Core Mental Models for Students & Tech Leads
+# Architect's Notes: Mental Models for Students and Tech Leads
 
-> **Curriculum Artifact:** High-Impact Mental Models, Architectural Maxims, and Diagrammatic Thinking  
-> **Target Audience:** Students, Tech Leads, Principal Architects  
-
----
-
-## 1. "Coupling Is the Enemy, Not the Monolith"
-
-Many engineering teams believe that decomposing an application into microservices will magically solve their architectural problems.
-
-**The Golden Law:**  
-> *"If you take a tangled monolith and distribute it across network boundaries, you do not get microservices. You get a Distributed Monolith—which combines all the complexity of distributed systems with all the brittleness of tight coupling."*
-
-```
-     Tangled In-Process Monolith
-                 │
-      [Split across network without fixing boundaries]
-                 ▼
-     Fragile Distributed Monolith
-     (Cascading timeouts, partial failures, distributed deadlocks)
-```
-
-The goal of architecture is **low coupling and high cohesion**. You can achieve low coupling inside a single executable.
+> **Audience:** senior engineers, tech leads, architects
+> **Purpose:** short, reusable mental models, each tied to where this codebase applies it
 
 ---
 
-## 2. "Database Foreign Keys Are Concrete Chains"
+## 1. Coupling is the enemy, not the monolith
 
-When engineers design relational databases in a monolith, their instinct is to link everything with SQL foreign keys:
-`contributions.campaign_id` $\rightarrow$ `campaigns.campaigns.id`.
+Splitting a tangled monolith across a network does not produce microservices. It produces a distributed monolith: the coupling stays, and network failures are added to it.
+
+```
+Tangled in-process monolith
+          |
+  [split across the network without fixing boundaries]
+          v
+Distributed monolith
+(cascading timeouts, partial failures, coordinated deploys)
+```
+
+Low coupling and high cohesion can be achieved inside one executable. Here, module boundaries are enforced by project references and architecture tests while everything runs in one process.
+
+---
+
+## 2. Foreign keys across modules are chains
+
+The instinct in a relational design is to link everything: `contributions.campaign_id -> campaigns.id`.
 
 ```mermaid
 graph LR
-    subgraph BadDesign["Anti-Pattern: Cross-Schema Foreign Key"]
-        T1["contributions table"] -->|"SQL FK Constraint (Concrete Chain)"| T2["campaigns table"]
+    subgraph Bad["Cross-module foreign key"]
+        T1["contributions"] -->|"FK constraint"| T2["campaigns"]
     end
-    subgraph GoodDesign["Pattern: Primitive Identifier Decoupling"]
-        T3["contributions table<br/>(campaign_id UUID)"] -. "Scalar Value Reference (Zero SQL Chain)" .-> T4["campaigns table<br/>(id UUID)"]
+    subgraph Good["Plain identifier"]
+        T3["contributions<br/>(campaign_id uuid)"] -. "value only, no constraint" .-> T4["campaigns<br/>(id uuid)"]
     end
 ```
 
-**Why This Is a Golden Rule:**
-A SQL foreign key constraint requires both tables to live in the **same database engine**. It permanently locks your data models together.
-- In a decomposition-ready architecture, **never write a cross-boundary foreign key**. Store the target entity's ID as a primitive scalar (`Guid CampaignId`).
-- Let domain logic and application events enforce consistency across boundaries.
+A foreign key requires both tables to live in the same database, which blocks moving one module's data elsewhere. Store the other module's id as a plain value (`Guid CampaignId`) and keep consistency with events and local read models. This codebase has no cross-module foreign keys.
 
 ---
 
-## 3. "The Dual-Write Fallacy & The Outbox/CDC Shield"
+## 3. Dual writes fail; the outbox does not
 
-Every software engineer eventually tries to write this code:
 ```csharp
-// THE DUAL-WRITE DISASTER
-await dbContext.SaveChangesAsync(); // Step 1: Write to Database
-await kafkaProducer.PublishAsync(event); // Step 2: Publish to Broker
+await dbContext.SaveChangesAsync();       // 1. write to the database
+await broker.PublishAsync(@event);        // 2. publish to the broker
 ```
 
-### Why This Fails in Production:
-1. **Network Crash:** Step 1 commits, but the network to Kafka drops. The database changed, but the rest of the world never hears about it.
-2. **App Crash:** The machine loses power between Step 1 and Step 2.
-3. **Database Rollback:** Step 2 fires, but Step 1 rolls back due to a transaction conflict. The event was published for an action that never happened!
+This fails in three ways:
+1. Step 1 commits and the broker call fails: the world never hears about the change.
+2. The process dies between steps 1 and 2: same result.
+3. The order is reversed and the commit then fails: the world hears about a change that never happened.
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant App as Application
     participant DB as PostgreSQL
-    participant Kafka as Kafka / RabbitMQ
+    participant Bus as Message bus
 
     rect rgb(255, 240, 240)
-        Note over App,Kafka: The Dual-Write Bug
-        App->>DB: SaveChangesAsync() (Committed!)
-        App--xKafka: PublishAsync() (CRASH / TIMEOUT!)
-        Note over App,Kafka: System in Corrupt Inconsistent State
+        Note over App,Bus: Dual write
+        App->>DB: SaveChangesAsync() (committed)
+        App--xBus: PublishAsync() (fails)
+        Note over App,Bus: database and consumers now disagree
     end
 
     rect rgb(240, 255, 240)
-        Note over App,Kafka: The Outbox / CDC Solution
-        App->>DB: Save Entity + Insert Outbox Row (Atomic Single DB Commit)
-        DB-->>App: OK!
-        Note over DB,Kafka: Debezium / Background Poller reads DB and streams to Kafka
-        DB->>Kafka: Stream Outbox Event (Guaranteed At-Least-Once!)
+        Note over App,Bus: Outbox
+        App->>DB: entity change + outbox row in one commit
+        Note over DB,Bus: a worker (or CDC) reads the outbox and publishes
+        DB->>Bus: at-least-once delivery
     end
 ```
 
-**The Golden Law:**  
-> *"You cannot achieve atomic consistency across two independent storage systems without Two-Phase Commit (which you do not want) or the Transactional Outbox Pattern / Change Data Capture (which you do want)."*
+> You cannot make two independent storage systems change atomically without two-phase commit. The outbox makes the database the single source of truth and publishes afterwards, at least once.
+
+Here: a per-module outbox table, a polling processor woken by a post-commit signal, and an inbox table for consumers that must not apply an event twice. Debezium CDC was considered and not implemented; see [`docs/outbox-architecture.md`](../../docs/outbox-architecture.md).
 
 ---
 
-## 4. "Symmetric Architecture Is an Illusion (The 80/20 Rule)"
-
-Never force an entire codebase into a single rigid mold.
+## 4. Uniform architecture is an illusion
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ THE 80/20 RULE OF ENTERPRISE ARCHITECTURE:                                  │
-│                                                                             │
-│ [80% Low-Risk CRUD & Queries]            [20% High-Risk Transactional Core] │
-│ - Draft creation, user bio, lookups      - Pledges, ledger balances, refunds│
-│ - Pattern: Minimal API / Fast Slices     - Pattern: Rich DDD + Locks + CDC  │
-│ - Focus: Velocity & Low Indirection      - Focus: Financial Invariants      │
-└─────────────────────────────────────────────────────────────────────────────┘
++---------------------------------------------------------------------------+
+| Low-risk CRUD and queries           | High-risk transactional core        |
+| - drafts, profiles, lookups         | - pledges, ledger, refunds          |
+| - Minimal API, direct projections   | - aggregates, locks, DB constraints |
+| - optimize for speed of change      | - optimize for correct invariants   |
++---------------------------------------------------------------------------+
 ```
 
-A Principal Architect knows that **forcing a 14-file DDD pipeline onto a lookup table is just as incompetent as using raw inline SQL for a high-concurrency ledger balance update.**
+Forcing a full domain pipeline onto a lookup table is as much a mistake as a hand-written read-modify-write on a concurrent balance. The Rosetta Stone sample ([`src/Samples/RosettaStone/README.md`](../../src/Samples/RosettaStone/README.md)) shows one requirement at three tiers.
 
 ---
 
-## 5. "Asymmetric Cryptography: Sign Centrally, Verify Locally"
-
-In microservices and modular monoliths, authentication must scale horizontally without bottlenecking on the identity database:
+## 5. Sign centrally, verify locally
 
 ```mermaid
 graph TD
-    Client["Client / User"] -->|"1. POST /login (Credentials)"| IdSvc["Identity Service"]
-    IdSvc -->|"2. Sign JWT with Private ECDSA Key"| Client
-    Client -->|"3. HTTP Bearer Token"| EdgeSvc["Extracted Campaigns Service"]
-    EdgeSvc -->|"4. Verify Locally using Public Key (JWKS)"| LocalCache["Cached JWKS Keys"]
-    EdgeSvc -- "Zero Network Calls to Identity!" --> EdgeSvc
+    Client["Client"] -->|"1. POST /api/identity/login"| Id["Identity"]
+    Id -->|"2. JWT signed with private ES256 key"| Client
+    Client -->|"3. Bearer token"| Svc["Any verifier"]
+    Svc -->|"4. verify with cached public keys"| Jwks["/.well-known/jwks.json"]
 ```
 
-**The Golden Law:**  
-> *"With symmetric keys (HS256), every service must hold the master secret. With asymmetric keys (ES256), the private key never leaves the Identity service. All other services verify tokens offline using public keys from `/.well-known/jwks.json`."*
+> With HS256 every verifier holds the signing secret and can forge tokens. With ES256 the private key stays with Identity (here encrypted at rest with AES-256-GCM), and verifiers need only the public keys from the JWKS endpoint.
 
 ---
 
-## 6. "Event-Carried State Transfer vs. Synchronous RPC"
+## 6. Replicated state vs. synchronous queries
 
-When Service B needs data from Service A:
+When module B needs module A's data:
 
-| Approach | Mechanics | Coupling Level | Availability Impact |
-|---|---|:---:|---|
-| **Synchronous RPC (HTTP/gRPC)** | Service B calls `GET /api/serviceA/{id}` on every incoming request. | 🔴 **High (Temporal Coupling)** | If Service A is down, **Service B goes down too**. |
-| **Event-Carried State Transfer** | Service A publishes `EntityUpdatedEvent`. Service B consumes it and maintains a local cache. | 🟢 **Zero (Autonomous)** | Service B handles requests locally with **100% uptime**, even if Service A is completely offline. |
+| Approach | Mechanics | Coupling | Availability |
+|---|---|---|---|
+| Synchronous query (in-process call, HTTP, gRPC) | B asks A on every request | Temporal: B needs A to be up | If A is down, B fails too |
+| Event-carried state transfer | A publishes events; B keeps a local read model | B depends on A's events, not on A being up | B keeps serving from possibly stale local data |
+
+Here, Contributions validates pledges against its own `active_campaigns_cache`, fed by Campaigns' created/published/cancelled/succeeded/failed events, instead of calling into Campaigns. The price is eventual consistency: a pledge can be checked against a slightly stale copy, which is why the Campaigns ledger re-checks the campaign's state when it credits the pledge.
 
 ---
 
----
+## 7. Databases are not queues: MVCC and outbox tables
 
-## 7. "Databases Are Not Queues: MVCC Write Amplification & Autovacuum"
+A common outbox implementation updates each row `Pending -> Processing -> Processed` and keeps it.
 
-Many architects blindly implement the Transactional Outbox pattern by adding an `outbox` table and updating rows from `Status = Pending` to `Status = Processing` to `Status = Processed`.
-
-**The Mechanical Sympathy Lesson:**
-In PostgreSQL's Multi-Version Concurrency Control (MVCC), an `UPDATE` does not overwrite the row on disk. It writes a brand new row version (tuple) and marks the old one dead.
-- Under 500 events/sec, mutating outbox row statuses generates **1,500 dead tuples per second**.
-- PostgreSQL's `autovacuum` daemon falls behind, causing catastrophic table fragmentation, B-tree index bloat, and eviction of active domain data from `shared_buffers`.
+In PostgreSQL an `UPDATE` writes a new row version and leaves the old one dead until vacuum removes it. Each status change is a dead tuple, and a table that keeps every processed row grows without bound. Under sustained load, autovacuum falls behind and table and index bloat follow.
 
 ```
-Naive Outbox:   [Insert Row] -> [Update to Processing] -> [Update to Processed] = 3 Dead Tuples per Event!
-Optimal Outbox: [Insert Row] -> [DELETE FROM outbox WHERE id = @id]            = Bounded Table Heap!
+Status-flag outbox: insert -> update (Processing) -> update (Processed), row kept forever
+Lean outbox:        insert -> claim (one update) -> DELETE on success
 ```
 
-**The Golden Law:**
-> *"If you use PostgreSQL as a transactional message outbox, delete messages immediately upon successful dispatch (`DELETE ON SUCCESS`). Archive failures to an append-only dead-letter table. Never let processed messages accumulate in an active poller table."*
+> Delete outbox rows once they are delivered. Move repeated failures to a dead-letter table. Keep only pending work in the table the worker scans.
+
+Here, `ModuleOutboxProcessor<TDbContext>` claims rows (one update, with a lease), deletes them on success, and moves a row to a dead-letter table after five attempts.
 
 ---
 
-## 8. "The Stateless Token Revocation Dilemma"
+## 8. Stateless tokens cannot be revoked on their own
 
-Architects choose asymmetric JWTs (ES256) so services can verify authentication offline against public JWKS (`/.well-known/jwks.json`) without hitting the Identity database.
-
-**The Architectural Dilemma:**
-Because validation is 100% offline and stateless, **a compromised token or deactivated user cannot be revoked until the token expires naturally**.
+Offline JWT verification is fast because it needs no lookup, which also means a token stays valid until it expires, even after logout or compromise.
 
 ```
-Pure Stateless JWT:    Fast offline verification, but ZERO immediate revocation capability.
-Database Session Auth: Instant revocation capability, but CENTRALIZED DATABASE BOTTLENECK on every request.
+Pure stateless JWT:  no lookup per request, no revocation before expiry
+Server sessions:     instant revocation, a store lookup per request
 ```
 
-**The Principal Solution (The Hybrid Tier):**
-1. Issue **short-lived access tokens** (10–15 minutes).
-2. Use **Refresh Token Rotation (RTR)** with automated reuse detection.
-3. Maintain a low-latency **Redis Security Stamp blacklist**: downstream services perform local cryptographic verification for normal endpoints, and check Redis only when high-value administrative/financial actions occur.
+The middle ground used here:
+1. Short-lived access tokens (15 minutes by default).
+2. Refresh token rotation: each refresh revokes the presented token; presenting a revoked one is treated as reuse and revokes all of the user's sessions.
+3. A security-stamp revocation list in Redis. Every token carries a security-stamp claim, and on each authenticated request the API checks that stamp against Redis (a key lookup, not a database read). Entries live only as long as an access token can.
+
+The trade-off is explicit: every request now depends on Redis. An extracted service verifying tokens from JWKS alone would lose immediate revocation unless it performs the same check.
 
 ---
 
-## 9. "Cross-Cutting Governance: Pipeline Behaviors Over Handler Pollution"
+## 9. Cross-cutting concerns belong in the pipeline
 
-When enforcing cross-cutting concerns (immutable audit logs, validation, metrics, distributed tracing):
+Injecting an audit repository, a validator and a logger into every handler duplicates code and guarantees that a new handler will forget one of them.
 
-**The Antipattern:**
-Manually injecting `IAuditRepository` or `ILogger` into 40 distinct command handlers.
-- Violates Single Responsibility.
-- Pollutes domain orchestration with infrastructure plumbing.
-- Guarantees that future engineers will forget to add audit logging to new endpoints.
+> Put cross-cutting behavior in the command dispatcher pipeline (a decorator around every handler). Keep handlers about business logic.
 
-**The Golden Law:**
-> *"Cross-cutting governance belongs in the Dispatcher Pipeline Behavior (Decorator pattern), never in the Use Case Handler. Command handlers must remain 100% pure business logic."*
+Here, `ValidationPipelineBehavior` runs every FluentValidation validator for a command before its handler (endpoints never validate by hand), and `AuditLoggingPipelineBehavior` records commands marked `[AuditableAction]` in `system.audit_records`. Domain code signals rule violations with its own exceptions (`BusinessRuleViolationException`, `DomainConflictException`), and one `ExceptionClassifier` maps exceptions to HTTP status codes in a single place.
 
 ---
 
-## 10. "Multi-Replica Scaling: Pre-Commit Cache Eviction Races"
+## 10. Evict caches after commit, not before
 
-Monoliths are never deployed as single instances in production; they run across 3, 5, or 10 container replicas behind an Application Load Balancer.
-
-**The Race Condition:**
-If Pod A updates an entity and evicts its Redis cache key *before* `SaveChangesAsync` commits the transaction to PostgreSQL, Pod B can concurrently handle a read request, query the database, read the **uncommitted old data**, and repopulate Redis with stale data for 30 minutes!
+Production runs several replicas. If a writer evicts a cache key before its transaction commits, a reader on another replica can miss the cache, read the old committed row, and repopulate the cache with stale data.
 
 ```mermaid
 sequenceDiagram
-    participant PodA as Pod A (Writer)
-    participant Redis as Redis Cache
+    participant A as Replica A (writer)
+    participant Redis as Redis
     participant DB as PostgreSQL
-    participant PodB as Pod B (Reader)
+    participant B as Replica B (reader)
 
-    PodA->>Redis: 1. Evict Cache Key (BEFORE Commit!)
-    PodB->>Redis: 2. Cache Miss!
-    PodB->>DB: 3. Read Entity (Returns OLD DB State!)
-    PodB->>Redis: 4. Populate Redis with OLD State (TTL 30s)
-    PodA->>DB: 5. SaveChangesAsync() (NEW State Committed!)
-    Note over PodA,PodB: Cache is now poisoned with stale data for 30 seconds!
+    A->>Redis: 1. evict key (before commit)
+    B->>Redis: 2. miss
+    B->>DB: 3. read old committed row
+    B->>Redis: 4. cache old row
+    A->>DB: 5. commit new state
+    Note over A,B: cache holds stale data until the TTL expires
 ```
 
-**The Golden Law:**
-> *"Never evict or invalidate caches inside the transactional write path before commit. Always bind cache evictions to post-commit hooks (`ITransactionExecutor.OnCommitted`) and broadcast invalidations across replicas via Redis Pub/Sub channels."*
+> Evict after the transaction commits. If replicas also keep in-process caches, broadcast the invalidation.
+
+Here, Campaigns repositories call `EnqueueCacheInvalidation` during the transaction and `CampaignTransactionExecutor` removes those keys from the shared Redis cache only after the commit succeeds (`CampaignCachePostCommitInvalidationTests`). For per-replica in-memory state, such as the cached signing keys, Redis Pub/Sub broadcasts invalidations (`SigningKeyMultiReplicaInvalidationE2ETests`), with a periodic refresh bounding staleness if a message is missed.
 
 ---
 
-## 11. The 10 Commandments of Decomposition-Ready Architecture
+## 11. Ten rules for a decomposition-ready monolith
 
-1. **Thou shalt not reference another module's domain assembly.**
-2. **Thou shalt communicate across module boundaries exclusively through contract DTOs and integration events.**
-3. **Thou shalt isolate database tables into schemas per module.**
-4. **Thou shalt never declare a SQL foreign key across schema boundaries.**
-5. **Thou shalt never dual-write to a database and a message broker in the same operation.**
-6. **Thou shalt sign tokens with asymmetric cryptography and publish public keys via JWKS.**
-7. **Thou shalt not route queries through write repositories; project directly from data to DTO.**
-8. **Thou shalt right-size each vertical slice: keep simple CRUD simple, and save heavy DDD for mission-critical aggregates.**
-9. **Thou shalt automate boundary enforcement in CI via architecture unit tests (`NetArchTest`).**
-10. **Thou shalt design systems so that extracting a microservice requires zero lines of business logic rewritten.**
-
+1. Do not reference another module's Domain, Application or Infrastructure assembly.
+2. Cross module boundaries only through Contracts: commands, queries and application events.
+3. Give each module its own DbContext, its own tables and its own connection string. (Separate schemas for the tables go further; this codebase does not do that yet.)
+4. Never declare a foreign key across module boundaries.
+5. Never dual-write to a database and a broker; use an outbox.
+6. Sign tokens asymmetrically and publish public keys through JWKS.
+7. Do not route queries through write repositories; project directly to DTOs.
+8. Size each feature to its risk: keep CRUD simple, reserve rich domain models for real invariants.
+9. Enforce boundaries in CI with architecture tests.
+10. Aim for extraction that does not rewrite business logic, and verify that claim with a real extraction (the next course step) rather than assuming it.

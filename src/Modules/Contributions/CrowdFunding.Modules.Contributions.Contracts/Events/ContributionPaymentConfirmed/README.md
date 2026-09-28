@@ -1,7 +1,7 @@
 ﻿# Contribution Payment Confirmed
 
 ## Purpose
-Contains source files related to Contribution Payment Confirmed.
+Contains the application event published when a contribution's payment is confirmed.
 
 ## Files
 - `ContributionPaymentConfirmedApplicationEvent.cs`: Application event contract published for cross-module reactions.
