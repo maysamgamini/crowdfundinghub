@@ -64,6 +64,8 @@ builder.Services.AddCrowdFundingSwagger();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services.AddCrowdFundingRateLimiting(builder.Configuration);
+builder.Services.AddCrowdFundingCors(builder.Configuration);
+builder.Services.AddCrowdFundingForwardedHeaders(builder.Configuration);
 builder.Services.Configure<PaymentGatewayWebhookOptions>(
     builder.Configuration.GetSection(PaymentGatewayWebhookOptions.SectionName));
 builder.Services.Configure<CloudFunctionWebhookOptions>(
@@ -139,8 +141,13 @@ builder.Services.AddEventHandlersFromAssemblies(
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
+        // Claims arrive exactly as issued ("sub", "email", "role"): no rewriting into the
+        // ClaimTypes.* schema URIs, so every host reads the same names (CustomClaimTypes).
+        options.MapInboundClaims = false;
         options.TokenValidationParameters = new TokenValidationParameters
         {
+            NameClaimType = CustomClaimTypes.Subject,
+            RoleClaimType = CustomClaimTypes.Role,
             ValidateIssuer = true,
             ValidIssuer = jwtIssuer,
             ValidateAudience = true,
@@ -160,7 +167,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             OnTokenValidated = async context =>
             {
-                var userIdClaim = context.Principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                var userIdClaim = context.Principal?.FindFirst(CustomClaimTypes.Subject)?.Value;
                 var stampClaim = context.Principal?.FindFirst(CustomClaimTypes.SecurityStamp)?.Value;
 
                 if (!Guid.TryParse(userIdClaim, out var userId) || !Guid.TryParse(stampClaim, out var stamp))
@@ -272,32 +279,37 @@ await using (var scope = app.Services.CreateAsyncScope())
     await signingKeyStore.WarmUpAsync(CancellationToken.None);
 }
 
-app.UseHttpsRedirection();
+// First, so every later component (HTTPS redirection, logging, rate limiting) sees the real
+// client IP and scheme reported by a trusted reverse proxy.
+app.UseForwardedHeaders();
 
 app.UseExceptionHandler();
 app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseHttpsRedirection();
+app.UseCors();
 
 app.MapHealthChecks("/health/live", new HealthCheckOptions
 {
     Predicate = _ => false,
     ResponseWriter = HealthCheckResponseWriter.WriteResponseAsync,
-}).WithTags("System");
+}).WithTags("System").DisableRateLimiting();
 
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
     Predicate = check => check.Tags.Contains("ready"),
     ResponseWriter = HealthCheckResponseWriter.WriteResponseAsync,
-}).WithTags("System");
+}).WithTags("System").DisableRateLimiting();
 
 app.MapGet("/.well-known/jwks.json", JwksEndpoint.Get)
     .AllowAnonymous()
-    .WithTags("System");
+    .WithTags("System")
+    .DisableRateLimiting();
 
 app.MapRosettaStoneSample();
 
-app.UseRateLimiter();
-
+// Authentication before the rate limiter, so policies can partition by the caller's "sub".
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHub<CampaignHub>("/hubs/campaigns");

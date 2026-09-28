@@ -32,13 +32,18 @@ public sealed class EfSigningKeyStore : ISigningKeyStore
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IDistributedCacheInvalidationPublisher _invalidationPublisher;
+    private readonly SigningKeyProtector _protector;
     private SigningKeyMaterial? _activeSigningKey;
     private IReadOnlyList<SigningKeyMaterial>? _publicSigningKeys;
 
-    public EfSigningKeyStore(IServiceScopeFactory scopeFactory, IDistributedCacheInvalidationPublisher invalidationPublisher)
+    public EfSigningKeyStore(
+        IServiceScopeFactory scopeFactory,
+        IDistributedCacheInvalidationPublisher invalidationPublisher,
+        SigningKeyProtector protector)
     {
         _scopeFactory = scopeFactory;
         _invalidationPublisher = invalidationPublisher;
+        _protector = protector;
     }
 
     /// <inheritdoc/>
@@ -54,7 +59,7 @@ public sealed class EfSigningKeyStore : ISigningKeyStore
 
         if (activeRecord is null)
         {
-            activeRecord = GenerateNewKeyRecord();
+            activeRecord = GenerateNewKeyRecord(_protector);
             // Add (not AddAsync) — EF's AddAsync exists only for value generators that need
             // async DB access, which SigningKeyRecord's client-generated Guid key doesn't use.
             dbContext.SigningKeys.Add(activeRecord);
@@ -62,7 +67,7 @@ public sealed class EfSigningKeyStore : ISigningKeyStore
         }
 
         var privateKey = ECDsa.Create();
-        privateKey.ImportPkcs8PrivateKey(Convert.FromBase64String(activeRecord.PrivateKeyPkcs8Base64), out _);
+        privateKey.ImportPkcs8PrivateKey(_protector.Unprotect(activeRecord.Kid, activeRecord.ProtectedPrivateKey), out _);
         var newActiveSigningKey = new SigningKeyMaterial(activeRecord.Kid, privateKey);
 
         // The public JWKS list includes every known key, not just the active one: a token signed
@@ -72,11 +77,13 @@ public sealed class EfSigningKeyStore : ISigningKeyStore
             .OrderByDescending(x => x.CreatedAtUtc)
             .ToListAsync(cancellationToken);
 
+        await ProtectLegacyRecordsAsync(dbContext, allRecords, cancellationToken);
+
         var newPublicSigningKeys = allRecords
             .Select(record =>
             {
                 using var recordPrivateKey = ECDsa.Create();
-                recordPrivateKey.ImportPkcs8PrivateKey(Convert.FromBase64String(record.PrivateKeyPkcs8Base64), out _);
+                recordPrivateKey.ImportPkcs8PrivateKey(_protector.Unprotect(record.Kid, record.ProtectedPrivateKey), out _);
 
                 var publicOnly = ECDsa.Create();
                 publicOnly.ImportParameters(new ECParameters
@@ -126,7 +133,7 @@ public sealed class EfSigningKeyStore : ISigningKeyStore
                 record.Deactivate();
             }
 
-            dbContext.SigningKeys.Add(GenerateNewKeyRecord());
+            dbContext.SigningKeys.Add(GenerateNewKeyRecord(_protector));
             await dbContext.SaveChangesAsync(cancellationToken);
         }
 
@@ -137,12 +144,43 @@ public sealed class EfSigningKeyStore : ISigningKeyStore
         await _invalidationPublisher.PublishAsync(SigningKeysInvalidationChannel, cancellationToken);
     }
 
-    private static SigningKeyRecord GenerateNewKeyRecord()
+    /// <summary>
+    /// One-time data migration: rows written before at-rest encryption hold the plain base64
+    /// PKCS#8 key. Each is re-protected in place the first time any replica warms up with an
+    /// encryption key configured; afterwards this finds nothing to do.
+    /// </summary>
+    private async Task ProtectLegacyRecordsAsync(
+        IdentityDbContext dbContext, IReadOnlyList<SigningKeyRecord> records, CancellationToken cancellationToken)
+    {
+        var legacyRecords = records.Where(record => !SigningKeyProtector.IsProtected(record.ProtectedPrivateKey)).ToList();
+        if (legacyRecords.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var record in legacyRecords)
+        {
+            var pkcs8 = _protector.Unprotect(record.Kid, record.ProtectedPrivateKey);
+            record.ReplaceProtectedPrivateKey(_protector.Protect(record.Kid, pkcs8));
+            CryptographicOperations.ZeroMemory(pkcs8);
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private static SigningKeyRecord GenerateNewKeyRecord(SigningKeyProtector protector)
     {
         using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-        var privateKeyBase64 = Convert.ToBase64String(ecdsa.ExportPkcs8PrivateKey());
         var kid = Guid.NewGuid().ToString("N");
+        var pkcs8 = ecdsa.ExportPkcs8PrivateKey();
 
-        return new SigningKeyRecord(kid, privateKeyBase64, DateTime.UtcNow);
+        try
+        {
+            return new SigningKeyRecord(kid, protector.Protect(kid, pkcs8), DateTime.UtcNow);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(pkcs8);
+        }
     }
 }

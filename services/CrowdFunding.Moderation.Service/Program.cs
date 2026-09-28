@@ -54,8 +54,11 @@ builder.Services.AddHttpClient<JwksSigningKeyResolver>();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
+        options.MapInboundClaims = false;
         options.TokenValidationParameters = new TokenValidationParameters
         {
+            NameClaimType = CrowdFunding.Modules.Identity.Contracts.Authorization.CustomClaimTypes.Subject,
+            RoleClaimType = CrowdFunding.Modules.Identity.Contracts.Authorization.CustomClaimTypes.Role,
             ValidateIssuer = true,
             ValidIssuer = jwtIssuer,
             // Decentralized authentication (TICKET-029 acceptance criterion #3): audience

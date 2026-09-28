@@ -1,11 +1,28 @@
-﻿namespace CrowdFunding.Modules.Identity.Contracts.Authorization;
+namespace CrowdFunding.Modules.Identity.Contracts.Authorization;
 
 /// <summary>
-/// Defines custom claim type names stored in JWT tokens and authorization policies.
+/// The claim type names this platform writes into access tokens and reads back. Every host
+/// validates tokens with inbound claim mapping switched off, so these are the exact names on the
+/// wire (<c>sub</c>, not <c>ClaimTypes.NameIdentifier</c>'s schema URI).
 /// </summary>
 public static class CustomClaimTypes
 {
+    /// <summary>
+    /// The registered JWT subject (RFC 7519 §4.1.2): the user id. The only claim any host reads
+    /// to identify the caller.
+    /// </summary>
+    public const string Subject = "sub";
+
+    /// <summary>The user's e-mail address (OpenID Connect standard claim).</summary>
+    public const string Email = "email";
+
+    /// <summary>One claim per role the user holds; also the tokens' role claim type.</summary>
+    public const string Role = "role";
+
+    /// <summary>The user's display name.</summary>
     public const string DisplayName = "display_name";
+
+    /// <summary>One claim per permission; authorization policies require these.</summary>
     public const string Permission = "permission";
 
     /// <summary>

@@ -54,6 +54,9 @@ public sealed class CrowdFundingApiFactory : WebApplicationFactory<Program>, IAs
         Environment.SetEnvironmentVariable("OpenMeter__BaseUrl", "https://openmeter.cloud");
         Environment.SetEnvironmentVariable("RateLimiting__Auth__PermitLimit", "100000");
         Environment.SetEnvironmentVariable("RateLimiting__Payment__PermitLimit", "100000");
+        Environment.SetEnvironmentVariable("RateLimiting__Global__PermitLimit", "100000");
+        // Test-only AES-256 key for encrypting ES256 private keys at rest (never used elsewhere).
+        Environment.SetEnvironmentVariable("SigningKeyEncryption__Key", "jtLCVz1aVwU89pIYA7XsdoffmhlWnw/oS5Huy+aSX00=");
 
         // TICKET-050's dispatch-time SSRF guard correctly refuses to connect to loopback/private
         // addresses, which is exactly what WebhookSubscriptionE2ETests.

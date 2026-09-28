@@ -49,6 +49,8 @@ public sealed class MultiDatabaseConnectionDecouplingTests : IAsyncLifetime
         Environment.SetEnvironmentVariable("Jwt__Audience", "CrowdFunding.Test.Client");
         Environment.SetEnvironmentVariable("RateLimiting__Auth__PermitLimit", "100000");
         Environment.SetEnvironmentVariable("RateLimiting__Payment__PermitLimit", "100000");
+        Environment.SetEnvironmentVariable("RateLimiting__Global__PermitLimit", "100000");
+        Environment.SetEnvironmentVariable("SigningKeyEncryption__Key", "jtLCVz1aVwU89pIYA7XsdoffmhlWnw/oS5Huy+aSX00=");
 
         _factory = new IsolatedWebApplicationFactory();
         _ = _factory.Server;

@@ -1,23 +1,24 @@
 # Rate Limiting Configuration
 
 ## Purpose
-Configures partitioned rate limiting policies to protect authentication and contribution endpoints against brute-force attacks, denial-of-service, Sybil registration storms, and card testing.
+Protects the API from abusive callers with ASP.NET Core's built-in rate limiter: one global per-caller limit plus stricter named policies for authentication, payment and webhook routes.
 
 ## Files
-- `RateLimitingConfiguration.cs`: Defines rate limiting partitions, permit windows, and HTTP 429 response handling using ASP.NET Core's built-in `RateLimiter` middleware.
+- `RateLimitingConfiguration.cs`: Registers the global limiter, the named policies and the 429 response writer.
 
-## Policies
-1. **`auth-strict` (`RateLimitingConfiguration.AuthPolicy`)**:
-   - **Target Endpoints**: `/api/identity/login`, `/api/identity/register`.
-   - **Partitioning**: Partitioned by client IP (`RemoteIpAddress`).
-   - **Threshold**: 10 permits per 1-minute fixed window.
-   - **Purpose**: Mitigates brute-force credential stuffing and mass automated account creation.
+## Partitioning
+- Callers are keyed by the authenticated JWT `sub` claim (`user:{sub}`), falling back to the client IP (`ip:{address}`) for anonymous requests.
+- This depends on middleware order in `Program.cs`: `UseForwardedHeaders` first (the IP is the real client behind a trusted proxy, not the proxy), then `UseAuthentication`, then `UseRateLimiter`.
 
-2. **`payment-strict` (`RateLimitingConfiguration.PaymentPolicy`)**:
-   - **Target Endpoints**: `/api/contributions`, `/api/contributions/{id}/confirm-payment`.
-   - **Partitioning**: Partitioned by authenticated user identifier (`ClaimTypes.NameIdentifier`), falling back to remote IP if unauthenticated.
-   - **Threshold**: 20 permits per 1-minute fixed window.
-   - **Purpose**: Mitigates automated pledge flooding and credit card testing.
+## Limits (fixed windows, configurable under `RateLimiting:{Section}:PermitLimit|WindowSeconds`)
+| Policy | Applies to | Partition | Default |
+| :--- | :--- | :--- | :--- |
+| Global limiter | Every endpoint except `/health/*` and `/.well-known/jwks.json` | `sub`, else IP | 300 / 60 s |
+| `auth-strict` (`AuthPolicy`) | Register, login, refresh | IP | 10 / 60 s |
+| `payment-strict` (`PaymentPolicy`) | Contribution and payment endpoints | `sub`, else IP | 20 / 60 s |
+| `webhook-strict` (`WebhookPolicy`) | Payment gateway and media-analysis webhooks | IP | 200 / 60 s |
 
-## Rejection Behavior
-When request volume exceeds the allocated window quota, the middleware halts pipeline execution and returns an HTTP status code `429 Too Many Requests`.
+The webhook limit is deliberately generous: gateways send from shared, rotating IP pools and the real defense is the HMAC signature check.
+
+## Rejections
+A rejected request gets `429 Too Many Requests` as RFC 9457 `application/problem+json` with a `traceId`, and a `Retry-After` header when the limiter can compute it.

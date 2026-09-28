@@ -58,6 +58,8 @@ public static class IdentityInfrastructureDependencyInjection
         services.AddCacheInvalidationSubscription(
             EfSigningKeyStore.SigningKeysInvalidationChannel,
             (provider, cancellationToken) => provider.GetRequiredService<ISigningKeyStore>().WarmUpAsync(cancellationToken));
+        // Encrypts the ES256 private keys at rest; throws at startup when SigningKeyEncryption:Key is missing.
+        services.AddSingleton<SigningKeyProtector>();
         services.AddSingleton<ISigningKeyStore, EfSigningKeyStore>();
         services.AddHostedService<SigningKeyRefreshBackgroundService>();
 

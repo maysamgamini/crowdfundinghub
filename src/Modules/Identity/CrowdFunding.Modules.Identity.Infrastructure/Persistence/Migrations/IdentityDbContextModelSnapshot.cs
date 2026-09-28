@@ -138,7 +138,7 @@ namespace CrowdFunding.Modules.Identity.Infrastructure.Persistence.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
-                    b.Property<string>("PrivateKeyPkcs8Base64")
+                    b.Property<string>("ProtectedPrivateKey")
                         .IsRequired()
                         .HasColumnType("text");
 

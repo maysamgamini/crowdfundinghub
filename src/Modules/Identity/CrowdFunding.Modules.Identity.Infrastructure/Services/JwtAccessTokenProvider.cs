@@ -1,4 +1,4 @@
-﻿using System.IdentityModel.Tokens.Jwt;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Services;
@@ -50,14 +50,15 @@ public sealed class JwtAccessTokenProvider : IAccessTokenProvider
         var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.EcdsaSha256);
         var claims = new List<Claim>
         {
-            new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new(ClaimTypes.Email, user.Email),
+            // "sub" is the only identity claim: hosts validate with inbound claim mapping off,
+            // so no duplicate ClaimTypes.NameIdentifier claim is issued.
+            new(CustomClaimTypes.Subject, user.Id.ToString()),
+            new(CustomClaimTypes.Email, user.Email),
             new(CustomClaimTypes.DisplayName, user.DisplayName),
             new(CustomClaimTypes.SecurityStamp, user.SecurityStamp.ToString())
         };
 
-        claims.AddRange(user.Roles.Select(role => new Claim(ClaimTypes.Role, role.Role)));
+        claims.AddRange(user.Roles.Select(role => new Claim(CustomClaimTypes.Role, role.Role)));
         claims.AddRange(permissions.Select(permission => new Claim(CustomClaimTypes.Permission, permission)));
 
         var token = new JwtSecurityToken(

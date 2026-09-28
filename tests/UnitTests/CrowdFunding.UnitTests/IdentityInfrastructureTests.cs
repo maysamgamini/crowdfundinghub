@@ -15,14 +15,74 @@ public sealed class SigningKeyRecordTests
     [Fact]
     public void Deactivate_ShouldTurnOffIsActive_WithoutClearingTheKeyMaterial()
     {
-        var record = new SigningKeyRecord("kid-1", "base64-key", DateTime.UtcNow);
+        var record = new SigningKeyRecord("kid-1", "ENC:v1:protected", DateTime.UtcNow);
 
         record.Deactivate();
 
         Assert.False(record.IsActive);
         Assert.Equal("kid-1", record.Kid);
-        Assert.Equal("base64-key", record.PrivateKeyPkcs8Base64);
+        Assert.Equal("ENC:v1:protected", record.ProtectedPrivateKey);
     }
+}
+
+public sealed class SigningKeyProtectorTests
+{
+    private const string TestKey = "jtLCVz1aVwU89pIYA7XsdoffmhlWnw/oS5Huy+aSX00=";
+
+    [Fact]
+    public void ProtectThenUnprotect_ShouldRoundTripThePrivateKey_WithoutStoringItInPlaintext()
+    {
+        var protector = CreateProtector(TestKey);
+        using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var pkcs8 = ecdsa.ExportPkcs8PrivateKey();
+
+        var stored = protector.Protect("kid-1", pkcs8);
+
+        Assert.StartsWith(SigningKeyProtector.ProtectedPrefix, stored);
+        Assert.DoesNotContain(Convert.ToBase64String(pkcs8), stored);
+        Assert.Equal(pkcs8, protector.Unprotect("kid-1", stored));
+    }
+
+    [Fact]
+    public void Unprotect_ShouldFail_WhenTheCiphertextIsMovedToAnotherKeyId()
+    {
+        var protector = CreateProtector(TestKey);
+        var stored = protector.Protect("kid-1", [1, 2, 3, 4]);
+
+        Assert.ThrowsAny<CryptographicException>(() => protector.Unprotect("kid-2", stored));
+    }
+
+    [Fact]
+    public void Unprotect_ShouldFail_WithADifferentEncryptionKey()
+    {
+        var stored = CreateProtector(TestKey).Protect("kid-1", [1, 2, 3, 4]);
+        var otherKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+
+        Assert.ThrowsAny<CryptographicException>(() => CreateProtector(otherKey).Unprotect("kid-1", stored));
+    }
+
+    [Fact]
+    public void Unprotect_ShouldDecodeALegacyPlaintextValue()
+    {
+        var legacy = Convert.ToBase64String([9, 8, 7]);
+
+        Assert.False(SigningKeyProtector.IsProtected(legacy));
+        Assert.Equal([9, 8, 7], CreateProtector(TestKey).Unprotect("kid-1", legacy));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("not-base64!")]
+    [InlineData("AAECAw==")]
+    public void Constructor_ShouldFailFast_WhenTheKeyIsMissingOrInvalid(string? key)
+    {
+        Assert.Throws<InvalidOperationException>(() => CreateProtector(key));
+    }
+
+    private static SigningKeyProtector CreateProtector(string? key)
+        => new(new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { [SigningKeyProtector.ConfigurationKey] = key })
+            .Build());
 }
 
 public sealed class Pbkdf2PasswordHasherTests
@@ -157,9 +217,11 @@ public sealed class JwtAccessTokenProviderTests
         Assert.Equal("test-kid", jwt.Header.Kid);
         Assert.Equal("CrowdFunding.API", jwt.Issuer);
         Assert.Contains("CrowdFunding.Client", jwt.Audiences);
-        Assert.Equal(user.Id.ToString(), jwt.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value);
-        Assert.Equal(user.Email, jwt.Claims.First(c => c.Type == ClaimTypes.Email).Value);
-        Assert.Contains(jwt.Claims, c => c.Type == ClaimTypes.Role && c.Value == RoleConstants.Creator);
+        Assert.Equal(user.Id.ToString(), jwt.Claims.Single(c => c.Type == CustomClaimTypes.Subject).Value);
+        Assert.Equal(user.Email, jwt.Claims.First(c => c.Type == CustomClaimTypes.Email).Value);
+        Assert.Contains(jwt.Claims, c => c.Type == CustomClaimTypes.Role && c.Value == RoleConstants.Creator);
+        // "sub" is the only identity claim; no duplicate NameIdentifier ("nameid") is issued.
+        Assert.DoesNotContain(jwt.Claims, c => c.Type is "nameid" or ClaimTypes.NameIdentifier);
         Assert.Contains(jwt.Claims, c => c.Type == CustomClaimTypes.Permission && c.Value == PermissionConstants.CampaignsCreate);
     }
 

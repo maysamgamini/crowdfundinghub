@@ -28,14 +28,14 @@ public sealed class ServiceCurrentUser : ICurrentUser
     {
         get
         {
-            var value = _httpContextAccessor.HttpContext?.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+            var value = _httpContextAccessor.HttpContext?.User?.FindFirstValue(CustomClaimTypes.Subject);
             return Guid.TryParse(value, out var userId) ? userId : Guid.Empty;
         }
     }
 
-    public string? Email => _httpContextAccessor.HttpContext?.User?.FindFirstValue(ClaimTypes.Email);
+    public string? Email => _httpContextAccessor.HttpContext?.User?.FindFirstValue(CustomClaimTypes.Email);
 
-    public IReadOnlyCollection<string> Roles => GetClaimValues(ClaimTypes.Role);
+    public IReadOnlyCollection<string> Roles => GetClaimValues(CustomClaimTypes.Role);
 
     public IReadOnlyCollection<string> Permissions => GetClaimValues(CustomClaimTypes.Permission);
 

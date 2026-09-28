@@ -92,6 +92,7 @@ public sealed class SigningKeyMultiReplicaInvalidationE2ETests
         services.AddCacheInvalidationSubscription(
             EfSigningKeyStore.SigningKeysInvalidationChannel,
             (provider, cancellationToken) => provider.GetRequiredService<ISigningKeyStore>().WarmUpAsync(cancellationToken));
+        services.AddSingleton<SigningKeyProtector>();
         services.AddSingleton<ISigningKeyStore, EfSigningKeyStore>();
         services.AddSingleton<DistributedCacheInvalidationSubscriber>();
 
