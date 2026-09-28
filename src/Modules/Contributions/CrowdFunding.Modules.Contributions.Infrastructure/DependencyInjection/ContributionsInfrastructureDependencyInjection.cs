@@ -1,4 +1,5 @@
 ﻿using CrowdFunding.BuildingBlocks.Infrastructure.Configuration;
+using CrowdFunding.BuildingBlocks.Infrastructure.Outbox;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Inbox;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
@@ -26,9 +27,14 @@ public static class ContributionsInfrastructureDependencyInjection
     {
         var connectionString = configuration.GetRequiredModuleConnectionString("ContributionsDb");
 
-        services.AddDbContext<ContributionsDbContext>(options =>
-            options.UseNpgsql(connectionString, npgsql =>
-                npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "contributions")));
+        // The interceptor wakes this module's outbox processor as soon as a transaction that wrote
+        // outbox rows commits; the processor's poll interval is only the fallback sweep.
+        services.AddOutboxSignal<ContributionsDbContext>();
+        services.AddDbContext<ContributionsDbContext>((serviceProvider, options) =>
+            options
+                .UseNpgsql(connectionString, npgsql =>
+                    npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "contributions"))
+                .AddOutboxSignalInterceptor<ContributionsDbContext>(serviceProvider));
 
         services.AddScoped<IContributionRepository, ContributionRepository>();
         services.AddScoped<IContributionsIdempotentConsumer, ContributionsIdempotentConsumer>();

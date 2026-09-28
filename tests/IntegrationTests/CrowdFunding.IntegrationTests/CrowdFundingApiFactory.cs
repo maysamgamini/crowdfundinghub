@@ -103,10 +103,9 @@ public sealed class CrowdFundingApiFactory : WebApplicationFactory<Program>, IAs
     }
 
     /// <summary>
-    /// Runs one outbox claim-and-publish pass on every module's autonomous outbox worker
-    /// (<see cref="IOutboxDispatcher"/>) synchronously, so tests can deterministically observe
-    /// cross-module side effects (e.g. Campaign Created -> Moderation Review Created) instead of
-    /// waiting on each worker's 5-second polling interval. Discovers dispatchers by interface
+    /// Drains every module's autonomous outbox worker (<see cref="IOutboxDispatcher.DrainAsync"/>),
+    /// so tests can deterministically observe cross-module side effects (e.g. Campaign Created ->
+    /// Moderation Review Created) without racing the commit-triggered background processor. Discovers dispatchers by interface
     /// rather than by module DbContext type, so this fixture needs no changes when a module is
     /// added, removed, or extracted into its own service.
     /// </summary>
@@ -117,9 +116,13 @@ public sealed class CrowdFundingApiFactory : WebApplicationFactory<Program>, IAs
             .GetServices<IHostedService>()
             .OfType<IOutboxDispatcher>();
 
+        // Drain rather than run a single pass: since commits wake each module's background
+        // processor, that processor may already hold (SKIP LOCKED) the rows a test just wrote.
+        // Draining waits for those in-flight rows too, so callers still observe every committed
+        // event as delivered when this returns.
         foreach (var dispatcher in dispatchers)
         {
-            await dispatcher.ProcessBatchAsync(cancellationToken);
+            await dispatcher.DrainAsync(TimeSpan.FromSeconds(30), cancellationToken);
         }
     }
 }

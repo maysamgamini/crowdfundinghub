@@ -15,6 +15,12 @@ Provides shared technical implementations for persistence, transactional outbox 
   - `OpenMeterClient.cs`: Implements `IUsageMeteringClient` over resilient HTTP (`Microsoft.Extensions.Http.Resilience`) targeting OpenMeter Cloud.
   - `OpenMeterOptions.cs`: Binds to configuration settings for OpenMeter endpoints and tokens.
   - `MeteringDependencyInjection.cs`: Extension methods wiring OpenMeter clients and resilient HTTP pipelines.
+- `Outbox`:
+  - `ModuleOutboxProcessor.cs`: Abstract per-module background worker. Claims due rows with `FOR UPDATE SKIP LOCKED` (and reclaims rows a crashed worker left in Processing once their lease expires, counting that as an attempt), publishes through `IMessageBus`, deletes on success, backs off and dead-letters after `MaxAttempts`. Wakes on `OutboxSignal` and sweeps every poll interval as a fallback; a failed pass is logged, never fatal to the host.
+  - `OutboxSignal.cs`: Single-slot, drop-write channel per module DbContext (ported from apps/backend's `ChannelOutboxSignal`) that coalesces commits into one wake-up.
+  - `OutboxCommitSignalInterceptor.cs`: EF Core save-changes + transaction interceptor that notifies the signal only after rows added to the outbox are committed (never on rollback).
+  - `OutboxSignalRegistrationExtensions.cs`: `AddOutboxSignal<TDbContext>()` and `AddOutboxSignalInterceptor<TDbContext>(sp)` used by each module's DI.
+  - `IOutboxDispatcher.cs`: `ProcessBatchAsync` (one pass) and `DrainAsync` (until nothing is due or in flight) for diagnostics and deterministic tests.
 - `Persistence`:
   - `OutboxMessage.cs`: Persistence model representing outbox records, storing serialized JSON payloads, event discriminator, occurrence time, processed time, and error trace.
   - `ModelBuilderExtensions.cs`: Fluent EF Core configuration extensions (`ConfigureOutbox`, `ConfigureDeadLetter`, `ConfigureInbox`) for mapping outbox and DLQ tables uniformly across modular DbContexts.

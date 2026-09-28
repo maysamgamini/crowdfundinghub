@@ -21,6 +21,11 @@ namespace CrowdFunding.BuildingBlocks.Infrastructure.Outbox;
 /// Publishes through <see cref="IMessageBus"/> rather than <see cref="IEventPublisher"/>
 /// directly, so switching a module's <c>Messaging:Provider</c> from in-process to a distributed
 /// broker changes nothing here. See docs/outbox-architecture.md for the SKIP LOCKED claim design.
+///
+/// Wake-up: a commit that writes outbox rows notifies this module's
+/// <see cref="OutboxSignal{TDbContext}"/> (via <see cref="OutboxCommitSignalInterceptor{TDbContext}"/>),
+/// so delivery normally starts milliseconds after the business transaction commits; the poll
+/// interval is only the fallback sweep.
 /// </summary>
 public abstract class ModuleOutboxProcessor<TDbContext> : BackgroundService, IOutboxDispatcher
     where TDbContext : DbContext
@@ -43,20 +48,87 @@ public abstract class ModuleOutboxProcessor<TDbContext> : BackgroundService, IOu
         _pollInterval = pollInterval;
     }
 
-    /// <inheritdoc/>
+    /// <summary>
+    /// Drains the outbox whenever a commit signals new rows, and at least every poll interval as
+    /// a fallback sweep (retries whose back-off has elapsed, rows from other replicas or
+    /// processes, a signal missed during a restart). A full batch loops straight into the next
+    /// one instead of waiting.
+    /// </summary>
+    /// <param name="stoppingToken">Signals host shutdown.</param>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using var timer = new PeriodicTimer(_pollInterval);
+        var signal = _serviceProvider.GetRequiredService<OutboxSignal<TDbContext>>();
+        var logger = _serviceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(GetType());
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            await ProcessBatchAsync(stoppingToken);
-            await timer.WaitForNextTickAsync(stoppingToken);
+            var claimed = 0;
+
+            try
+            {
+                claimed = await ProcessNextBatchAsync(stoppingToken);
+            }
+            catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
+            {
+                // A database outage must not kill the host (BackgroundService's default is to stop
+                // the application on an unhandled exception). The rows stay Pending or their lease
+                // expires, so the next pass picks them up.
+                logger.LogError(exception, "Outbox pass for {DbContext} failed; retrying after the fallback interval.", typeof(TDbContext).Name);
+            }
+
+            if (claimed < BatchSize)
+            {
+                await signal.WaitAsync(_pollInterval, stoppingToken);
+            }
         }
     }
 
     /// <inheritdoc/>
-    public async Task ProcessBatchAsync(CancellationToken cancellationToken)
+    public Task ProcessBatchAsync(CancellationToken cancellationToken) => ProcessNextBatchAsync(cancellationToken);
+
+    /// <inheritdoc/>
+    public async Task<bool> DrainAsync(TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+
+        while (DateTime.UtcNow < deadline)
+        {
+            if (await ProcessNextBatchAsync(cancellationToken) > 0)
+            {
+                continue;
+            }
+
+            if (!await HasDueOrInFlightRowsAsync(cancellationToken))
+            {
+                return true;
+            }
+
+            // Another worker holds the remaining rows; give it a moment to finish publishing.
+            await Task.Delay(TimeSpan.FromMilliseconds(25), cancellationToken);
+        }
+
+        return false;
+    }
+
+    private async Task<bool> HasDueOrInFlightRowsAsync(CancellationToken cancellationToken)
+    {
+        await using var scope = _serviceProvider.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
+        var nowUtc = DateTime.UtcNow;
+
+        return await dbContext.Set<OutboxMessage>().AnyAsync(
+            message => (message.Status == OutboxMessageStatus.Pending && message.ScheduledAtUtc <= nowUtc)
+                       || message.Status == OutboxMessageStatus.Processing,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Claims up to <see cref="BatchSize"/> due rows with <c>FOR UPDATE SKIP LOCKED</c>, publishes
+    /// them, and deletes, reschedules or dead-letters each one.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The number of rows claimed.</returns>
+    private async Task<int> ProcessNextBatchAsync(CancellationToken cancellationToken)
     {
         await using var scope = _serviceProvider.CreateAsyncScope();
         var services = scope.ServiceProvider;
@@ -70,7 +142,7 @@ public abstract class ModuleOutboxProcessor<TDbContext> : BackgroundService, IOu
 
         if (messages.Count == 0)
         {
-            return;
+            return 0;
         }
 
         var nowUtc = DateTime.UtcNow;
@@ -129,6 +201,8 @@ public abstract class ModuleOutboxProcessor<TDbContext> : BackgroundService, IOu
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        return messages.Count;
     }
 
     /// <summary>

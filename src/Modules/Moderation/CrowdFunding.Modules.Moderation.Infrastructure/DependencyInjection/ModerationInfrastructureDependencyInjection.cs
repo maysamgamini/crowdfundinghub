@@ -1,4 +1,5 @@
 ﻿using CrowdFunding.BuildingBlocks.Infrastructure.Configuration;
+using CrowdFunding.BuildingBlocks.Infrastructure.Outbox;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Services;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Transactions;
@@ -25,9 +26,14 @@ public static class ModerationInfrastructureDependencyInjection
     {
         var connectionString = configuration.GetRequiredModuleConnectionString("ModerationDb");
 
-        services.AddDbContext<ModerationDbContext>(options =>
-            options.UseNpgsql(connectionString, npgsql =>
-                npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "moderation")));
+        // The interceptor wakes this module's outbox processor as soon as a transaction that wrote
+        // outbox rows commits; the processor's poll interval is only the fallback sweep.
+        services.AddOutboxSignal<ModerationDbContext>();
+        services.AddDbContext<ModerationDbContext>((serviceProvider, options) =>
+            options
+                .UseNpgsql(connectionString, npgsql =>
+                    npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "moderation"))
+                .AddOutboxSignalInterceptor<ModerationDbContext>(serviceProvider));
 
         services.AddScoped<ICampaignReviewStatusReader, CampaignReviewStatusReader>();
         services.AddScoped<ICampaignReviewRepository, CampaignReviewRepository>();

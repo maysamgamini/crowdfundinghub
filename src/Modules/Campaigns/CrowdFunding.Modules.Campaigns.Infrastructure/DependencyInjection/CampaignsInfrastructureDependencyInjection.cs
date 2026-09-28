@@ -1,4 +1,5 @@
 ﻿using CrowdFunding.BuildingBlocks.Infrastructure.Configuration;
+using CrowdFunding.BuildingBlocks.Infrastructure.Outbox;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Transactions;
@@ -30,9 +31,14 @@ public static class CampaignsInfrastructureDependencyInjection
         var redisConnectionString = configuration.GetConnectionString("Redis")
                                     ?? throw new InvalidOperationException("Connection string 'Redis' was not found.");
 
-        services.AddDbContext<CampaignsDbContext>(options =>
-            options.UseNpgsql(connectionString, npgsql =>
-                npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "campaigns")));
+        // The interceptor wakes this module's outbox processor as soon as a transaction that wrote
+        // outbox rows commits; the processor's poll interval is only the fallback sweep.
+        services.AddOutboxSignal<CampaignsDbContext>();
+        services.AddDbContext<CampaignsDbContext>((serviceProvider, options) =>
+            options
+                .UseNpgsql(connectionString, npgsql =>
+                    npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "campaigns"))
+                .AddOutboxSignalInterceptor<CampaignsDbContext>(serviceProvider));
 
         services.AddStackExchangeRedisCache(options =>
         {
