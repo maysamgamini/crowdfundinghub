@@ -1,7 +1,7 @@
 # CrowdFunding Architecture Tests
 
 ## Purpose
-Executable architecture tests using `NetArchTest.Rules` to enforce dependency boundaries, clean architecture invariants, and prevent layer coupling or improper cross-module references.
+Executable architecture tests (plain xUnit, inspecting `Assembly.GetReferencedAssemblies()`; the NetArchTest library is not used) to enforce dependency boundaries, clean architecture invariants, and prevent layer coupling or improper cross-module references.
 
 ## Test Suites & Boundary Rules
 - `CampaignsModuleDependencyTests.cs`:

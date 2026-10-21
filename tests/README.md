@@ -5,7 +5,7 @@ Contains automated test suites designed to safeguard software correctness, enfor
 
 ## Test Strategy & Categories
 1. **Architecture Tests (`tests/ArchitectureTests`)**:
-   - Uses `NetArchTest.Rules` to enforce architectural constraints.
+   - Uses plain xUnit tests that inspect referenced assemblies (reflection) to enforce architectural constraints. The NetArchTest library is not used.
    - Verifies that `API` does not bypass application boundaries to reference domain models directly.
    - Asserts that modules only communicate via `Contracts` and cannot depend on each other's internal domain or infrastructure implementations.
 2. **Unit Tests (`tests/UnitTests`)**:

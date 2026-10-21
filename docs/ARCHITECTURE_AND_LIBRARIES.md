@@ -26,13 +26,13 @@
    - [3.3 Mapster](#33-mapster)
    - [3.4 FluentValidation](#34-fluentvalidation)
    - [3.5 Asymmetric ES256 ECDSA & Microsoft.IdentityModel](#35-asymmetric-es256-ecdsa--microsoftidentitymodel)
-   - [3.6 Serilog Compact JSON & OpenTelemetry](#36-serilog-compact-json--opentelemetry)
+   - [3.6 Serilog Compact JSON & Correlation IDs](#36-serilog-compact-json--correlation-ids)
    - [3.7 OpenMeter & CloudEvents v1.0](#37-openmeter--cloudevents-v10)
    - [3.8 Testcontainers.PostgreSql](#38-testcontainerspostgresql)
-   - [3.9 NetArchTest](#39-netarchtest)
+   - [3.9 Architecture Tests (assembly-reference checks)](#39-architecture-tests-assembly-reference-checks)
    - [3.10 Coverlet](#310-coverlet)
    - [3.11 ASP.NET Core SignalR](#311-aspnet-core-signalr)
-   - [3.12 OpenTelemetry Distributed Tracing & W3C Traceparent Propagation](#312-opentelemetry-distributed-tracing--w3c-traceparent-propagation)
+   - [3.12 Distributed Tracing & W3C Traceparent Propagation (System.Diagnostics.Activity)](#312-distributed-tracing--w3c-traceparent-propagation-systemdiagnosticsactivity)
 4. [End-to-End Architectural Workflows & Data Flows](#4-end-to-end-architectural-workflows--data-flows)
    - [4.1 Concurrent Pledge Ingestion & Financial Settlement Flow](#41-concurrent-pledge-ingestion--financial-settlement-flow)
    - [4.2 Asymmetric ES256 Token Issuance & Edge Verification Flow](#42-asymmetric-es256-token-issuance--edge-verification-flow)
@@ -164,7 +164,7 @@ The solution is divided into six distinct Bounded Contexts:
 - **Database Context Isolation**: Each module maintains its own dedicated EF Core DbContext ([`CampaignsDbContext`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Persistence/DbContexts/CampaignsDbContext.cs), [`ContributionsDbContext`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Infrastructure/Persistence/DbContexts/ContributionsDbContext.cs), [`IdentityDbContext`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Persistence/DbContexts/IdentityDbContext.cs), [`ModerationDbContext`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Moderation/CrowdFunding.Modules.Moderation.Infrastructure/Persistence/DbContexts/ModerationDbContext.cs)). Cross-context joins or entity navigation properties crossing module boundaries are forbidden at compile-time and runtime.
 - **Contract Decoupling**: Modules expose public contracts strictly via dedicated `.Contracts` assemblies (e.g., [`CrowdFunding.Modules.Campaigns.Contracts`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Contracts) or [`CrowdFunding.Modules.Contributions.Contracts`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Contracts)). Internal entity definitions (`Campaign`, `Contribution`) never escape their owning module.
 - **Zero API-to-Domain Dependencies**: The [`CrowdFunding.API`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API) project does **NOT** reference any module's `.Domain` assembly. Controllers interact exclusively with Application command/query models and Mapster DTOs.
-- **Automated NetArchTest Boundary Verification**: Dependency direction and encapsulation rules are checked continuously via automated architectural unit tests in [`CrowdFunding.ArchitectureTests`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/tests/ArchitectureTests/CrowdFunding.ArchitectureTests).
+- **Automated Architecture Boundary Verification**: Dependency direction and encapsulation rules are checked continuously via automated architectural unit tests in [`CrowdFunding.ArchitectureTests`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/tests/ArchitectureTests/CrowdFunding.ArchitectureTests).
 
 ```mermaid
 graph LR
@@ -491,7 +491,7 @@ Automates transformation between external HTTP Request/Response DTO contracts an
 
 ### 3.4 FluentValidation
 
-- **Package/Runtime:** `FluentValidation 11.x`
+- **Package/Runtime:** `FluentValidation 12.1.1`
 - **Location:** Applied across Application projects, e.g., [`CreateCampaignCommandValidator.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Application/Features/Campaigns/Commands/CreateCampaign/CreateCampaignCommandValidator.cs)
 
 #### Problem It Solves
@@ -548,7 +548,7 @@ sequenceDiagram
 
 ---
 
-### 3.6 Serilog Compact JSON & OpenTelemetry
+### 3.6 Serilog Compact JSON & Correlation IDs
 
 - **Package/Runtime:** `Serilog.AspNetCore 9.0.0`, `Serilog.Formatting.Compact 3.0.0`, `Serilog.Enrichers.Environment 3.0.1`
 - **Location:** [`LoggingConfiguration.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Observability/LoggingConfiguration.cs), [`CorrelationIdMiddleware.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Observability/CorrelationIdMiddleware.cs)
@@ -599,9 +599,9 @@ Executes real database integration tests against genuine, ephemeral PostgreSQL D
 
 ---
 
-### 3.9 NetArchTest
+### 3.9 Architecture Tests (assembly-reference checks)
 
-- **Package/Runtime:** `NetArchTest.Rules`
+- **Package/Runtime:** `xunit` only. The `NetArchTest.Rules` library is not referenced; the tests read `Assembly.GetReferencedAssemblies()` through reflection.
 - **Location:** [`CrowdFunding.ArchitectureTests`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/tests/ArchitectureTests/CrowdFunding.ArchitectureTests)
 
 #### Problem It Solves
@@ -609,7 +609,11 @@ Automates compilation and reflection-level enforcement of modular architecture b
 
 #### Why Chosen Over Alternatives
 - **vs. Manual Code Reviews:** Architectural decay occurs incrementally. Developers under pressure may accidentally add a direct project reference from the API controller to an internal domain entity or between two modules. Manual code reviews frequently miss these subtle boundary erosions.
-- **vs. Custom Roslyn Analyzers:** Building custom Roslyn analyzers requires complex abstract syntax tree (AST) programming, dedicated packaging, and high maintenance overhead. NetArchTest allows architectural rules to be declared as standard, readable xUnit tests:
+- **vs. Custom Roslyn Analyzers:** Building custom Roslyn analyzers requires complex abstract syntax tree (AST) programming, dedicated packaging, and high maintenance overhead. plain xUnit tests over assembly references keep the rules readable and need no extra library:
+  ```csharp
+  var referenced = typeof(CreateCampaignCommand).Assembly.GetReferencedAssemblies()
+      .Select(a => a.Name).ToHashSet();
+  Assert.DoesNotContain(typeof(CampaignRepository).Assembly.GetName().Name, referenced);
   ```csharp
   Types.InAssembly(typeof(CampaignsApplicationDependencyInjection).Assembly)
       .ShouldNot()
@@ -649,16 +653,16 @@ Pushes real-time campaign funding progress updates, backer counters, and funding
 
 ---
 
-### 3.12 OpenTelemetry Distributed Tracing & W3C Traceparent Propagation
+### 3.12 Distributed Tracing & W3C Traceparent Propagation (System.Diagnostics.Activity)
 
-- **Package/Runtime:** `System.Diagnostics.DiagnosticSource`, `OpenTelemetry.Api`
+- **Package/Runtime:** `System.Diagnostics.Activity` from the .NET framework (no separate package). The OpenTelemetry SDK, `OpenTelemetry.Api` and any exporter are not referenced; the code propagates the W3C `traceparent` value by hand.
 - **Location:** [`OutboxMessage.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxMessage.cs), [`TICKET-030`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/qa-tickets/TICKET-030-DISTRIBUTED-TRACING-OPENTELEMETRY-OUTBOX-PROPAGATION.md)
 
 #### Problem It Solves
 When operations span transactional outbox boundaries or extracted microservices, the causal link between the initial HTTP request and the asynchronous background consumer execution is severed, preventing end-to-end distributed latency analysis.
 
 #### Why Chosen Over Alternatives
-- **vs. Proprietary APM Tracing (Datadog/NewRelic Agents):** Vendor agents create runtime lock-in and require proprietary binaries. OpenTelemetry adheres to the **W3C Distributed Tracing Recommendation (`traceparent` header)**.
+- **vs. Proprietary APM Tracing (Datadog/NewRelic Agents):** Vendor agents create runtime lock-in and require proprietary binaries. The W3C standard that this code follows by hand is the **W3C Distributed Tracing Recommendation (`traceparent` header)**.
 - **Outbox Trace Context Preservation:** When an event is captured, the active `Activity.Current?.Id` is recorded in `OutboxMessage.TraceParent`. When the outbox processor claims the row, it initializes an `ActivityContext.Parse(traceParent)`, ensuring that asynchronous background jobs and distributed consumers appear under the **exact same trace span tree** in Jaeger, Tempo, or Datadog.
 
 ---
@@ -808,7 +812,7 @@ To safeguard against distributed denial-of-service (DDoS) and brute-force creden
 
 | Decision Area | Selected Technology / Architectural Pattern | Alternatives Evaluated | Deciding Factor / Trade-off Rationale | Primary References |
 | :--- | :--- | :--- | :--- | :--- |
-| **System Architecture** | Modular Monolith (6 Bounded Contexts) | Distributed Microservices; Monolithic Spaghetti | Eliminates distributed transaction failures and network hops while guaranteeing strict boundary isolation via NetArchTest. | [`DEV_GUIDELINES.md`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/DEV_GUIDELINES.md)<br/>[`improvement.md`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/improvement.md) |
+| **System Architecture** | Modular Monolith (6 Bounded Contexts) | Distributed Microservices; Monolithic Spaghetti | Eliminates distributed transaction failures and network hops while guaranteeing strict boundary isolation via assembly-reference architecture tests. | [`DEV_GUIDELINES.md`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/DEV_GUIDELINES.md)<br/>[`improvement.md`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/improvement.md) |
 | **Outbox Claiming** | PostgreSQL Native `FOR UPDATE SKIP LOCKED` | Debezium CDC + Kafka; RabbitMQ | Zero extra infrastructure; guarantees zero multi-worker race conditions. Revisit for Debezium when throughput exceeds 5,000 events/sec. | [`outbox-architecture.md`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/docs/outbox-architecture.md)<br/>[`OutboxClaimQuery.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxClaimQuery.cs) |
 | **Financial Concurrency** | `pg_advisory_xact_lock` + `xmin` + Unique Ledger | Pessimistic Table Locks; Optimistic Locking alone | Advisory locks serialize read-modify-write loops to prevent TOCTOU races; `xmin` catches out-of-band updates; ledger blocks duplicate replays. | [`CampaignTransactionExecutor.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Transactions/CampaignTransactionExecutor.cs)<br/>[`AdvisoryLockKey.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Domain/Common/AdvisoryLockKey.cs) |
 | **Integration Testing** | `Testcontainers.PostgreSql` | EF Core InMemory; SQLite In-Memory | Real PostgreSQL semantics required to execute and test `xmin`, `SKIP LOCKED`, advisory locks, and raw SQL CTE queries. | [`CampaignsPostgresFixture.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/tests/IntegrationTests/CrowdFunding.IntegrationTests/CampaignsPostgresFixture.cs)<br/>[`CampaignContributionConcurrencyTests.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/tests/IntegrationTests/CrowdFunding.IntegrationTests/CampaignContributionConcurrencyTests.cs) |
@@ -817,6 +821,6 @@ To safeguard against distributed denial-of-service (DDoS) and brute-force creden
 | **Validation Pipeline** | FluentValidation | DataAnnotations; Domain Invariants Only | Keeps DTOs clean; handles complex cross-property validation rules; fails fast with RFC 9457 errors before database transactions open. | [`CreateCampaignCommandValidator.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Application/Features/Campaigns/Commands/CreateCampaign/CreateCampaignCommandValidator.cs) |
 | **Real-Time Streaming** | ASP.NET Core SignalR | Raw WebSockets; Server-Sent Events; Pusher | High-level hub abstractions with automatic transport negotiation and connection groups without third-party SaaS dependency. | [`CampaignHub.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/RealTime/CampaignHub.cs) |
 | **Platform Metering** | OpenMeter + CloudEvents v1.0 | Custom DB Counters; Direct Stripe API calls | Offloads millions of usage events to ClickHouse; avoids transactional DB contention; ensures CNCF interoperability. | [`OpenMeterClient.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Metering/OpenMeterClient.cs)<br/>[`CloudEvent.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Application/Metering/CloudEvent.cs) |
-| **Structured Logging** | Serilog + Compact JSON + OpenTelemetry | Default Console Logger; NLog | Emits standardized single-line CLEF JSON logs; embeds W3C Trace IDs for distributed observability and log correlation. | [`LoggingConfiguration.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Observability/LoggingConfiguration.cs)<br/>[`CorrelationIdMiddleware.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Observability/CorrelationIdMiddleware.cs) |
-| **Architecture Guardrails** | NetArchTest | Manual PR Reviews; Custom Roslyn Analyzers | Compile-time and CI test automation of module boundaries, Clean Architecture layer direction, and encapsulation. | [`CampaignsModuleDependencyTests.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/tests/ArchitectureTests/CrowdFunding.ArchitectureTests/CampaignsModuleDependencyTests.cs) |
+| **Structured Logging** | Serilog + Compact JSON + manual W3C trace propagation | Default Console Logger; NLog | Emits standardized single-line CLEF JSON logs; embeds W3C Trace IDs for distributed observability and log correlation. | [`LoggingConfiguration.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Observability/LoggingConfiguration.cs)<br/>[`CorrelationIdMiddleware.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Observability/CorrelationIdMiddleware.cs) |
+| **Architecture Guardrails** | xUnit assembly-reference tests | Manual PR Reviews; Custom Roslyn Analyzers | Compile-time and CI test automation of module boundaries, Clean Architecture layer direction, and encapsulation. | [`CampaignsModuleDependencyTests.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/tests/ArchitectureTests/CrowdFunding.ArchitectureTests/CampaignsModuleDependencyTests.cs) |
 | **Code Coverage** | Coverlet (`coverlet.collector`) | Visual Studio Coverage; dotCover | Cross-platform, open-source code coverage engine integrated directly into `dotnet test` on Linux, macOS, and CI runners. | [`CrowdFunding.ArchitectureTests.csproj`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/tests/ArchitectureTests/CrowdFunding.ArchitectureTests/CrowdFunding.ArchitectureTests.csproj) |

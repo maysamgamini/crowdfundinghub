@@ -59,7 +59,7 @@ Every line of code in this repository adheres to 6 core architectural guardrails
 3. **Zero Cross-Schema Foreign Keys:** Cross-module references are primitive identifiers (`Guid CampaignId`), never database-level foreign key constraints. Data integrity is enforced via application invariants and eventual consistency sagas.
 4. **Transactional Outbox for Boundary Traversal:** Local database transactions write business events atomically into an `outbox_messages` table within the same module schema, completely eliminating distributed dual-write hazards.
 5. **Decentralized Authentication (Asymmetric ES256 / JWKS):** Identity generates private ECDSA keys and exposes public keys at `/.well-known/jwks.json`. Consuming modules and future microservices validate JWTs offline without calling back to Identity.
-6. **Automated Architecture Tests (NetArchTest):** Build-time unit tests enforce that the API host and external modules never violate clean architecture boundaries or directly reference internal domains.
+6. **Automated Architecture Tests (assembly-reference checks):** Build-time unit tests enforce that the API host and external modules never violate clean architecture boundaries or directly reference internal domains.
 
 ---
 
@@ -106,7 +106,7 @@ All identified improvements, architectural defects, and concrete feature tasks a
 | **Mapping** | Mapster | High-performance compiled IL object mapping avoiding AutoMapper runtime reflection tax. |
 | **Validation** | FluentValidation | Expressive, strongly typed command validation separated from HTTP controllers. |
 | **Security** | Asymmetric ES256 ECDSA | Elliptic-curve JWT signing with RFC 7517 JWKS endpoint for offline signature verification. |
-| **Testing** | xUnit, Testcontainers, NetArchTest | Ephemeral PostgreSQL containers for real database integration testing, plus build-time architectural dependency enforcement. |
+| **Testing** | xUnit, Testcontainers, assembly-reference architecture tests | Ephemeral PostgreSQL containers for real database integration testing, plus build-time architectural dependency enforcement. |
 
 ---
 
@@ -152,6 +152,6 @@ dotnet test CrowdFunding.slnx
 | Test Project | Purpose & Scope | Count | Status |
 | :--- | :--- | :---: | :---: |
 | **`CrowdFunding.UnitTests`** | Domain aggregate invariants, command handlers, value objects, and concurrency rules. | 134 | ✅ Passed |
-| **`CrowdFunding.ArchitectureTests`** | NetArchTest rules enforcing assembly boundaries and zero API-to-domain references. | 16 | ✅ Passed |
+| **`CrowdFunding.ArchitectureTests`** | xUnit tests that inspect referenced assemblies to enforce boundaries and zero API-to-domain references. | 16 | ✅ Passed |
 | **`CrowdFunding.IntegrationTests`** | WebApplicationFactory E2E HTTP flows running against real PostgreSQL Testcontainers. | 21 | ✅ Passed |
 | **Total** | | **171** | **100% Green** |
