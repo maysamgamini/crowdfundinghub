@@ -148,12 +148,15 @@ The loop's "See It Built" section describes the reference code ahead of the code
 
 ## 5. Gaps this mapping exposes
 
+> Added 2026-10-22: the schema-per-module row below was found while checking a lesson. It was checked statically (migrations and entity configurations) and has not been confirmed against a live database.
+
 | Gap | Design step | Suggested ticket |
 |---|---|---|
 | No idempotency on pledge creation | 1.2 | Add an idempotency key or client pledge ID with a unique index |
 | No closing fence; late confirmations dead-letter without refund | 1.5 | Add an ENDED state and refund late confirmations |
 | Outbox rows stuck in `Processing` are never reclaimed | outbox | Reclaim on lock expiry, or correct the docs |
 | Ledger lacks entry kind, sign check, trigger, refund entries | 1.3 | Decide whether to build it or change the design text |
+| Module tables are not in per-module schemas: only the EF migrations history table is. `CreateTable` and `ToTable` set no schema, so tables sit in the default schema with module-prefixed names (for example `campaigns_outbox_messages`). Only the Audit and RosettaStone contexts call `EnsureSchema` | Cross-cutting (schema per module) | Set the schema per DbContext and migrate the tables, or correct the "schema per module" claims in the docs |
 | No settlement charge-once mechanism | 1.6 | Out of scope while charge-now stands; document the choice |
 | No success/failure outcome email | "Tell people" | Add handlers or remove the stubs |
 | Scavenger and outbox crash recovery untested | 1.4, outbox | Add tests |
