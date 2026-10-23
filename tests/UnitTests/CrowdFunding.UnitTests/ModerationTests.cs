@@ -368,7 +368,7 @@ public sealed class GetCampaignReviewByCampaignIdQueryHandlerTests
             new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc),
             null);
 
-        var handler = new GetCampaignReviewByCampaignIdQueryHandler(new FakeCampaignReviewReadService(expected));
+        var handler = new GetCampaignReviewByCampaignIdQueryHandler(new FakeCampaignReviewReadService(expected), new TestCurrentUser { UserId = Guid.NewGuid(), Permissions = [PermissionConstants.ModerationReview] });
 
         var result = await handler.Handle(new GetCampaignReviewByCampaignIdQuery(expected.CampaignId), CancellationToken.None);
 
@@ -379,7 +379,7 @@ public sealed class GetCampaignReviewByCampaignIdQueryHandlerTests
     public async Task Handle_ShouldThrow_WhenReviewWasNotFound()
     {
         var campaignId = Guid.NewGuid();
-        var handler = new GetCampaignReviewByCampaignIdQueryHandler(new FakeCampaignReviewReadService(null));
+        var handler = new GetCampaignReviewByCampaignIdQueryHandler(new FakeCampaignReviewReadService(null), new TestCurrentUser { UserId = Guid.NewGuid(), Permissions = [PermissionConstants.ModerationReview] });
 
         var action = async () => await handler.Handle(new GetCampaignReviewByCampaignIdQuery(campaignId), CancellationToken.None);
 
@@ -402,7 +402,7 @@ public sealed class ListCampaignReviewsQueryHandlerTests
             new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc),
             null);
 
-        var handler = new ListCampaignReviewsQueryHandler(new FakeCampaignReviewReadService(expected));
+        var handler = new ListCampaignReviewsQueryHandler(new FakeCampaignReviewReadService(expected), new TestCurrentUser { UserId = Guid.NewGuid(), Permissions = [PermissionConstants.ModerationReview] });
 
         var result = await handler.Handle(
             new ListCampaignReviewsQuery(new PageRequest(1, 20), "Pending"),

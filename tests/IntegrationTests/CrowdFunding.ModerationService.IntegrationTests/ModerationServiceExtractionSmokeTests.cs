@@ -102,6 +102,35 @@ public sealed class ModerationServiceExtractionSmokeTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task PlainUserJwtIssuedByTheMonolith_ShouldNotBeAbleToReadAReviewOnTheExtractedModerationService()
+    {
+        using var identityClient = _monolith.CreateClient();
+
+        var email = $"extraction-plain-{Guid.NewGuid():N}@example.com";
+        var register = await identityClient.PostAsJsonAsync(
+            "api/identity/register", new RegisterUserRequest(email, "Plain User", "P@ssw0rd123!"));
+        register.EnsureSuccessStatusCode();
+        var login = await (await identityClient.PostAsJsonAsync("api/identity/login", new LoginUserRequest(email, "P@ssw0rd123!")))
+            .Content.ReadFromJsonAsync<LoginUserResponse>();
+
+        var campaignId = Guid.NewGuid();
+        using (var scope = _moderationService.Services.CreateScope())
+        {
+            var repository = scope.ServiceProvider.GetRequiredService<ICampaignReviewRepository>();
+            var transactionExecutor = scope.ServiceProvider.GetRequiredService<IModerationTransactionExecutor>();
+            await transactionExecutor.ExecuteAsync(
+                ct => repository.AddAsync(CampaignReview.Create(campaignId, DateTime.UtcNow), ct), CancellationToken.None);
+        }
+
+        using var moderationClient = _moderationService.CreateClient();
+        moderationClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login!.AccessToken);
+
+        var response = await moderationClient.GetAsync($"api/moderation/reviews/{campaignId}");
+
+        Assert.Equal(System.Net.HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
     public async Task RequestWithNoBearerToken_ShouldBeRejectedByTheExtractedModerationService()
     {
         using var moderationClient = _moderationService.CreateClient();
