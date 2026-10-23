@@ -118,6 +118,19 @@ public abstract class ModuleOutboxProcessor<TDbContext> : BackgroundService, IOu
 
         foreach (var message in messages)
         {
+            // A row that was reclaimed after its worker died has been claimed Attempts times without
+            // ever finishing. When that reaches the limit the message is the likely cause of the
+            // deaths (an event that crashes the process), so stop handing it to workers.
+            if (message.Attempts >= MaxAttempts)
+            {
+                var reason = $"Claimed {message.Attempts} times without finishing: the worker died while processing it.";
+                logger.LogError("Dead-lettering outbox message {MessageId} (EventType={EventType}): {Reason}", message.Id, message.EventType, reason);
+                dbContext.Set<DeadLetterEvent>().Add(new DeadLetterEvent(
+                    message.Id, message.EventType, message.Version, message.Payload, reason, nowUtc));
+                dbContext.Set<OutboxMessage>().Remove(message);
+                continue;
+            }
+
             if (!message.TryResolve(eventTypeRegistry, out var applicationEvent, out var failureReason))
             {
                 logger.LogWarning(

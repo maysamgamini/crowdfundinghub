@@ -35,6 +35,12 @@ public static class ModelBuilderExtensions
             builder.HasIndex(x => new { x.ScheduledAtUtc, x.Id })
                 .HasFilter($"\"{nameof(OutboxMessage.Status)}\" = {(int)OutboxMessageStatus.Pending}")
                 .HasDatabaseName($"ix_{tableName}_pending");
+
+            // The reclaim half of the claim statement looks for Processing rows whose lease has
+            // run out. There are normally very few, so this index stays tiny.
+            builder.HasIndex(x => x.LockedUntilUtc)
+                .HasFilter($"\"{nameof(OutboxMessage.Status)}\" = {(int)OutboxMessageStatus.Processing}")
+                .HasDatabaseName($"ix_{tableName}_processing");
         });
 
         return modelBuilder;

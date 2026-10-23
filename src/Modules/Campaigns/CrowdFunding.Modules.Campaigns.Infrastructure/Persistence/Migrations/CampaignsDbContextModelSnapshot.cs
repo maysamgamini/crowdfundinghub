@@ -130,6 +130,10 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("LockedUntilUtc")
+                        .HasDatabaseName("ix_campaigns_outbox_messages_processing")
+                        .HasFilter("\"Status\" = 1");
+
                     b.HasIndex("ScheduledAtUtc", "Id")
                         .HasDatabaseName("ix_campaigns_outbox_messages_pending")
                         .HasFilter("\"Status\" = 0");
