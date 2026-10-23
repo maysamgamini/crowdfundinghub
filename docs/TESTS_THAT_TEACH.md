@@ -1,17 +1,17 @@
 # Tests that teach
 
-Most of the 400-odd tests in this repository protect the code. A handful do something more useful for a learner: each one **proves a design rule** that would otherwise be a claim in a lesson. This page lists them, says what each one teaches, and says honestly which tests are not worth a student's time.
+Most of the 450 tests in this repository protect the code. A handful do something more useful for a learner: each one **proves a design rule** that would otherwise be a claim in a lesson. This page lists them, says what each one teaches, and says honestly which tests are not worth a student's time.
 
 ## The three layers
 
 ```mermaid
 flowchart TB
     subgraph Fast["Seconds, no Docker"]
-        U["Unit tests: 284<br/>domain rules, handlers, value objects"]
-        A["Architecture tests: 22<br/>who may reference whom"]
+        U["Unit tests: 315<br/>domain rules, handlers, value objects"]
+        A["Architecture tests: 28<br/>who may reference whom, and that documents link to real things"]
     end
     subgraph Slow["Minutes, real PostgreSQL via Testcontainers"]
-        I["Integration tests<br/>races, outbox, inbox, schemas, webhooks"]
+        I["Integration tests: 109<br/>races, outbox, inbox, schemas, webhooks"]
     end
     subgraph Drills["By hand, replicated stack"]
         D["Failure drills<br/>kill a primary, stop a standby"]

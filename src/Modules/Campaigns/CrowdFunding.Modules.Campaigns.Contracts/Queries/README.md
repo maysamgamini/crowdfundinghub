@@ -4,7 +4,7 @@
 Groups contract-level queries exposed by the Campaigns module.
 
 ## Files
-- No direct files live in this folder; it primarily organizes child folders.
+- None. The folder is empty on purpose: other modules learn about campaigns from published events, not from query contracts.
 
 ## Child Folders
-- `GetCampaignContributionAvailability`: Contains source files related to Get Campaign Contribution Availability.
+- None.

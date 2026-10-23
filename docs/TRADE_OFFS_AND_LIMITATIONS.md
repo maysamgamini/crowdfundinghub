@@ -57,7 +57,7 @@ graph TB
         subgraph "In-Memory Orchestration"
             Dispatchers["ICommandDispatcher / IQueryDispatcher"]
             EventPub["IEventPublisher / ServiceProviderEventPublisher"]
-            OutboxWorker["ModuleOutboxProcessor<br/>(SKIP LOCKED Poller, 5s Interval)"]
+            OutboxWorker["ModuleOutboxProcessor<br/>(SKIP LOCKED claim, wake-up signal + 5s timer)"]
             SignalRHub["SignalR CampaignHub<br/>(In-Memory Group Dispatch)"]
         end
     end
@@ -65,7 +65,7 @@ graph TB
     subgraph "Storage & Caching Layer"
         subgraph "PostgreSQL 16 (database per module locally)"
             SchemaCamp["campaigns Schema<br/>- campaigns (xmin)<br/>- contribution_ledger_entries<br/>- campaigns_outbox_messages<br/>- campaigns_dead_letter_events"]
-            SchemaCont["contributions Schema<br/>- contributions<br/>- contributions_outbox_messages"]
+            SchemaCont["contributions Schema<br/>- contributions<br/>- active_campaigns_cache<br/>- contributions_outbox_messages"]
             SchemaMod["moderation Schema<br/>- campaign_reviews<br/>- moderation_outbox_messages"]
             SchemaId["identity Schema<br/>- users, roles, permissions"]
         end
@@ -81,7 +81,6 @@ graph TB
     Dispatchers --> Contributions
     Dispatchers --> Moderation
 
-    Contributions -. "Synchronous Read (ICampaignContributionAvailabilityReader)" .-> Campaigns
     Campaigns -- "pg_advisory_xact_lock" --> SchemaCamp
     Contributions --> SchemaCont
     Moderation --> SchemaMod
@@ -92,6 +91,7 @@ graph TB
     OutboxWorker --> SchemaMod
     OutboxWorker --> EventPub
     EventPub -. "In-process Event" .-> Campaigns
+    EventPub -. "Campaign events replicate state" .-> Contributions
     EventPub -. "In-process Event" .-> Notifications
     EventPub -. "In-process Event" .-> CampaignUpdates
 
@@ -223,6 +223,7 @@ sequenceDiagram
     autonumber
     participant App as Web Request Handler
     participant DB as PostgreSQL (module database)
+    participant Signal as IOutboxSignal
     participant Worker as ModuleOutboxProcessor
     participant Handlers as Module Event Handlers
 
@@ -231,22 +232,30 @@ sequenceDiagram
     App->>DB: 2. INSERT OutboxMessage (Status = Pending, ScheduledAtUtc = now())
     App->>DB: 3. COMMIT Transaction
     Note over App,DB: Both state and intent are atomically committed
+    App-)Signal: 4. Notify() wakes the worker
 
-    loop Every 5 Seconds (PeriodicTimer)
-        Worker->>DB: 4. CTE: SELECT Pending rows due on the app clock, FOR UPDATE SKIP LOCKED LIMIT 20
-        DB-->>Worker: 5. UPDATE Status = Processing, LockedUntilUtc = now()+30s RETURNING *
+    loop While the host runs
+        Worker->>DB: 5. CTE: SELECT Pending rows that are due, or Processing rows whose lease ran out, FOR UPDATE SKIP LOCKED LIMIT 20
+        DB-->>Worker: 6. UPDATE Status = Processing, LockedUntilUtc = app clock + 30s RETURNING *
         loop For Each Claimed Outbox Message
-            Worker->>Handlers: 6. Publish Application Event (In-Process)
+            Worker->>Handlers: 7. Publish Application Event via IMessageBus
             alt Handler Succeeded
-                Worker->>DB: 7a. UPDATE Status = Processed, ProcessedOnUtc = now()
-            else Handler Thrown / Exhausted Retries
-                Worker->>DB: 7b. INSERT DeadLetterEvent & UPDATE Status = DeadLetter
+                Worker->>DB: 8a. DELETE the outbox row
+            else Handler Thrown, attempts left
+                Worker->>DB: 8b. Status = Pending, ScheduledAtUtc = now + 10s (fixed delay)
+            else Fifth attempt failed
+                Worker->>DB: 8c. INSERT DeadLetterEvent & DELETE the outbox row
             end
+        end
+        alt The batch was full
+            Note over Worker: Claim again at once
+        else Fewer than 20 rows came back
+            Worker->>Signal: 9. Wait for a signal, or 5 seconds as the safety net
         end
     end
 ```
 
-"Due" is judged on the application clock (`"ScheduledAtUtc" <= {3}`, bound to `DateTime.UtcNow`) because a database clock lagging the application's left just-queued rows unclaimable (26 of 92 integration tests failed at random). `LockedUntilUtc` is still set from the database `now()`.
+"Due" is judged on the application clock (`"ScheduledAtUtc" <= {3}`, bound to `DateTime.UtcNow`) because a database clock lagging the application's left just-queued rows unclaimable (26 of 92 integration tests failed at random). The lease (`LockedUntilUtc`) is written from the application clock as well, so a lease is never judged against a different clock from the one that wrote it.
 
 #### The CDC Alternative (Debezium + Kafka / Redpanda)
 
@@ -272,19 +281,21 @@ sequenceDiagram
 | Architectural Dimension | Polling Outbox with `SKIP LOCKED` | CDC via Debezium + Kafka |
 | :--- | :--- | :--- |
 | **External Infrastructure** | **Zero**: Pure PostgreSQL. No extra daemons, brokers, or operational pipelines. | **Heavy**: Requires Kafka/Redpanda cluster, ZooKeeper/KRaft, Debezium Connect, Kafka Schema Registry. |
-| **Dispatch Latency** | **High**: Governed by the polling interval (currently `5 seconds`). Under low traffic, events wait up to 5s before processing. | **Near-Zero**: Sub-100 millisecond latency. Events stream off the WAL as soon as the transaction commits. |
-| **PostgreSQL MVCC Write Bloat**| **Severe under load**: Each outbox event requires 1 INSERT + 2 UPDATEs (`Pending` $\to$ `Processing` $\to$ `Processed`). Generates $3\times$ dead tuples. | **None**: The outbox table is strictly append-only. No UPDATE statements; rows are purged in bulk or partitioned. |
-| **Database Polling Overhead** | **Continuous**: Workers query the database every 5 seconds per module regardless of whether new events exist. | **Zero Polling**: Database pushes changes via replication stream; zero query load or connection churn. |
+| **Dispatch Latency** | **Low to moderate**: The committing process wakes the worker through `IOutboxSignal`, so delivery usually starts within milliseconds. The 5-second timer is only the safety net for rows another instance wrote, a lost signal, or a failed message waiting out its fixed 10-second retry delay. | **Near-Zero**: Sub-100 millisecond latency. Events stream off the WAL as soon as the transaction commits. |
+| **PostgreSQL MVCC Write Bloat**| **Severe under load**: Each outbox event requires 1 INSERT, 1 claim UPDATE (`Pending` $\to$ `Processing`) and 1 DELETE on success. Every UPDATE and DELETE leaves a dead tuple behind. | **None**: The outbox table is strictly append-only. No UPDATE statements; rows are purged in bulk or partitioned. |
+| **Database Polling Overhead** | **Bounded**: A worker queries when a commit wakes it or its 5-second timer fires, whether or not new events exist. | **Zero Polling**: Database pushes changes via replication stream; zero query load or connection churn. |
 | **Multi-Worker Coordination** | **Built-in (`SKIP LOCKED`)**: Concurrent workers claim non-overlapping batches atomically without distributed locks. | **Partition Consumer Groups**: Handled natively by Kafka consumer group rebalancing across worker pods. |
-| **Event Replayability** | **Limited**: Once marked `Processed`, replaying requires manual SQL status manipulation. | **Native**: Consumers can rewind Kafka topic offsets to reprocess historical events arbitrarily. |
-| **Failure Blast Radius** | **Local**: If the worker crashes, `LockedUntilUtc` is written (30s) but nothing reads it for the outbox, so rows the worker had claimed stay in `Processing` (see 3.3, Scenario A). | **Infrastructure Dependency**: If Kafka or Debezium crashes, WAL logs accumulate on Postgres disk, risking disk full outages. |
+| **Event Replayability** | **None from the outbox**: A delivered row is deleted, so replaying means re-publishing from another source. Only dead-lettered events are kept (in the dead-letter table). | **Native**: Consumers can rewind Kafka topic offsets to reprocess historical events arbitrarily. |
+| **Failure Blast Radius** | **Local**: If the worker crashes, the rows it had claimed stay in `Processing` until the 30-second lease runs out, then any worker reclaims them (see 3.3, Scenario A). | **Infrastructure Dependency**: If Kafka or Debezium crashes, WAL logs accumulate on Postgres disk, risking disk full outages. |
 
 #### Mathematical Model of MVCC Write Amplification
 
 In PostgreSQL, an `UPDATE` does not overwrite data in place; it writes an entirely new row version (tuple) and marks the old tuple dead.
 For an event load of $\lambda$ events/second:
-$$\text{Tuples Written per Second} = \lambda_{\text{insert}} + \lambda_{\text{claim\_update}} + \lambda_{\text{complete\_update}} = 3\lambda$$
-$$\text{Dead Tuples Generated per Second} = 2\lambda$$
+$$\text{Tuples Written per Second} = \lambda_{\text{insert}} + \lambda_{\text{claim\_update}} = 2\lambda$$
+$$\text{Dead Tuples Generated per Second} = \lambda_{\text{claim\_update}} + \lambda_{\text{delete}} = 2\lambda$$
+
+A successful delivery ends with a DELETE, which writes no new tuple but kills the claimed one, so rows do not pile up in the table; the dead tuples are what autovacuum has to clean.
 
 At a modest volume of $100\text{ events/sec}$, the database generates:
 $$200\text{ dead tuples/sec} \times 86,400\text{ sec/day} = 17,280,000\text{ dead tuples/day}$$
@@ -293,7 +304,7 @@ Without aggressive `autovacuum` tuning (specifically lowering `autovacuum_vacuum
 
 #### 2.3.1 The per-module inbox (consumer side)
 
-Each module keeps a `<module>_inbox_messages` table keyed `(MessageId, Consumer)`, where `Consumer` is the handler's full type name ([`EfInbox`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/EfInbox.cs), used by [`ServiceProviderEventPublisher`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Events/ServiceProviderEventPublisher.cs)). The handler runs first; only after it succeeds is the pair recorded with `INSERT ... ON CONFLICT DO NOTHING`. A crash between the handler and the record therefore re-runs the handler once, so handlers must still tolerate a repeat. Only in-process outbox dispatch sets a message id, so the RabbitMQ path bypasses the inbox. Inbox rows are never pruned. See the retry test in [`TESTS_THAT_TEACH.md`](TESTS_THAT_TEACH.md).
+Every module except Identity (Campaigns, Contributions, Moderation, Notifications, CampaignUpdates) keeps a `<module>_inbox_messages` table keyed `(MessageId, Consumer)`, where `Consumer` is the handler's full type name ([`EfInbox`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/EfInbox.cs), used by [`ServiceProviderEventPublisher`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Events/ServiceProviderEventPublisher.cs)). The handler runs first; only after it succeeds is the pair recorded with `INSERT ... ON CONFLICT DO NOTHING`. A crash between the handler and the record therefore re-runs the handler once, so handlers must still tolerate a repeat. Only in-process outbox dispatch sets a message id, so the RabbitMQ path bypasses the inbox. Inbox rows are never pruned. See the retry test in [`TESTS_THAT_TEACH.md`](TESTS_THAT_TEACH.md).
 
 ---
 
@@ -359,57 +370,57 @@ In a Redis Redlock pattern, the application acquires an algorithmic distributed 
 
 ### 2.5 Synchronous Read Services vs. Eventual Consistency & Replicated Read Models
 
-When a backer attempts to pledge funds via `POST /api/campaigns/{campaignId}/contributions`, the `Contributions` module must verify that the campaign exists, is currently `Active`, and accepts the specified currency.
+When a backer attempts to pledge funds via `POST /api/campaigns/{campaignId}/contributions`, the `Contributions` module must verify that the campaign exists, is currently `Published`, has not passed its deadline, and accepts the specified currency.
 
-The architecture solves this via **Synchronous In-Process Read Delegation**:
-1. `CrowdFunding.Modules.Contributions.Application` references `CrowdFunding.Modules.Campaigns.Contracts`.
-2. [`MakeContributionCommandHandler`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs) injects [`ICampaignContributionAvailabilityReader`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Contracts/Queries/GetCampaignContributionAvailability/ICampaignContributionAvailabilityReader.cs).
-3. The implementation ([`CampaignContributionAvailabilityReader`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Services/CampaignContributionAvailabilityReader.cs)) executes the query directly against `CampaignsDbContext` in the same memory space.
+The architecture solves this with a **replicated read model** (Event-Carried State Transfer):
+1. `Campaigns` publishes `CampaignCreated`, `CampaignPublished`, `CampaignCancelled`, `CampaignSucceeded` and `CampaignFailed` application events through its outbox.
+2. [`ReplicatedCampaignEventHandlers`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/ActiveCampaigns/Events/ReplicatedCampaignEventHandlers.cs) in `Contributions` consume them and keep a local table, `contributions.active_campaigns_cache` (campaign id, owner, title, currency, an `IsActive` flag and the deadline), in the `Contributions` database through [`IActiveCampaignCacheRepository`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Abstractions/Persistence/IActiveCampaignCacheRepository.cs).
+3. [`MakeContributionCommandHandler`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs) reads only that local table. It never calls into `Campaigns`.
+
+An earlier design had `Contributions` call a synchronous in-process reader, `ICampaignContributionAvailabilityReader`, that queried `CampaignsDbContext` directly. That interface and its implementation were removed; the rest of this section compares the two designs.
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Backer
     participant ContApp as Contributions Module
-    participant CampReader as ICampaignContributionAvailabilityReader
-    participant CampDB as Campaigns Schema
+    participant Cache as contributions.active_campaigns_cache
+    participant Camp as Campaigns Module
 
+    Camp-->>ContApp: CampaignCreated / CampaignPublished / CampaignCancelled (via outbox)
+    ContApp->>Cache: Upsert or flip IsActive
     Backer->>ContApp: Make Contribution ($50 USD)
-    ContApp->>CampReader: GetCampaignContributionAvailabilityAsync(id)
-    CampReader->>CampDB: SELECT Status, GoalCurrency FROM campaigns WHERE Id = @id
-    CampDB-->>CampReader: Status = Active, Currency = USD
-    CampReader-->>ContApp: AvailabilityResult(CanAccept = true)
-    ContApp->>ContApp: Validate Currency & Insert Contribution (PendingPayment)
+    ContApp->>Cache: Read campaign snapshot (local, no call into Campaigns)
+    Cache-->>ContApp: IsActive = true, Currency = USD, DeadlineUtc
+    ContApp->>ContApp: Validate currency and deadline, insert Contribution (Pending)
     ContApp-->>Backer: 201 Created (ContributionId)
 ```
 
-#### The Eventual Consistency Alternative: Replicated Read Models
+#### The Synchronous Alternative: an In-Process Reader (the earlier design)
 
-In a fully decoupled or microservice architecture, `Contributions` cannot query `Campaigns` synchronously. Instead, `Contributions` maintains an internal, read-only replica table (`replicated_campaign_availability`). Whenever a campaign is created, launched, or cancelled, `Campaigns` publishes an event, and `Contributions` updates its local replica asynchronously.
+In the monolith `Contributions` could ask `Campaigns` directly, through a contract interface that read `campaigns.campaigns` in the same memory space. That is simple and strongly consistent, but it ties the two modules together at runtime.
 
 #### Comparison Matrix
 
-| Dimension | Synchronous In-Process Reader (Current) | Replicated Read Model (Eventual Consistency) |
+| Dimension | Synchronous In-Process Reader (earlier design) | Replicated Read Model (Current) |
 | :--- | :--- | :--- |
-| **Consistency Guarantee** | **Strict Strong Consistency**: Always reads the absolute latest committed state in PostgreSQL. Zero window for stale reads. | **Eventual Consistency**: Replicated state lags by the event processing time (governed by the 5-second outbox cycle). |
-| **Temporal Coupling** | **High**: A slow query or lock contention in the `Campaigns` schema directly blocks the `Contributions` command handler. | **Zero**: `Contributions` queries its own local table; failures or slowdowns in `Campaigns` have zero impact on pledges. |
-| **In-Process Code Coupling** | **Moderate**: `Contributions` depends on `Campaigns.Contracts`. Cannot extract `Contributions` without introducing network RPC. | **Zero**: `Contributions` only consumes generic asynchronous domain events. |
-| **Storage Overhead** | **Zero Duplication**: Data is stored once in `campaigns.campaigns`. | **Storage Duplication**: Key attributes (`Id`, `Status`, `Currency`) duplicated in `contributions.campaign_replicas`. |
-| **Compensation Complexity** | **Zero**: Invalid pledges are rejected immediately at the API gate. | **High**: A user may successfully pledge against a campaign that was cancelled 2 seconds prior, requiring automated payment refunds. |
+| **Consistency Guarantee** | **Strict Strong Consistency**: Always reads the absolute latest committed state in PostgreSQL. Zero window for stale reads. | **Eventual Consistency**: The replica lags by the event delivery time (milliseconds with the outbox wake-up signal, up to the 5-second safety-net timer). |
+| **Temporal Coupling** | **High**: A slow query or lock contention in the `Campaigns` schema directly blocks the `Contributions` command handler. | **Zero**: `Contributions` queries its own local table; failures or slowdowns in `Campaigns` have no effect on pledges. |
+| **In-Process Code Coupling** | **Moderate**: `Contributions` depends on a `Campaigns` query contract. Cannot extract `Contributions` without introducing network RPC. | **Low**: `Contributions` only consumes `Campaigns` application events. |
+| **Storage Overhead** | **Zero Duplication**: Data is stored once in `campaigns.campaigns`. | **Storage Duplication**: A few attributes per campaign are copied into `contributions.active_campaigns_cache`. |
+| **Compensation Complexity** | **Zero**: Invalid pledges are rejected immediately at the API gate. | **Higher**: A pledge can be accepted against a campaign that was cancelled moments earlier and must then be refunded. |
 
 #### The "Cancelled Campaign Race" Scenario
 
-Consider what would occur if CrowdFunding Hub used an eventual consistency model with its current 5-second outbox polling interval:
-1. **T0 (00:00)**: Campaign creator cancels Campaign X due to suspected fraud. Aggregate updates `Status = Cancelled`. Outbox row is inserted.
-2. **T1 (00:02)**: Backer submits a $1,000 pledge for Campaign X.
-3. **T2 (00:02)**: `Contributions` checks its replicated read model. The outbox has not polled yet (3 seconds remaining). The local replica still shows `Active`.
-4. **T3 (00:03)**: Contribution payment is authorized and captured.
-5. **T4 (00:05)**: Outbox processor polls and publishes `CampaignCancelledApplicationEvent`.
-6. **T5 (00:05)**: `Contributions` receives the event and updates replica to `Cancelled`.
-7. **Result**: A backer's credit card was charged for a cancelled campaign. Complex asynchronous refund and reconciliation workflows are now required.
+Eventual consistency has a price, and this is the window in which it shows:
+1. **T0 (00:00)**: Campaign creator cancels Campaign X due to suspected fraud. Aggregate updates `Status = Cancelled`. Outbox row is inserted and the worker is woken.
+2. **T1 (00:00, a moment later)**: Backer submits a $1,000 pledge for Campaign X before the `CampaignCancelled` event has reached `Contributions`.
+3. **T2**: `Contributions` checks its replicated read model. The local replica still shows `IsActive = true`, so the pledge is accepted.
+4. **T3**: The event arrives and `Contributions` flips the replica to inactive. Further pledges and payment confirmations are rejected.
+5. **Result**: The pledge that slipped in is not lost track of. `CampaignTerminationRefundHandler` refunds every contribution of the campaign that has already succeeded, and `ConfirmContributionPaymentCommandHandler` refuses to confirm a payment once the replica says the campaign is no longer published. The window is milliseconds with the wake-up signal, not the several seconds a fixed polling timer would leave. Refunds are state-only today (see Known Gaps).
 
 > [!NOTE]
-> **Conclusion:** The synchronous in-process query reader is a highly beneficial trade-off for the current monolith. It completely eliminates payment reconciliation anomalies while maintaining clean project boundaries via interfaces.
+> **Conclusion:** The replicated read model costs a short stale window and a refund path for the pledge that lands inside it. In return, `Contributions` no longer depends on `Campaigns` at runtime, which is what makes extracting it into its own service possible.
 
 ---
 
@@ -504,9 +515,9 @@ graph TD
 
     subgraph "Bottleneck 2: Outbox Processing Throughput"
         O1["Burst of 2,000 Contributions"] --> O2["Outbox Table Backlog"]
-        O2 --> O3["PeriodicTimer = 5s, BatchSize = 20"]
-        O3 --> O4["Max Processing Rate: 4 events/sec per module"]
-        O4 --> O5["Queue Drain Time: 500 Seconds (8.3 minutes delay)"]
+        O2 --> O3["Batch of 20 claimed; a full batch is followed by the next claim at once"]
+        O3 --> O4["Drain rate is set by handler speed, one message at a time per module"]
+        O4 --> O5["Delay lasts only while arrivals outpace handlers"]
     end
 ```
 
@@ -517,18 +528,14 @@ graph TD
   $$\text{Throughput}_{\text{max}} = \frac{1000\text{ ms}}{15\text{ ms/tx}} \approx \mathbf{65\text{ writes/second per campaign}}$$
 - **Degradation Behavior**: Any concurrency exceeding 65 requests/second targeting the *same* campaign aggregate will queue inside the database driver. Once the queue exceeds the connection pool limit (`MaxPoolSize=100`), incoming HTTP requests fail immediately with Npgsql connection timeout exceptions.
 
-#### 2. Outbox Dispatch Latency Floor & Queue Starvation
-- **Root Cause**: In [`ModuleOutboxProcessor.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Outbox/ModuleOutboxProcessor.cs), constants are configured as:
-  ```csharp
-  private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
-  private const int BatchSize = 20;
-  ```
-- **Operating Ceiling**: A single background processor instance processes at most 20 messages every 5 seconds per module.
-  $$\text{Processing Ceiling} = \frac{20\text{ messages}}{5\text{ seconds}} = \mathbf{4\text{ events/second per module}}$$
-- **Degradation Behavior**: If a flash-funding event generates 1,200 contributions in 60 seconds, the outbox queue accumulates 1,200 rows. At 4 events/second, the background service requires **300 seconds (5 full minutes)** to drain the backlog. During these 5 minutes:
+#### 2. Outbox Dispatch Latency & Handler-Bound Draining
+- **Root Cause**: In [`ModuleOutboxProcessor.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Outbox/ModuleOutboxProcessor.cs), a worker claims up to `BatchSize = 20` rows, publishes them one after another, and, when the batch was full, claims again at once. When fewer than 20 rows come back it waits for the commit signal, or for the 5-second timer as a safety net. A batch gate lets only one batch per module run at a time inside a process.
+- **Operating Ceiling**: There is no fixed events-per-second cap from the timer. The ceiling is how long the handlers take: for example, handlers that need 50 ms each drain about 20 events per second per module in one process. More instances claim disjoint batches (`SKIP LOCKED`) and raise the ceiling.
+- **Degradation Behavior**: If a flash-funding event creates more events than the handlers can finish, the outbox accumulates a backlog until arrivals slow down. While it exists:
   - The campaign's `RaisedAmount` on public pages is out of date.
-  - SignalR real-time pledges to backers lag by up to 5 minutes.
+  - SignalR real-time pledges to backers lag by the length of the backlog.
   - OpenMeter usage and monetization metering events are delayed.
+- **Failed messages**: A message whose handler throws goes back to `Pending` with a fixed 10-second delay and is dead-lettered after five attempts, so one bad message delays only itself.
 
 #### 3. Database Connection Pool Exhaustion
 - **Root Cause**: Each HTTP request handling a contribution activates multiple scoped dependencies. In an in-process modular monolith, a single web request may open connections to `CampaignsDbContext` and `ContributionsDbContext` within the same asynchronous scope.
@@ -536,14 +543,14 @@ graph TD
 - **Degradation Behavior**: Requests block waiting for a free connection from the pool. If no connection becomes free within `Timeout=15s`, requests throw `NpgsqlException: The connection pool has been exhausted`.
 
 #### 4. PostgreSQL MVCC Table Bloat
-- **Root Cause**: The outbox implementation mutates rows from `Pending` $\to$ `Processing` $\to$ `Processed` or `DeadLetter`.
+- **Root Cause**: The outbox implementation inserts a `Pending` row, updates it to `Processing` when a worker claims it, and deletes it when delivery succeeds (a failed message goes back to `Pending`; an exhausted one moves to the dead-letter table).
 - **Operating Ceiling**: Under a sustained load of 50 events/second, the table generates 100 dead tuples per second (8.6 million dead tuples daily).
 - **Degradation Behavior**: Unless PostgreSQL `autovacuum` is aggressively tuned specifically for these tables, table heap pages and the partial index `ix_*_pending` expand significantly. Sequential table scans during vacuuming compete with user queries for disk I/O bandwidth.
 
 #### 5. SignalR Horizontal Scaling Barrier
-- **Root Cause**: Absence of a Redis backplane in `builder.Services.AddSignalR()`.
-- **Operating Ceiling**: Strictly **1 container instance**.
-- **Degradation Behavior**: Scaling to 2 or more replicas immediately causes silent notification loss; backers connected to Instance B will never receive updates generated by transactions processed on Instance A.
+- **Root Cause**: Without a Redis backplane each instance only knows its own WebSocket clients. `Program.cs` adds `AddStackExchangeRedis()` to SignalR whenever `ConnectionStrings:Redis` is configured; without that setting the hub is in-memory only.
+- **Operating Ceiling**: With Redis configured, several instances work. Without it, strictly **1 container instance**.
+- **Degradation Behavior**: Running 2 or more replicas without the backplane causes silent notification loss; backers connected to Instance B never receive updates generated by transactions processed on Instance A.
 
 ---
 
@@ -555,10 +562,10 @@ The following operational matrix defines the tested safe ranges, warning thresho
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Global Write Throughput** | 0 – 100 TPS | 100 – 250 TPS | **~350 TPS** | PostgreSQL Write-Ahead Log (WAL) sync & disk I/O | Database latency spikes; connection timeouts. |
 | **Single-Campaign Write Concurrency** | 0 – 30 TPS | 30 – 55 TPS | **~65 TPS** | `pg_advisory_xact_lock` sequential execution queue | HTTP 500 / connection pool starvation. |
-| **Outbox Event Ingestion Rate** | 0 – 4 events/s | 4 – 15 events/s | **20 events/s** (single node) | `BatchSize=20` / `PollInterval=5s` configuration | Event dispatch lag grows unboundedly; stale UI totals. |
+| **Outbox Event Ingestion Rate** | Backlog empties between pledges | Backlog persists over several batches | Arrival rate above handler speed (single node) | How fast handlers finish; batches of 20 run back to back | Event dispatch lag grows; stale UI totals. |
 | **Concurrent WebSocket Connections** | 0 – 2,500 | 2,500 – 10,000 | **~15,000** (single node) | Linux file descriptors & ASP.NET Core memory buffers | Dropped WebSocket handshakes; host OOM. |
-| **Active Web Worker Replicas** | 1 Node | 1 Node | **1 Node** (for SignalR) | Lack of SignalR Redis Backplane | Real-time events dropped across nodes. |
-| **Outbox Queue Depth** | 0 – 50 rows | 50 – 500 rows | **> 2,000 rows** | Poller batch size & database I/O | Latency between pledge and credit exceeds 5 minutes. |
+| **Active Web Worker Replicas** | Any, with the Redis backplane configured | 1 Node without it | **1 Node** (for SignalR, when `ConnectionStrings:Redis` is not set) | SignalR Redis backplane not configured | Real-time events dropped across nodes. |
+| **Outbox Queue Depth** | 0 – 50 rows | 50 – 500 rows | **> 2,000 rows** | Handler speed & database I/O | Latency between pledge and credit keeps growing. |
 | **Database Connection Pool Usage** | 0 – 40% | 40 – 75% | **100% (100 conns)** | Npgsql client-side connection pool ceiling | `TimeoutException`: connection pool exhausted. |
 
 ---
@@ -581,7 +588,7 @@ graph TD
 
 #### Scenario B: Poison / Corrupt Event Payload
 - **Event**: A serialized JSON payload in the outbox cannot be deserialized, or its CLR type cannot be resolved by `EventTypeRegistry`.
-- **System Defense**: In [`ModuleOutboxProcessor.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Outbox/ModuleOutboxProcessor.cs), if `message.TryResolve(...)` returns `false`, the processor marks the row as `DeadLetter`, writes an audited record to `DeadLetterEvent`, logs an alert, and executes `continue`.
+- **System Defense**: In [`ModuleOutboxProcessor.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Outbox/ModuleOutboxProcessor.cs), if `message.TryResolve(...)` returns `false`, the processor writes an audited record to `DeadLetterEvent`, removes the row from the outbox table, logs an alert, and executes `continue`.
 - **Result**: **No Head-of-Line Blocking.** The single corrupt message is permanently isolated without blocking the remaining 19 messages in the batch.
 
 #### Scenario C: Database Network Drop During Advisory-Locked Mutation
@@ -600,9 +607,9 @@ gantt
     title CrowdFunding Hub Architectural Evolution Roadmap
     dateFormat  YYYY-MM-DD
     section Phase 1: In-Place Monolith
-    Dynamic Outbox Draining & Tuning       :p1_1, 2026-10-01, 30d
-    SignalR Redis Backplane Implementation :p1_2, 2026-10-15, 20d
-    Automated Outbox Partitioning / Purge   :p1_3, 2026-11-01, 25d
+    Outbox wake-up signal and batch draining (built) :done, p1_1, 2026-10-01, 30d
+    SignalR Redis Backplane (built)        :done, p1_2, 2026-10-15, 20d
+    Inbox pruning and Outbox Autovacuum Tuning :p1_3, 2026-11-01, 25d
     section Phase 2: Event-Driven Core
     Append-Only Outbox + Debezium CDC     :p2_1, 2027-01-15, 60d
     Redpanda / Kafka Streaming Pipeline    :p2_2, 2027-02-15, 45d
@@ -617,27 +624,13 @@ gantt
 
 Engineering should initiate the transition between architectural phases when the following operational indicators are reached:
 
-```
-                  ┌────────────────────────────────────────────────────────┐
-                  │                 CURRENT ARCHITECTURE                   │
-                  │  Modular Monolith + Postgres SKIP LOCKED + Advisory Lock │
-                  └───────────────────────────┬────────────────────────────┘
-                                              │
-                    Trigger: Sustained TPS > 200 OR Outbox Lag > 15s
-                                              ▼
-                  ┌────────────────────────────────────────────────────────┐
-                  │                        PHASE 2                         │
-                  │        CDC Event Streaming (Debezium + Redpanda)       │
-                  │      Append-Only Outbox + Asynchronous Aggregators     │
-                  └───────────────────────────┬────────────────────────────┘
-                                              │
-                 Trigger: Engineering Team > 20 OR Cross-Module I/O Contention
-                                              ▼
-                  ┌────────────────────────────────────────────────────────┐
-                  │                        PHASE 3                         │
-                  │              Autonomous Microservices                  │
-                  │         Database-Per-Service + Event Sagas             │
-                  └────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Current["CURRENT ARCHITECTURE<br/>Modular Monolith + Postgres SKIP LOCKED + Advisory Lock"]
+    Phase2["PHASE 2<br/>CDC Event Streaming (Debezium + Redpanda)<br/>Append-Only Outbox + Asynchronous Aggregators"]
+    Phase3["PHASE 3<br/>Autonomous Microservices<br/>Database-Per-Service + Event Sagas"]
+    Current -- "Trigger: Sustained TPS > 200 OR Outbox Lag > 15s" --> Phase2
+    Phase2 -- "Trigger: Engineering Team > 20 OR Cross-Module I/O Contention" --> Phase3
 ```
 
 ---
@@ -646,37 +639,18 @@ Engineering should initiate the transition between architectural phases when the
 
 *Focus: Maximize single-process throughput, enable horizontal web scaling, and eliminate outbox dispatch latency without adding distributed infrastructure.*
 
-#### 1. Implement Dynamic Outbox Polling & Queue Draining
-- **Change**: Modify [`ModuleOutboxProcessor.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Outbox/ModuleOutboxProcessor.cs) to eliminate the fixed 5-second sleep when a full batch is retrieved.
-- **Implementation**:
-  ```csharp
-  // If the batch claimed equals BatchSize, poll immediately for the next batch!
-  if (messages.Count == BatchSize)
-  {
-      // Immediate next iteration without waiting for PeriodicTimer
-      continue;
-  }
-  ```
-- **Benefit**: Reduces outbox drain time during traffic spikes from minutes to seconds; lowers average event latency from 2,500 ms to < 100 ms under continuous load.
+#### 1. Outbox wake-up signal and batch draining (built)
+- **Where**: [`ModuleOutboxProcessor.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Outbox/ModuleOutboxProcessor.cs) claims again at once when a batch comes back full, and otherwise waits on `IOutboxSignal` (woken by the commit that wrote the rows) with the 5-second timer as a safety net.
+- **Benefit**: Delivery usually starts within milliseconds of the commit, and a burst drains at handler speed instead of one batch per timer tick.
 
-#### 2. Wire Redis Backplane for SignalR
-- **Change**: Update `Program.cs` to enable multi-instance WebSocket broadcasts using the already-provisioned Redis instance:
-  ```csharp
-  builder.Services.AddSignalR()
-      .AddStackExchangeRedis(builder.Configuration.GetConnectionString("Redis")!);
-  ```
-- **Benefit**: Unblocks horizontal scaling of the API host across multiple Kubernetes pods or container instances.
+#### 2. Redis backplane for SignalR (built)
+- **Where**: `Program.cs` calls `AddStackExchangeRedis` on the SignalR builder when `ConnectionStrings:Redis` is configured.
+- **Benefit**: Several API instances behind a load balancer all reach every connected client.
 
-#### 3. Establish Outbox Data Retention / Partitioning
-- **Change**: Create a daily maintenance job (`pg_cron` or background worker) to delete `Processed` rows older than 7 days, or partition the outbox table by week using PostgreSQL declarative table partitioning:
-  ```sql
-  CREATE TABLE campaigns_outbox_messages (
-      id uuid NOT NULL,
-      scheduled_at_utc timestamptz NOT NULL,
-      ...
-  ) PARTITION BY RANGE (scheduled_at_utc);
-  ```
-- **Benefit**: Keeps table heap small, permanently preventing MVCC table bloat and ensuring `ix_*_pending` stays pinned in the PostgreSQL buffer cache.
+#### 3. Keep the outbox and inbox tables small
+- **Outbox**: Delivered rows are deleted on success and dead-lettered rows move to the dead-letter table, so the outbox table holds only pending and in-flight work. Remaining work is tuning autovacuum for the update and delete churn (see the checklist in section 5).
+- **Inbox**: Nothing prunes `<module>_inbox_messages` yet. A scheduled job that deletes rows older than the longest redelivery window, or partitioning the table by `ProcessedAtUtc`, would keep it bounded.
+- **Benefit**: Keeps table heaps small and the indexes pinned in the PostgreSQL buffer cache.
 
 ---
 
@@ -714,8 +688,8 @@ graph LR
 - **Change**: Modify transaction executors to treat the outbox table as strictly **append-only**. Remove `Status`, `Attempts`, `LockedBy`, and `LockedUntilUtc`.
 - **Infrastructure**: Provision Debezium connector configured to capture the outbox table using `pgoutput`.
 - **Result**:
-  - Outbox write amplification drops from $3\times$ to $1\times$.
-  - Event dispatch latency drops from $5,000\text{ ms}$ to $< 50\text{ ms}$.
+  - Outbox write amplification drops from two tuple writes per event (insert and claim update, plus a delete) to a single insert.
+  - Event dispatch latency becomes a steady $< 50\text{ ms}$, instead of depending on the signal and the 5-second safety-net timer.
   - Polling queries on PostgreSQL drop to zero.
 
 #### 2. Asynchronous Raised Amount Accumulator
@@ -771,9 +745,9 @@ graph TB
 - Configure dedicated connection pools and independent backup/recovery schedules per service.
 
 #### 2. Asynchronous Replicated Read Models
-- Replace [`ICampaignContributionAvailabilityReader`](../src/Modules/Campaigns/Contracts/Queries/GetCampaignContributionAvailability/ICampaignContributionAvailabilityReader.cs) with an internal `CampaignReplica` table inside the `Contributions` database.
-- Keep the replica updated via `CampaignCreated`, `CampaignPublished`, and `CampaignCancelled` Kafka stream consumers.
-- Implement an automated refund compensation saga if a contribution slips in during the eventual consistency window of a campaign cancellation.
+- Already in place inside the monolith: `Contributions` keeps `active_campaigns_cache` in its own database and updates it from `CampaignCreated`, `CampaignPublished`, `CampaignCancelled`, `CampaignSucceeded` and `CampaignFailed` events (section 2.5).
+- Remaining step: feed the same handlers from Kafka stream consumers instead of the in-process bus.
+- Extend the existing refund handler (`CampaignTerminationRefundHandler`, state-only today) into a full compensation saga that also moves money, for a contribution that slips in during the eventual consistency window of a campaign cancellation.
 
 #### 3. Lock-Free Partitioned Event Sourcing
 - Route all events for a given `CampaignId` to the same Kafka partition key.
@@ -789,10 +763,10 @@ graph TB
 | :--- | :--- | :--- | :--- | :--- |
 | **System Boundary** | **Modular Monolith** | Distributed Microservices | Maximize developer velocity; zero network overhead; atomic transactional boundary options. | Single process failure domain; coarse-grained scaling. |
 | **Data Persistence** | **Schema per module; one shared database as the fallback, one database per module locally (Patroni pairs in the HA profile)** | Database-per-Service | Schema boundaries and per-schema migration history hold either way; the shared fallback has a single backup target. | Shared fallback: connection pool ceiling and noisy neighbor I/O. Per-module databases: more instances to back up and migrate. |
-| **Outbox Dispatch** | **PostgreSQL `SKIP LOCKED`** | CDC (Debezium / Kafka) | Zero extra infrastructure; native ACID consistency; simple operational surface. | 5-second dispatch latency floor; MVCC dead tuple bloat from status updates. |
+| **Outbox Dispatch** | **PostgreSQL `SKIP LOCKED` with a wake-up signal** | CDC (Debezium / Kafka) | Zero extra infrastructure; native ACID consistency; simple operational surface. | Polling queries (signal plus a 5-second safety net) and dead tuples from the claim update and the delete. |
 | **Aggregate Locking** | **`pg_advisory_xact_lock`** | Distributed Redis Redlock | ACID transaction-bound; automatic rollback on failure; zero risk of orphaned locks. | Ties up active DB connection while waiting; caps single-campaign writes to ~65 TPS. |
-| **Cross-Module Reads**| **Synchronous In-Process Adapter** | Replicated Eventual Consistency | Absolute strong consistency; prevents charging backers on cancelled campaigns. | In-process coupling between modules; shared execution thread. |
-| **Real-time Push** | **In-Memory SignalR** | Redis SignalR Backplane | Zero infrastructure overhead for local development and single-node staging. | **Cannot scale horizontally across multiple web nodes without dropping messages.** |
+| **Cross-Module Reads**| **Replicated Read Model (Event-Carried State Transfer)** | Synchronous In-Process Adapter | No runtime dependency of `Contributions` on `Campaigns`; local sub-millisecond reads. | A short stale window after a cancellation, covered by the refund handler. |
+| **Real-time Push** | **SignalR with a Redis backplane when `ConnectionStrings:Redis` is set, in-memory otherwise** | In-Memory only | Zero configuration for local development; several nodes work once Redis is configured. | Without the Redis setting, one node only: messages do not reach clients on other nodes. |
 
 ---
 
@@ -800,8 +774,7 @@ graph TB
 
 Prior to promoting CrowdFunding Hub to high-traffic production environments, the operations and engineering teams must complete the following mandatory remediations:
 
-- [ ] **Configure Redis Backplane for SignalR**: Call `AddStackExchangeRedis()` in `Program.cs` before provisioning more than 1 container replica.
-- [ ] **Tune Outbox Polling Loop**: Update `ModuleOutboxProcessor` to immediately drain batches when `batch.Count == BatchSize` rather than sleeping for 5 seconds.
+- [ ] **Configure Redis for SignalR**: Set `ConnectionStrings:Redis` before provisioning more than 1 container replica, so `Program.cs` adds the backplane.
 - [ ] **Tune PostgreSQL Autovacuum**: Apply aggressive vacuum parameters to all `*_outbox_messages` tables:
   ```sql
   ALTER TABLE campaigns_outbox_messages SET (
@@ -809,7 +782,6 @@ Prior to promoting CrowdFunding Hub to high-traffic production environments, the
       autovacuum_vacuum_cost_limit = 1000
   );
   ```
-- [ ] **Establish Outbox Purge Job**: Implement a scheduled cleanup job to purge `Processed` outbox rows older than 7 days.
 - [ ] **Establish Inbox Purge Job**: Nothing prunes `<module>_inbox_messages`; add a scheduled job to delete inbox rows older than the longest redelivery window.
 - [ ] **Set Metric Alarms**:
   - Alert if `Outbox Lag (p95)` exceeds **15 seconds**.
@@ -827,4 +799,4 @@ The detailed lists live in [`TESTS_THAT_TEACH.md`](TESTS_THAT_TEACH.md) ("Gaps")
 - The ledger lacks an entry kind, a sign check and a trigger.
 - Refunds are state-only: no gateway money movement and no ledger reversal.
 - Success and failure emails are not built.
-- The campaign scavenger and outbox crash recovery are untested, and the inbox crash window has only a note.
+- The campaign scavenger is untested, and the inbox crash window has only a note. Outbox crash recovery is covered by `OutboxReclaimE2ETests`.

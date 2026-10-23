@@ -83,7 +83,7 @@ namespace CrowdFunding.Features.Campaigns;
 
 public static class CreateDraftCampaignEndpoint
 {
-    public record Request(string Title, string Story, string Category, decimal TargetAmount, string Currency, DateTime DeadlineUtc);
+    public record Request(string Title, string Story, string Category, decimal GoalAmount, string Currency, DateTime DeadlineUtc);
     public record Response(Guid Id, string Title, string Status);
 
     public class Validator : AbstractValidator<Request>
@@ -92,7 +92,7 @@ public static class CreateDraftCampaignEndpoint
         {
             RuleFor(x => x.Title).NotEmpty().MaximumLength(200);
             RuleFor(x => x.Story).NotEmpty().MinimumLength(20).MaximumLength(5000);
-            RuleFor(x => x.TargetAmount).GreaterThan(0);
+            RuleFor(x => x.GoalAmount).GreaterThan(0);
             RuleFor(x => x.DeadlineUtc).GreaterThan(DateTime.UtcNow.AddDays(1));
         }
     }
@@ -109,7 +109,7 @@ public static class CreateDraftCampaignEndpoint
             if (!validation.IsValid) 
                 return Results.ValidationProblem(validation.ToDictionary());
 
-            var campaign = new Campaign(req.Title, req.Story, req.Category, req.TargetAmount, req.Currency, req.DeadlineUtc);
+            var campaign = new Campaign(req.Title, req.Story, req.Category, req.GoalAmount, req.Currency, req.DeadlineUtc);
             db.Campaigns.Add(campaign);
             await db.SaveChangesAsync(ct);
 
@@ -136,21 +136,23 @@ Conversely, when a backer's payment is confirmed by Stripe/Adyen:
 Here, **the 14-file pipeline is 100% justified**:
 
 ```csharp
-// Inside Contributions Application & Domain
-await _transactionExecutor.ExecuteAsync(async ct =>
+// Inside Campaigns Application, crediting a confirmed pledge (AddContributionToCampaignCommandHandler).
+// Contributions has already confirmed the payment under its own xmin token and published the event through its outbox.
+await _transactionExecutor.ExecuteAsync(advisoryLockKey, async ct =>
 {
-    // 1. Acquire pessimistic PostgreSQL advisory lock on the campaign ID to serialize balance updates
-    await dbContext.Database.ExecuteSqlRawAsync(
-        "SELECT pg_advisory_xact_lock({0});", AdvisoryLockKey.FromResource(campaignId), ct);
+    // 1. The executor first takes the PostgreSQL advisory lock on the campaign ID: SELECT pg_advisory_xact_lock(key)
 
-    // 2. Load Aggregate Root & Enforce State Machine Invariants
-    var contribution = await _contributionRepository.GetByIdAsync(contributionId, ct);
-    contribution.ConfirmPayment(paymentReference, DateTime.UtcNow); // Mutates state to Succeeded
+    // 2. Load the Aggregate Root inside the lock & enforce its invariants
+    var campaign = await _campaignRepository.GetByIdAsync(campaignId, ct);
 
-    // 3. Persist entity (optimistic concurrency token checked)
-    await _contributionRepository.UpdateAsync(contribution, ct);
+    // 3. Ledger row first (unique per contribution), so a redelivered event is a no-op
+    if (await _contributionLedger.TryRecordAsync(campaignId, contributionId, amount, currency, ct))
+    {
+        campaign.ApplyConfirmedContribution(new Money(amount, currency));
+        await _campaignRepository.UpdateAsync(campaign, ct); // optimistic concurrency token checked
+    }
 
-    // 4. Domain Event automatically captured and committed to Outbox table in the SAME transaction!
+    // 4. Domain events are captured and committed to the outbox table in the SAME transaction!
 }, cancellationToken);
 ```
 - **Files Touched:** Domain Aggregate, Repository, AdvisoryLockKey, OutboxMessage, Event Handler.

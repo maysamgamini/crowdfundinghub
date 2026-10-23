@@ -26,8 +26,8 @@ the module boundary is.
 
 ## What the code says today
 
-Only three aggregates raise events: `Campaign`, `Contribution` and `CampaignReview`. Three
-aggregates or tables carry an `xmin` token: `Campaign`, `Contribution` and `RefreshToken`.
+Only three aggregates raise events: `Campaign`, `Contribution` and `CampaignReview`. Six
+entities carry an `xmin` token: `Campaign`, `Contribution`, `RefreshToken`, `WebhookSubscription`, `RewardTier` and `RewardTierReservation`.
 
 | Module | Write features | Today | Proposed tier |
 |---|---|---|---|

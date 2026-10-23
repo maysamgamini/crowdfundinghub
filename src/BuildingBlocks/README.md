@@ -54,7 +54,7 @@ sequenceDiagram
     Pub->>Db: already in inbox for this handler? skip
     Pub->>H: Handle
     Pub->>Db: record (MessageId, handler) in inbox, ON CONFLICT DO NOTHING
-    P->>Db: mark Processed, or schedule retry, or dead-letter after 5 attempts
+    P->>Db: delete the row on success, or schedule a retry 10 s later, or dead-letter after 5 attempts
 ```
 
 How the worker is woken, and the alternatives (LISTEN/NOTIFY, change data capture), are compared in [`docs/EVENT_DELIVERY_APPROACHES.md`](../../docs/EVENT_DELIVERY_APPROACHES.md).

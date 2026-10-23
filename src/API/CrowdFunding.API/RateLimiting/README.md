@@ -14,10 +14,16 @@ Configures partitioned rate limiting policies to protect authentication and cont
    - **Purpose**: Mitigates brute-force credential stuffing and mass automated account creation.
 
 2. **`payment-strict` (`RateLimitingConfiguration.PaymentPolicy`)**:
-   - **Target Endpoints**: `/api/contributions`, `/api/contributions/{id}/confirm-payment`.
+   - **Target Endpoints**: `POST /api/campaigns/{campaignId}/contributions` only. The confirm-payment endpoint is not rate limited.
    - **Partitioning**: Partitioned by authenticated user identifier (`ClaimTypes.NameIdentifier`), falling back to remote IP if unauthenticated.
    - **Threshold**: 20 permits per 1-minute fixed window.
    - **Purpose**: Mitigates automated pledge flooding and credit card testing.
+
+3. **`webhook-strict` (`RateLimitingConfiguration.WebhookPolicy`)**:
+   - **Target Endpoints**: `/api/webhooks/payments/stripe` and `/api/webhooks/moderation/media-analysis`.
+   - **Partitioning**: Partitioned by client IP (`RemoteIpAddress`).
+   - **Threshold**: 200 permits per 1-minute fixed window.
+   - **Purpose**: Absorbs provider retries while still bounding abuse of the unauthenticated callbacks.
 
 ## Rejection Behavior
 When request volume exceeds the allocated window quota, the middleware halts pipeline execution and returns an HTTP status code `429 Too Many Requests`.

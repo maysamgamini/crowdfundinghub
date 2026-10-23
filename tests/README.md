@@ -8,11 +8,11 @@ Contains automated test suites designed to safeguard software correctness, enfor
 ```mermaid
 flowchart TB
     subgraph Fast["No Docker, seconds"]
-        U["Unit tests: 284"]
-        A["Architecture tests: 22"]
+        U["Unit tests: 315"]
+        A["Architecture tests: 28"]
     end
     subgraph Real["Real PostgreSQL via Testcontainers, about a minute"]
-        I["Integration tests: 92"]
+        I["Integration tests: 109"]
     end
     subgraph Hand["By hand on the replicated stack"]
         D["Failure drills"]

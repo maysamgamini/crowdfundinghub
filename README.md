@@ -23,7 +23,7 @@ Integration tests start their own databases with Testcontainers. With Colima, ex
 
 ```bash
 colima start --memory 8                              # Colima only; Docker Desktop: give it 8 GB
-docker compose -f docker-compose.ha.yml up -d        # 16 database nodes + 3 etcd witnesses + Redis (~3.5 GB, 2-3 minutes to settle)
+docker compose -f docker-compose.ha.yml up -d        # 16 database nodes + 3 etcd witnesses + Redis (needs roughly 6 GB of VM memory, 2-3 minutes to settle)
 ASPNETCORE_ENVIRONMENT=HA dotnet run --project src/API/CrowdFunding.API -- migrate
 ASPNETCORE_ENVIRONMENT=HA dotnet run --project src/API/CrowdFunding.API
 ```
@@ -42,7 +42,7 @@ Most microservices migrations fail not because distributed systems are inherentl
 ```mermaid
 flowchart TB
     Client["HTTP client / Swagger"] --> Host["CrowdFunding.API<br/>one deployable process"]
-    subgraph Modules["Six modules, each with Domain / Application / Infrastructure / Contracts"]
+    subgraph Modules["Six modules, each with Domain / Application / Infrastructure, plus Contracts where other modules consume it"]
         direction LR
         Identity["Identity"]
         Campaigns["Campaigns"]
@@ -128,7 +128,7 @@ A master curriculum suite is published under [`educational/`](./educational/READ
 
 ### [02. Gap Analysis & Architectural Trade-offs](./educational/02-gap-analysis-and-tradeoffs/)
 - **[`over-engineering-audit.md`](./educational/02-gap-analysis-and-tradeoffs/over-engineering-audit.md)**: Where did we go too far? An unsparing audit of accidental complexity: the 14-file pipeline for basic inserts, project explosion, and triple-mapping ceremonies.
-- **[`under-engineering-audit.md`](./educational/02-gap-analysis-and-tradeoffs/under-engineering-audit.md)**: Where didn't we go far enough? Hidden microservice decomposition roadblocks: synchronous query coupling (`ICampaignContributionAvailabilityReader`), centralized outbox poller coupling, and connection pool starvation.
+- **[`under-engineering-audit.md`](./educational/02-gap-analysis-and-tradeoffs/under-engineering-audit.md)**: Where didn't we go far enough? Hidden microservice decomposition roadblocks: synchronous query coupling (the removed `ICampaignContributionAvailabilityReader`, now replaced by a replicated read model), centralized outbox poller coupling, and connection pool starvation.
 
 ### [03. Engineering Specifications & Roadmap](./educational/03-engineering-spec-and-roadmap/)
 - **[`transformation-spec.md`](./educational/03-engineering-spec-and-roadmap/transformation-spec.md)**: Sprint-ready engineering specification to evolve the codebase into the benchmark educational reference (Epics 1–5).
@@ -147,7 +147,7 @@ The design says more than the code does in a few places. [`design-to-code-mappin
 flowchart LR
     subgraph Built["Built and tested"]
         B1["Outbox with SKIP LOCKED claims"]
-        B2["Per-module schema, inbox, database"]
+        B2["Per-module schema and database; inbox in every module except Identity"]
         B3["xmin and advisory-lock concurrency"]
         B6["Idempotent pledge creation"]
         B7["Outbox wake-up signal and crash reclaim"]
@@ -161,7 +161,7 @@ flowchart LR
     end
 ```
 
-The open gaps are also listed in [`docs/TESTS_THAT_TEACH.md`](./docs/TESTS_THAT_TEACH.md). Historical ticket text lived in a `qa-tickets/` folder that is not part of this repository.
+The open gaps are also listed in [`docs/TESTS_THAT_TEACH.md`](./docs/TESTS_THAT_TEACH.md). The `TICKET-0xx` names used in the documents identify historical work items; their text is not kept in this repository.
 
 ---
 
@@ -230,8 +230,10 @@ dotnet test CrowdFunding.slnx
 
 | Test Project | Purpose & Scope | Count | Needs Docker |
 | :--- | :--- | :---: | :---: |
-| **`CrowdFunding.UnitTests`** | Domain aggregate invariants, command handlers, value objects. | 284 | no |
-| **`CrowdFunding.ArchitectureTests`** | Assembly-reference rules that keep module boundaries intact. | 22 | no |
-| **`CrowdFunding.IntegrationTests`** | HTTP flows, concurrency races, outbox, inbox and schema rules against real PostgreSQL (Testcontainers). | 92 | yes |
+| **`CrowdFunding.UnitTests`** | Domain aggregate invariants, command handlers, value objects. | 315 | no |
+| **`CrowdFunding.ArchitectureTests`** | Assembly-reference rules that keep module boundaries intact, plus checks that the documents link to things that exist. | 28 | no |
+| **`CrowdFunding.IntegrationTests`** | HTTP flows, concurrency races, outbox, inbox and schema rules against real PostgreSQL (Testcontainers). | 109 | yes |
+
+The counts are the test cases that `dotnet test --list-tests` reports for each project, and they are the single source for the other pages. A fourth project, `CrowdFunding.ModerationService.IntegrationTests` (2 tests), covers the extracted Moderation service. It is not part of `CrowdFunding.slnx`; run it on its own with `dotnet test tests/IntegrationTests/CrowdFunding.ModerationService.IntegrationTests`.
 
 All of them pass. The tests worth reading first, and the ones that are not, are listed in [`docs/TESTS_THAT_TEACH.md`](./docs/TESTS_THAT_TEACH.md).

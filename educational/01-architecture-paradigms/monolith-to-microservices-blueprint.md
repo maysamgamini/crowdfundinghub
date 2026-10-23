@@ -47,7 +47,7 @@ To extract a microservice from a monolith without rewriting business logic, the 
 - **The Implementation:** Module B publishes a lightweight contract assembly (`CrowdFunding.Modules.Campaigns.Contracts.csproj`) containing **only**:
   - Request/Response DTO records.
   - Integration event records (`CampaignPublishedApplicationEvent`).
-  - Read interfaces (`ICampaignContributionAvailabilityReader`).
+  - Interfaces and DTOs that other modules may call. (A synchronous availability reader once lived here; it was removed in favour of integration events plus a replicated read model in the consumer.)
 - **Why It Matters for Microservices:** When extracting Module B into a microservice, `Campaigns.Contracts` is simply packed as a NuGet package (`dotnet pack`) and published to a private registry. Downstream consumers change their `<ProjectReference>` to a `<PackageReference>` with zero code edits!
 
 ### 2. Physical Database Schema Isolation (Schema-per-Module)
@@ -60,7 +60,7 @@ To extract a microservice from a monolith without rewriting business logic, the 
 - **Why It Matters for Microservices:** In legacy monoliths, tables from different domains are lumped into `public`, and developers write cross-domain SQL joins. By isolating schemas:
   - Database migrations for Module A never collide with Module B.
   - Migrating to **Database-per-Service** is a physical operational task (`pg_dump` the `campaigns` schema and restore to a dedicated server), requiring **zero modifications to EF Core entity configurations**.
-  - The schemas already live in per-module databases locally (`docker-compose.yml` creates `identity_db`, `campaigns_db` and so on via `deploy/postgres/init-module-databases.sh`), and `MultiDatabaseConnectionDecouplingTests` checks that each module only needs its own connection string.
+  - The schemas already live in per-module databases locally (`docker-compose.yml` creates `identity_db`, `campaigns_db` and so on via `deploy/postgres/init-module-databases.sh`), and `MultiDatabaseConnectionDecouplingTests` moves the Campaigns module onto a second, independent PostgreSQL instance to check that its writes land there while the other modules keep the shared database.
 
 ### 3. Absolute Elimination of Cross-Schema Database Foreign Keys
 - **The Rule:** Foreign key constraints across module boundaries are strictly forbidden.
@@ -111,7 +111,7 @@ graph TD
     
     subgraph DecomposedSystem["System Deployment"]
         Gateway -- "Route /api/campaigns/*" --> Monolith["Monolith Host"]
-        Gateway -- "Route /api/contributions/*" --> Monolith
+        Gateway -- "Route /api/campaigns/{id}/contributions/*" --> Monolith
         Gateway -- "Route /api/moderation/* (Strangled)" --> ModService["Extracted Moderation Microservice"]
     end
 

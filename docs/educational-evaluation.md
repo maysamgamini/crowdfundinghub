@@ -6,6 +6,9 @@
 > **Stated Mission:** *"Create a vertical slice of monolithic clean architecture for educational purposes."*  
 > **Evaluation Date:** September 8, 2026  
 
+> [!NOTE]
+> **Status banner.** This is a point-in-time evaluation. Since it was written, the synchronous availability reader was replaced by a replicated read model, the central outbox service was replaced by a `ModuleOutboxProcessor` per module that publishes through `IMessageBus`, and the project and test counts changed (30 projects in the solution, 450 tests). Sections 3.1, 9.2 and 9.3 carry notes where the code has changed. Current gaps are listed in [`TRADE_OFFS_AND_LIMITATIONS.md`](TRADE_OFFS_AND_LIMITATIONS.md) (Known Gaps) and in [`design-to-code-mapping-round1.md`](../educational/03-engineering-spec-and-roadmap/design-to-code-mapping-round1.md).
+
 ---
 
 ## Table of Contents
@@ -15,7 +18,7 @@
    - [2.1 Clean Architecture vs. Vertical Slice Architecture (VSA)](#21-clean-architecture-vs-vertical-slice-architecture-vsa)
    - [2.2 What This Codebase Actually Is](#22-what-this-codebase-actually-is)
 3. [Where Did We Go Too Far? (The Over-Engineering Audit)](#3-where-did-we-go-too-far-the-over-engineering-audit)
-   - [3.1 Assembly & Project Sprawl (29 .csproj Files)](#31-assembly--project-sprawl-29-csproj-files)
+   - [3.1 Assembly & Project Sprawl (30 .csproj Files)](#31-assembly--project-sprawl-30-csproj-files)
    - [3.2 Enterprise Cryptographic Infrastructure (ES256 / JWKS)](#32-enterprise-cryptographic-infrastructure-es256--jwks)
    - [3.3 Low-Level Database Locking & Concurrency Primitives](#33-low-level-database-locking--concurrency-primitives)
    - [3.4 The Triple-Mapping Ceremony & DTO Inflation](#34-the-triple-mapping-ceremony--dto-inflation)
@@ -62,7 +65,7 @@ quadrantChart
 3. **Transactional Outbox Demystification:** Provides a working, transparent implementation of the Transactional Outbox pattern with `FOR UPDATE SKIP LOCKED`, solving the classic dual-write distributed transaction fallacy.
 
 ### Key Weaknesses as an Educational Resource
-1. **Conflation of Styles:** It claims to be "Vertical Slice", but is actually an Onion Clean Architecture fragmented across 29 assemblies.
+1. **Conflation of Styles:** It claims to be "Vertical Slice", but is actually an Onion Clean Architecture fragmented across 30 assemblies.
 2. **Infrastructure Drowning Domain:** The student spends 80% of their mental energy trying to understand cryptographic DER conversions, advisory lock bitwise math, and outbox claim queries, rather than core domain design.
 3. **The "All-or-Nothing" Domain Is Broken:** Crowdfunding's primary domain rule (campaign expires -> target reached -> funds captured; target missed -> pledges refunded) is **unimplemented**. The domain stops halfway.
 
@@ -96,7 +99,7 @@ graph TD
 | Architectural Axis | Pure Clean Architecture (CA) | Pure Vertical Slice Architecture (VSA) | What CrowdFundingHub Does |
 |---|---|---|---|
 | **Primary Organizing Principle** | Concentric Technical Rings (Domain, App, Infra, API) | Distinct Business Use Cases (Feature Slices) | **Modular Monolith by Bounded Context**, with CA rings inside each module |
-| **Number of Assemblies** | 4 to 6 projects per solution | 1 to 2 projects (Web API + optionally Core) | **29 Assemblies** |
+| **Number of Assemblies** | 4 to 6 projects per solution | 1 to 2 projects (Web API + optionally Core) | **30 Assemblies** |
 | **Data Access Strategy** | `IRepository<T>` + `IUnitOfWork` abstractions | Direct `DbContext` or Dapper in the Feature Handler | Strict `IRepository<T>` + `ITransactionExecutor` |
 | **Read Operations (Queries)** | Queries route through domain abstractions / read services | Queries execute raw SQL / projected EF `AsNoTracking()` straight to DTO | Read services (`CachedCampaignReadService`) with domain entities |
 | **Co-location of Code** | Sliced horizontally; changes touch 4 projects | Everything for a feature lives in one directory or file | Folder slicing inside `Application`, but isolated from `Domain` and `Infrastructure` |
@@ -112,15 +115,17 @@ Calling it a "vertical slice" will severely confuse students who read Jimmy Boga
 
 The following areas represent significant **accidental or advanced complexity** that distracts from the core goal of teaching Clean Architecture and feature design.
 
-### 3.1 Assembly & Project Sprawl (29 .csproj Files)
-The solution contains **29 distinct projects**:
-- 6 Modules × 4 Projects (`Domain`, `Application`, `Infrastructure`, `Contracts`) = 24 projects
+### 3.1 Assembly & Project Sprawl (30 .csproj Files)
+The solution contains **30 distinct projects** (32 `.csproj` files exist on disk; the extracted `CrowdFunding.Moderation.Service` and its integration test project are outside the solution):
+- Four modules (Identity, Campaigns, Contributions, Moderation) × 4 projects (`Domain`, `Application`, `Infrastructure`, `Contracts`) = 16 projects
+- Two modules (Notifications, CampaignUpdates) × 3 projects (no `Contracts`, because no other module consumes them) = 6 projects
 - BuildingBlocks (`Domain`, `Application`, `Infrastructure`) = 3 projects
 - API Host (`CrowdFunding.API`) = 1 project
-- Tests (`UnitTests`, `ArchitectureTests`, `IntegrationTests`) = 3 projects (Total: 31 files including solution)
+- Rosetta Stone sample (`CrowdFunding.Samples.RosettaStone`) = 1 project
+- Tests (`UnitTests`, `ArchitectureTests`, `IntegrationTests`) = 3 projects
 
 #### Why It Goes Too Far:
-1. **Compilation Overhead:** Every `dotnet build` executes MSBuild evaluation across 29 targets.
+1. **Compilation Overhead:** Every `dotnet build` executes MSBuild evaluation across 30 targets.
 2. **Project Reference Friction:** When a student creates a new command, they must decide: *"Does this contract go in `Campaigns.Contracts` or `BuildingBlocks.Application`? Does the entity belong in `Campaigns.Domain` or `BuildingBlocks.Domain`?"*
 3. **Overkill for In-Process Monolith:** In .NET 10, internal module encapsulation can be achieved cleanly with **1 project per module** using C# `internal` visibility and file-scoped namespaces, or even **1 single project** using modern C# namespace folder structures.
 
@@ -179,7 +184,7 @@ graph LR
 ```
 
 #### Why It Goes Too Far:
-- `CreateCampaignRequest` and `CreateCampaignCommand` have the exact same 6 fields (`Title`, `Story`, `Category`, `TargetAmount`, `Currency`, `DeadlineUtc`).
+- `CreateCampaignRequest` and `CreateCampaignCommand` have the exact same 6 fields (`Title`, `Story`, `Category`, `GoalAmount`, `Currency`, `DeadlineUtc`).
 - Students perceive this as **"boilerplate for the sake of boilerplate"**, giving Clean Architecture an unfair reputation as verbose and inefficient.
 
 ### 3.5 External SaaS Vendor Coupling (OpenMeter CloudEvents)
@@ -199,8 +204,8 @@ While the project went to extreme lengths on infrastructure and security, **the 
 The quintessential problem in crowdfunding (Kickstarter, Indiegogo) is the **All-or-Nothing Model**:
 1. Creator defines a target ($10,000) and deadline (30 days).
 2. Backers pledge contributions.
-3. If deadline arrives and `RaisedAmount >= TargetAmount`: Campaign transitions to `Successful`; creator can withdraw funds.
-4. If deadline arrives and `RaisedAmount < TargetAmount`: Campaign transitions to `Failed`; **all backers must be refunded**.
+3. If deadline arrives and `RaisedAmount >= GoalAmount`: Campaign transitions to `Successful`; creator can withdraw funds.
+4. If deadline arrives and `RaisedAmount < GoalAmount`: Campaign transitions to `Failed`; **all backers must be refunded**.
 5. If creator cancels campaign: **all backers must be refunded**.
 
 #### The Educational Gap:
@@ -240,33 +245,15 @@ To understand why a student feels overwhelmed, compare tracing `POST /api/Campai
 
 ### 5.1 Current Journey: 14 Files Across 5 Assemblies
 
-```
-[Client]
-   │
-   ▼ (1) src/API/CrowdFunding.API/Controllers/CampaignsController.cs
-   │   └── Uses (2) Contracts/Campaigns/CreateCampaignRequest.cs
-   │   └── Uses (3) Mapping/CampaignsMappingConfig.cs (Mapster)
-   ▼
-[BuildingBlocks.Application]
-   │   └── Uses (4) Dispatchers/ICommandDispatcher.cs
-   ▼
-[Modules.Campaigns.Application]
-   │   └── Dispatches (5) Commands/CreateCampaign/CreateCampaignCommand.cs
-   │   └── Validates via (6) Commands/CreateCampaign/CreateCampaignCommandValidator.cs
-   │   └── Executes (7) Commands/CreateCampaign/CreateCampaignCommandHandler.cs
-   │   └── Invokes (8) Persistence/ICampaignRepository.cs
-   ▼
-[Modules.Campaigns.Domain]
-   │   └── Instantiates (9) Aggregates/Campaign.cs
-   │   └── Emits (10) Events/CampaignCreatedDomainEvent.cs
-   ▼
-[Modules.Campaigns.Infrastructure]
-   │   └── Persists via (11) Persistence/Repositories/CampaignRepository.cs
-   │   └── Maps via (12) Persistence/Configurations/CampaignConfiguration.cs
-   │   └── Commits via (13) Persistence/DbContexts/CampaignsDbContext.cs
-   ▼
-[BuildingBlocks.Infrastructure]
-   │   └── Writes Outbox (14) Persistence/OutboxMessage.cs
+```mermaid
+flowchart TD
+    Client([Client])
+    Client --> Ctl["(1) src/API/CrowdFunding.API/Controllers/CampaignsController.cs<br/>(2) Contracts/Campaigns/CreateCampaignRequest.cs<br/>(3) Mapping/CampaignsMappingConfig.cs (Mapster)"]
+    Ctl --> BBA["BuildingBlocks.Application<br/>(4) Dispatchers/ICommandDispatcher.cs"]
+    BBA --> App["Modules.Campaigns.Application<br/>(5) Commands/CreateCampaign/CreateCampaignCommand.cs<br/>(6) Commands/CreateCampaign/CreateCampaignCommandValidator.cs<br/>(7) Commands/CreateCampaign/CreateCampaignCommandHandler.cs<br/>(8) Persistence/ICampaignRepository.cs"]
+    App --> Dom["Modules.Campaigns.Domain<br/>(9) Aggregates/Campaign.cs<br/>(10) Events/CampaignCreatedDomainEvent.cs"]
+    Dom --> Inf["Modules.Campaigns.Infrastructure<br/>(11) Persistence/Repositories/CampaignRepository.cs<br/>(12) Persistence/Configurations/CampaignConfiguration.cs<br/>(13) Persistence/DbContexts/CampaignsDbContext.cs"]
+    Inf --> BBI["BuildingBlocks.Infrastructure<br/>(14) Persistence/OutboxMessage.cs"]
 ```
 **Student Reaction:** *"I had to open 14 tabs and jump across 5 projects just to save a title and goal amount to a table."*
 
@@ -282,7 +269,7 @@ namespace CrowdFunding.Features.Campaigns;
 
 public static class CreateCampaign
 {
-    public record Request(string Title, string Story, string Category, decimal TargetAmount, string Currency, DateTime DeadlineUtc);
+    public record Request(string Title, string Story, string Category, decimal GoalAmount, string Currency, DateTime DeadlineUtc);
     public record Response(Guid Id, string Title, string Status);
 
     public class Validator : AbstractValidator<Request>
@@ -291,7 +278,7 @@ public static class CreateCampaign
         {
             RuleFor(x => x.Title).NotEmpty().MaximumLength(200);
             RuleFor(x => x.Story).NotEmpty().MinimumLength(20).MaximumLength(5000);
-            RuleFor(x => x.TargetAmount).GreaterThan(0);
+            RuleFor(x => x.GoalAmount).GreaterThan(0);
         }
     }
 
@@ -308,7 +295,7 @@ public static class CreateCampaign
 
         public override async Task HandleAsync(Request req, CancellationToken ct)
         {
-            var campaign = new Campaign(req.Title, req.Story, req.Category, req.TargetAmount, req.Currency, req.DeadlineUtc);
+            var campaign = new Campaign(req.Title, req.Story, req.Category, req.GoalAmount, req.Currency, req.DeadlineUtc);
             _db.Campaigns.Add(campaign);
             await _db.SaveChangesAsync(ct);
 
@@ -332,9 +319,9 @@ Evaluation of `CrowdFundingHub` across key pedagogical dimensions (1 to 10 scale
 |---|:---:|---|
 | **Architecture Discipline & Rule Enforcement** | **10 / 10** | Unmatched. The assembly-reference architecture tests guard against illegal boundary leaks. |
 | **Enterprise Production Realism** | **9.5 / 10** | Realistic concurrency control, outbox patterns, and database testing. |
-| **Test Engineering Best Practices** | **9.5 / 10** | Testcontainers Postgres fixture, 156 passing tests across unit, arch, and integration. |
+| **Test Engineering Best Practices** | **9.5 / 10** | Testcontainers Postgres fixture, 450 passing tests across unit, architecture, and integration (the README has the count per project). |
 | **Documentation & Code Explanations** | **9.5 / 10** | 100% inline XML documentation, README in every folder, exhaustive architecture docs. |
-| **Simplicity & Cognitive Accessibility** | **3 / 10** | Overwhelming for junior/intermediate learners. 29 projects cause intense navigation friction. |
+| **Simplicity & Cognitive Accessibility** | **3 / 10** | Overwhelming for junior/intermediate learners. 30 projects cause intense navigation friction. |
 | **Fidelity to "Vertical Slice Architecture"** | **2 / 10** | It is not VSA; it is layered Onion Clean Architecture organized by module. |
 | **Business Domain Completeness** | **4 / 10** | Core crowdfunding lifecycle (deadline expiration, refunding backers) is missing. |
 | **Developer Onboarding (Friction to Run)** | **5 / 10** | Requires manual SDK 10 setup; lacks API containerization and automated CI. |
@@ -373,8 +360,8 @@ graph TD
 ### Recommendation 3: Complete the Domain Lifecycle (Add Deadlines & Refunds)
 - **Action:**
   1. Add a background worker `CampaignExpirationBackgroundService` that queries campaigns where `DeadlineUtc <= DateTime.UtcNow && Status == CampaignStatus.Active`.
-  2. If `CurrentBalance >= TargetAmount`, dispatch `CompleteCampaignCommand` (Status: `Successful`).
-  3. If `CurrentBalance < TargetAmount`, dispatch `FailCampaignCommand` (Status: `Failed`) and publish `CampaignFailedApplicationEvent`.
+  2. If `CurrentBalance >= GoalAmount`, dispatch `CompleteCampaignCommand` (Status: `Successful`).
+  3. If `CurrentBalance < GoalAmount`, dispatch `FailCampaignCommand` (Status: `Failed`) and publish `CampaignFailedApplicationEvent`.
   4. In `Contributions`, handle `CampaignFailedApplicationEvent` and transition contributions to `Refunded`.
 - **Pedagogical Benefit:** Teaches students real-world saga/choreography compensation workflows and aggregate state machines.
 
@@ -453,12 +440,9 @@ The campaign creation pipeline in this repository is a textbook example of apply
 
 Navigating **14 files across 5 assemblies** just to save a record creates massive cognitive overhead, slows down feature delivery, and makes debugging unnecessarily painful for simple CRUD logic.
 
-```
-[Current 14-File Pipeline for a Single Insert]
-API Controller ──> Request DTO ──> Mapster Config ──> ICommandDispatcher ──>
-CreateCampaignCommand ──> Validator ──> CommandHandler ──> ICampaignRepository ──>
-Campaign Aggregate ──> Domain Event ──> CampaignsDbContext ──> Entity Config ──>
-OutboxMessage ──> OutboxProcessorBackgroundService
+```mermaid
+flowchart LR
+    A["API Controller"] --> B["Request DTO"] --> C["Mapster Config"] --> D["ICommandDispatcher"] --> E["CreateCampaignCommand"] --> F["Validator"] --> G["CommandHandler"] --> H["ICampaignRepository"] --> I["Campaign Aggregate"] --> J["Domain Event"] --> K["CampaignsDbContext"] --> L["Entity Config"] --> M["OutboxMessage"] --> N["ModuleOutboxProcessor"]
 ```
 
 #### Why This Is Excessive:
@@ -488,7 +472,7 @@ app.MapPost("/api/campaigns", async (
         Title = req.Title, 
         Story = req.Story,
         Category = req.Category,
-        TargetAmount = req.TargetAmount,
+        GoalAmount = req.GoalAmount,
         Currency = req.Currency,
         DeadlineUtc = req.DeadlineUtc,
         CreatedAtUtc = DateTime.UtcNow 
@@ -516,7 +500,7 @@ Otherwise, **keep your architecture flat and only introduce advanced patterns wh
 Even with the goal of designing for microservices extraction, several areas overshot pragmatic boundaries:
 
 1. **Premature Outbox Persistence on Internal-Only Events**:
-   - `CampaignCreatedApplicationEvent` is committed to `campaigns_outbox_messages` and polled every 5 seconds by `OutboxProcessorBackgroundService`.
+   - `CampaignCreatedApplicationEvent` is committed to `campaigns_outbox_messages` and picked up by the module's outbox worker (`ModuleOutboxProcessor`, woken by the commit and polling every 5 seconds as a safety net).
    - In reality, the only listener in the entire codebase is `CampaignCreatedApplicationEventHandler` in Moderation. In an educational monolith, an architect should teach that **only events intended for external cross-service consumption belong in an outbox**; purely internal domain events can be dispatched in-process immediately.
 2. **Custom Database-Backed Asymmetric Key Store (ES256 / JWKS)**:
    - While asymmetric ES256 tokens and a JWKS endpoint (`/.well-known/jwks.json`) are the **gold standard for microservice edge authentication** (downstream services verify tokens offline without calling Identity), writing a custom ECDSA P-256 key generator, DER private key serializer, and EF Core `EfSigningKeyStore` is heavy.
@@ -534,7 +518,9 @@ Even with the goal of designing for microservices extraction, several areas over
 If an architect attempts to extract `Campaigns` or `Contributions` into standalone microservices tomorrow, they will hit **four major roadblocks** that the current codebase hides behind in-process convenience:
 
 #### Roadblock 1: Synchronous Inter-Module Query Coupling (The Latency & Availability Trap)
-- **The Code Location**: In [`MakeContributionCommandHandler.cs`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs#L42-L44):
+> **Resolved.** The synchronous reader `ICampaignContributionAvailabilityReader` was removed. [`MakeContributionCommandHandler.cs`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs) now reads the replicated `contributions.active_campaigns_cache`. The text below shows the earlier code and the fix that was built.
+
+- **The Code Location (earlier code)**: In `MakeContributionCommandHandler`:
   ```csharp
   var campaignAvailability = await _campaignContributionAvailabilityReader
       .GetCampaignContributionAvailabilityAsync(
@@ -551,8 +537,8 @@ If an architect attempts to extract `Campaigns` or `Contributions` into standalo
 ```mermaid
 sequenceDiagram
     autonumber
-    Note over Monolith: Synchronous In-Process Coupling (Current)
-    ContributionsModule->>CampaignsModule: ICampaignContributionAvailabilityReader.GetAvailabilityAsync()
+    Note over Monolith: Synchronous In-Process Coupling (earlier design, removed)
+    ContributionsModule->>CampaignsModule: Availability reader call (removed interface)
     CampaignsModule-->>ContributionsModule: CampaignAvailabilityDTO (In-Memory: 0.2ms)
 
     Note over Microservices: The True Decoupled Alternative (Replicated Read Model)
@@ -563,7 +549,9 @@ sequenceDiagram
 ```
 
 #### Roadblock 2: Outbox Poller Coupled to In-Process Memory Dispatcher
-- **The Code Location**: In [`OutboxProcessorBackgroundService.cs`](../src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs#L70):
+> **Resolved.** The central `OutboxProcessorBackgroundService` was replaced by [`ModuleOutboxProcessor`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Outbox/ModuleOutboxProcessor.cs), one worker per module, which publishes through `IMessageBus` (`InProcessMessageBus` or `RabbitMqMessageBus`, chosen by `Messaging:Provider`). The text below shows the earlier code.
+
+- **The Code Location (earlier code)**: In the former `OutboxProcessorBackgroundService`:
   ```csharp
   await _eventPublisher.PublishAsync(appEvent, stoppingToken);
   ```
@@ -614,7 +602,7 @@ How ready is each module in `CrowdFundingHub` to be extracted into an autonomous
 | **Moderation** | 🟢 **Trivial (1/5)** | Zero. Owns `moderation` schema. | None. Listens to `CampaignCreated`. | **9.5 / 10** | 1. Create `Moderation.Service` Web host.<br/>2. Point outbox poller to RabbitMQ/Kafka.<br/>3. Route `/api/moderation/reviews` via API Gateway. |
 | **CampaignUpdates** | 🟢 **Trivial (1/5)** | Zero. Owns own schema. | Consumes events. | **9.5 / 10** | 1. Create host.<br/>2. Subscribe to message broker. |
 | **Campaigns** | 🟡 **Moderate (2.5/5)** | Owns `campaigns` schema. Optimistic concurrency & advisory locks. | Receives `AddContributionToCampaign` via outbox. | **8.5 / 10** | 1. Replace in-process event handler with message consumer.<br/>2. Replace in-memory cache with Redis distributed cache. |
-| **Contributions** | 🟠 **Challenging (3.5/5)** | Owns `contributions` schema. | **Calls `ICampaignContributionAvailabilityReader` synchronously.** | **7.0 / 10** | 1. **Eliminate synchronous call**: implement replicated read model or resilient gRPC client.<br/>2. Publish `ContributionPaymentConfirmed` to broker. |
+| **Contributions** | 🟠 **Challenging (3.5/5)** | Owns `contributions` schema. | Used to call `ICampaignContributionAvailabilityReader` synchronously (removed; it now reads a replicated read model). | **7.0 / 10** | 1. ~~Eliminate synchronous call~~ (done: replicated read model).<br/>2. Publish `ContributionPaymentConfirmed` to broker. |
 | **Notifications** | 🟢 **Trivial (1/5)** | Pure consumer. | Event consumer. | **9.0 / 10** | 1. Implement broker consumers for notification events. |
 
 ---
@@ -625,7 +613,7 @@ To demonstrate the power of this modular clean architecture, here is the exact 5
 
 ```
 [Step 1: Create Host Project]
-dotnet new web -n CrowdFunding.Moderation.Service -o src/Services/CrowdFunding.Moderation.Service
+dotnet new web -n CrowdFunding.Moderation.Service -o services/CrowdFunding.Moderation.Service
 
 [Step 2: Reference Existing Clean Architecture Assemblies]
 Add references to:
@@ -662,10 +650,10 @@ Use this checklist when designing an in-process monolith that must retain the op
 - [x] **4. Zero Cross-Schema Foreign Keys**: Relationships use scalar primitive identifiers (`Guid CampaignId`), never SQL foreign keys.
 - [x] **5. Transactional Outbox Pattern**: Domain events committed to local outbox tables, eliminating 2PC dual-writes.
 - [x] **6. Asymmetric Cryptography (ES256/JWKS)**: Edge services verify authentication without shared symmetric secrets or database lookups.
-- [ ] **7. Asynchronous Replicated Read Models**: Eliminate blocking cross-module synchronous queries (`ICampaignContributionAvailabilityReader`).
-- [ ] **8. Pluggable Messaging Abstraction**: Easily swap in-process event dispatchers for RabbitMQ or Kafka.
-- [ ] **9. Independent Connection Strings**: Each DbContext configured to support its own database host.
-- [ ] **10. Reference Extraction Spike**: At least one module extracted in a sample branch to prove the decomposition model works.
+- [x] **7. Asynchronous Replicated Read Models**: Blocking cross-module synchronous queries are eliminated (the removed `ICampaignContributionAvailabilityReader` is replaced by `contributions.active_campaigns_cache`).
+- [x] **8. Pluggable Messaging Abstraction**: `IMessageBus` swaps the in-process dispatcher for RabbitMQ (publish only; Kafka is not implemented).
+- [x] **9. Independent Connection Strings**: Each DbContext has its own connection string, and the local run uses one database per module.
+- [x] **10. Reference Extraction Spike**: The Moderation module is extracted as `services/CrowdFunding.Moderation.Service`.
 
 ---
 
@@ -673,4 +661,4 @@ Use this checklist when designing an in-process monolith that must retain the op
 
 When the goal is **teaching software architects how to design a Monolith that can be broken into microservices**, this codebase is **an exceptional, industry-grade reference (Grade: A)**.
 
-Its 29 projects, isolated schemas, outbox tables, and cryptographic boundaries are not accidental complexity—they are **the necessary structural scaffolding that allows a multi-million-dollar monolith to decompose into microservices without rewriting a single line of business logic.**
+Its 30 projects, isolated schemas, outbox tables, and cryptographic boundaries are not accidental complexity—they are **the necessary structural scaffolding that allows a multi-million-dollar monolith to decompose into microservices without rewriting a single line of business logic.**

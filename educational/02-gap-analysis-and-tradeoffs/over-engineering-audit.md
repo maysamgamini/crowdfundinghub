@@ -41,7 +41,7 @@ Committing an `OutboxMessage` row to `campaigns.campaigns_outbox_messages` and p
 #### Gotcha 4: The Triple-Mapping Tax
 `CreateCampaignRequest` (API), `CreateCampaignCommand` (Application), and `Campaign` (Domain) declare the **exact same 6 fields**:
 ```
-Title, Story, Category, TargetAmount, Currency, DeadlineUtc
+Title, Story, Category, GoalAmount, Currency, DeadlineUtc
 ```
 Maintaining three separate classes and Mapster mapping profiles for identical property names is "ceremony for the sake of ceremony."
 
@@ -50,7 +50,7 @@ Maintaining three separate classes and Mapster mapping profiles for identical pr
 ## 2. Hand-Rolled Enterprise Cryptography (ES256 / JWKS)
 
 In [`EfSigningKeyStore.cs`](../../src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Services/EfSigningKeyStore.cs) and [`JwksEndpoint.cs`](../../src/API/CrowdFunding.API/Security/JwksEndpoint.cs):
-- 400+ lines of low-level cryptographic key generation (`ECDsa.Create(ECCurve.NamedCurves.nistP256)`).
+- About 190 lines of low-level cryptographic key generation and key discovery (`ECDsa.Create(ECCurve.NamedCurves.nistP256)`): 148 in `EfSigningKeyStore.cs` and 42 in `JwksEndpoint.cs`.
 - Custom database persistence of private key DER bytes and public key discovery endpoints (`/.well-known/jwks.json`).
 
 ### Why It's Over-Engineering for an Educational Core:
@@ -59,12 +59,12 @@ In [`EfSigningKeyStore.cs`](../../src/Modules/Identity/CrowdFunding.Modules.Iden
 
 ---
 
-## 3. The 29-Project Assembly Sprawl
+## 3. The 30-Project Assembly Sprawl
 
-Creating 4 projects per module across 6 modules results in **29 `.csproj` projects**.
+Creating 3 or 4 projects per module across 6 modules (22 module projects), plus building blocks, the API host, the Rosetta Stone sample and three test projects, results in **30 `.csproj` projects** in the solution, 27 of them under `src`.
 
 ### The Operational Penalty:
-1. **Slow Compilation:** MSBuild must resolve dependencies, copy DLLs, and compile 29 separate assemblies for every single change.
+1. **Slow Compilation:** MSBuild must resolve dependencies, copy DLLs, and compile 30 separate assemblies for every single change.
 2. **Mental Fatigue:** When adding a new property, developers must touch 4 projects.
 3. **Better Educational Alternative:** In modern .NET 10, module boundaries can be enforced cleanly using **1 project per module** with C# `internal` visibility, or using namespace conventions verified by architecture tests.
 
@@ -72,17 +72,8 @@ Creating 4 projects per module across 6 modules results in **29 `.csproj` projec
 
 ## 4. Summary: The Spectrum of Justification
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ WHEN THE 14-FILE PIPELINE IS UNJUSTIFIED:                                   │
-│ - Basic CRUD operations (lookups, user bio, draft creation).                │
-│ - Single-row updates with no concurrent contention.                         │
-│ - Internal-only workflows where no external microservice listens.           │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ WHEN THE 14-FILE PIPELINE IS FULLY JUSTIFIED:                               │
-│ - Financial state mutations (pledges, ledger balances, refunds).            │
-│ - High-concurrency operations requiring pessimistic advisory locking.       │
-│ - Cross-boundary state synchronization where failure triggers compensating  │
-│   sagas or event streaming to Kafka.                                        │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+| When the 14-file pipeline is unjustified | When it is fully justified |
+| :--- | :--- |
+| Basic CRUD operations (lookups, user bio, draft creation). | Financial state mutations (pledges, ledger balances, refunds). |
+| Single-row updates with no concurrent contention. | High-concurrency operations requiring pessimistic advisory locking. |
+| Internal-only workflows where no external microservice listens. | Cross-boundary state synchronization where failure triggers compensating sagas or event streaming to Kafka. |

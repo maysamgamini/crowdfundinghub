@@ -66,7 +66,7 @@ graph TB
         Controllers["ASP.NET Core Controllers<br/>(Thin Transport / Content Negotiation)"]
         JWKSEndpoint["JWKS Endpoint<br/>(/.well-known/jwks.json)"]
         SignalRHub["CampaignHub (SignalR)<br/>(Real-Time Backer & Funding Stream)"]
-        OutboxWorker["ModuleOutboxProcessor<br/>(PeriodicTimer Polling)"]
+        OutboxWorker["ModuleOutboxProcessor<br/>(wake-up signal + 5s timer)"]
         RateLimiter["Partitioned Rate Limiter"]
     end
 
@@ -156,7 +156,7 @@ graph TB
 
 The solution is divided into six distinct Bounded Contexts:
 1. **[`Campaigns`](../src/Modules/Campaigns)**: Owns campaign creation, editing, publishing, financial target definitions, and balance accumulation.
-2. **[`Contributions`](../src/Modules/Contributions)**: Owns backer pledge lifecycle, payment state transitions (`Pending`, `Confirmed`, `Failed`), and payment gateway callbacks.
+2. **[`Contributions`](../src/Modules/Contributions)**: Owns backer pledge lifecycle, payment state transitions (`Pending`, `Succeeded`, `Failed`, `Refunded`), and payment gateway callbacks.
 3. **[`Identity`](../src/Modules/Identity)**: Owns user credentials, PBKDF2 hashing, roles/permissions, ES256 asymmetric cryptographic keys, and token issuance.
 4. **[`Moderation`](../src/Modules/Moderation)**: Owns campaign audit, manual compliance review, and approval/rejection workflows.
 5. **[`Notifications`](../src/Modules/Notifications)**: Owns email, SMS, and backer notification dispatching upon domain event triggers.
@@ -280,10 +280,10 @@ In an event-driven system, when an aggregate changes state (e.g., a pledge is co
 1. Within [`CampaignTransactionExecutor.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Transactions/CampaignTransactionExecutor.cs#L60-L75), domain events raised during the aggregate's business execution are intercepted via `DomainEventAccessor.GetDomainEvents(_dbContext)`.
 2. Each domain event is transformed into an [`OutboxMessage`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxMessage.cs) row containing:
    - Unique Message ID (`Guid`)
-   - Fully qualified `EventType` and schema `Version`
+   - A stable event-name discriminator (`EventType`, resolved by `EventTypeRegistry`) and a schema `Version`
    - Canonical UTF-8 JSON `Payload`
    - Initial status `Pending`
-   - Creation timestamp `CreatedAtUtc` and scheduled execution time `ScheduledAtUtc`
+   - The time the event occurred (`OccurredOnUtc`) and the scheduled execution time `ScheduledAtUtc`
 3. The outbox rows are committed in the **exact same ACID database transaction** as the aggregate's state change. If the transaction rolls back, no outbox entry exists; if it commits, durability is absolute.
 
 ```mermaid
@@ -296,15 +296,15 @@ flowchart TD
         SaveOutbox -.->|Same Transaction Commit| DB
     end
 
-    subgraph BackgroundWorker["ModuleOutboxProcessor&lt;TDbContext&gt; (one per module, PeriodicTimer)"]
-        DB -->|Atomic Claim via FOR UPDATE SKIP LOCKED| ClaimBatch["Claim Batch<br/>(Status = Processing, LockedUntilUtc written, never read)"]
+    subgraph BackgroundWorker["ModuleOutboxProcessor&lt;TDbContext&gt; (one per module, wake-up signal + 5s timer)"]
+        DB -->|Atomic Claim via FOR UPDATE SKIP LOCKED| ClaimBatch["Claim Batch<br/>(Pending rows that are due, or Processing rows whose lease ran out;<br/>Status = Processing, lease on the application clock)"]
         ClaimBatch --> CheckType{EventType in Registry?}
         
-        CheckType -->|No / Corrupted Payload| DeadLetter["Mark DeadLetter &<br/>INSERT dead_letter_events"]
+        CheckType -->|No / Corrupted Payload| DeadLetter["INSERT dead_letter_events &<br/>delete the outbox row"]
         CheckType -->|Yes| PublishEvt["IEventPublisher.PublishAsync()"]
         
         PublishEvt -->|Success| Processed["Success: row deleted<br/>from the active table"]
-        PublishEvt -->|Failure & Attempts < 5| RetryPending["Increment Attempts<br/>Exponential Backoff Delay<br/>Status = Pending"]
+        PublishEvt -->|Failure & Attempts < 5| RetryPending["Increment Attempts<br/>Fixed 10 s delay<br/>Status = Pending"]
         PublishEvt -->|Failure & Attempts >= 5| DeadLetter
     end
 
@@ -320,7 +320,7 @@ stateDiagram-v2
     [*] --> Pending
     Pending --> Processing: claim via SKIP LOCKED
     Processing --> Deleted: publish success, row removed
-    Processing --> Pending: failure and attempts below max, exponential backoff
+    Processing --> Pending: failure and attempts below max, fixed 10 s delay
     Processing --> Processing: lease ran out, another worker reclaims it (counts as an attempt)
     Processing --> DeadLetter: failure at max attempts or unknown type
     DeadLetter --> [*]: recorded in dead_letter_events for operator review
@@ -366,7 +366,7 @@ graph TD
         EFSave --> XminCheck["Optimistic Concurrency Check:<br/>WHERE id = @id AND xmin = @xmin"]
         XminCheck -->|Match| CommitTx["COMMIT Transaction<br/>(Advisory Lock Auto-Released)"]
         XminCheck -->|"Mismatch (Concurrent Out-of-Band Writer)"| ThrowConcurrency["Throw DbUpdateConcurrencyException"]
-        ThrowConcurrency --> RetryLoop["Retry Handler with Exponential Backoff + Jitter<br/>(Max 5 Attempts)"]
+        ThrowConcurrency --> RetryLoop["Retry the handler with a short, growing delay + jitter<br/>(3 attempts)"]
     end
 ```
 
@@ -429,21 +429,21 @@ In [`services/CrowdFunding.Moderation.Service/`](../services/CrowdFunding.Modera
 ### 2.8 Asynchronous Replicated Read Models & Pluggable Message Bus
 
 #### Eliminating Synchronous Cross-Module Queries
-In earlier iterations, `Contributions` executed a synchronous in-process query via `ICampaignContributionAvailabilityReader` to verify if a campaign was active before accepting pledges. When moving toward microservices, this synchronous call creates a **Distributed Monolith** (if Campaigns is down, Contributions cannot accept pledges).
+In earlier iterations, `Contributions` executed a synchronous in-process query through a reader interface (`ICampaignContributionAvailabilityReader`, since removed) to verify if a campaign was active before accepting pledges. When moving toward microservices, this synchronous call creates a **Distributed Monolith** (if Campaigns is down, Contributions cannot accept pledges).
 
-In [`TICKET-023`](../qa-tickets/TICKET-023-ASYNCHRONOUS-REPLICATED-READ-MODELS.md), this was replaced with **Event-Carried State Transfer**:
-- `Contributions` maintains its own local `contributions.campaign_read_models` table.
-- When `CampaignPublishedApplicationEvent` or `CampaignCancelledApplicationEvent` fires, a background consumer updates this local read model.
+In TICKET-023 (the ticket text is not kept in this repository), this was replaced with **Event-Carried State Transfer**:
+- `Contributions` maintains its own local `contributions.active_campaigns_cache` table.
+- When `CampaignCreatedApplicationEvent`, `CampaignPublishedApplicationEvent` or `CampaignCancelledApplicationEvent` (and the succeeded and failed events) fire, an event handler (`ReplicatedCampaignEventHandlers`) updates this local read model.
 - Pledge validation checks the local read model in 0.1ms, ensuring **100% autonomous availability**.
 
 #### Pluggable `IMessageBus` Abstraction
-In [`TICKET-024`](../qa-tickets/TICKET-024-PLUGGABLE-MESSAGE-BUS-RABBITMQ-KAFKA.md), the monolith decoupled event delivery from in-process memory via `IMessageBus`:
+In TICKET-024, the monolith decoupled event delivery from in-process memory via `IMessageBus`:
 - `InProcessMessageBus`: Calls `IEventPublisher` directly in the same process, for zero-infrastructure local execution (no `System.Threading.Channels`).
 - `RabbitMqMessageBus`: Pluggable distributed broker implementation for cluster deployments.
 
 #### Consumer-Side Inbox
 
-Each module has a `<module>_inbox_messages` table keyed `(MessageId, Consumer)`, where `Consumer` is the handler's full type name (`EfInbox<TDbContext>`, called from `ServiceProviderEventPublisher`). The handler runs first; only after it succeeds is the pair recorded, with `INSERT ... ON CONFLICT DO NOTHING`. A crash between the handler and the record re-runs the handler once, so handlers must tolerate a repeat. The inbox applies only to in-process outbox dispatch, which sets `InboxMessageContext.MessageId`; the RabbitMQ path does not set a message id and bypasses it. Inbox rows are not pruned.
+Every module except Identity has a `<module>_inbox_messages` table keyed `(MessageId, Consumer)`, where `Consumer` is the handler's full type name (`EfInbox<TDbContext>`, called from `ServiceProviderEventPublisher`). The handler runs first; only after it succeeds is the pair recorded, with `INSERT ... ON CONFLICT DO NOTHING`. A crash between the handler and the record re-runs the handler once, so handlers must tolerate a repeat. The inbox applies only to in-process outbox dispatch, which sets `InboxMessageContext.MessageId`; the RabbitMQ path does not set a message id and bypasses it. Inbox rows are not pruned.
 
 ### 2.9 Schema Versus Database Topology
 
@@ -640,12 +640,6 @@ Automates compilation and reflection-level enforcement of modular architecture b
   var referenced = typeof(CreateCampaignCommand).Assembly.GetReferencedAssemblies()
       .Select(a => a.Name).ToHashSet();
   Assert.DoesNotContain(typeof(CampaignRepository).Assembly.GetName().Name, referenced);
-  ```csharp
-  Types.InAssembly(typeof(CampaignsApplicationDependencyInjection).Assembly)
-      .ShouldNot()
-      .HaveDependencyOnAny("CrowdFunding.Modules.Contributions.Domain")
-      .GetResult()
-      .IsSuccessful.Should().BeTrue();
   ```
 
 ---
@@ -682,7 +676,7 @@ Pushes real-time campaign funding progress updates, backer counters, and funding
 ### 3.12 Distributed Tracing & W3C Traceparent Propagation (System.Diagnostics.Activity)
 
 - **Package/Runtime:** `System.Diagnostics.Activity` from the .NET framework (no separate package). The OpenTelemetry SDK, `OpenTelemetry.Api` and any exporter are not referenced; the code propagates the W3C `traceparent` value by hand.
-- **Location:** [`OutboxMessage.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxMessage.cs), [`TICKET-030`](../qa-tickets/TICKET-030-DISTRIBUTED-TRACING-OPENTELEMETRY-OUTBOX-PROPAGATION.md)
+- **Location:** [`OutboxMessage.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxMessage.cs), TICKET-030 (ticket text not kept in this repository)
 
 #### Problem It Solves
 When operations span transactional outbox boundaries or extracted microservices, the causal link between the initial HTTP request and the asynchronous background consumer execution is severed, preventing end-to-end distributed latency analysis.
@@ -728,18 +722,18 @@ sequenceDiagram
     participant SignalR as CampaignHub (WebSockets)
     participant OpenMeter as OpenMeter (Usage Metering)
 
-    Backer->>API: POST /api/contributions/{id}/confirm-payment
+    Backer->>API: POST /api/campaigns/{campaignId}/contributions/{contributionId}/confirm-payment
     API->>Handler: Dispatch ConfirmContributionPaymentCommand
     Handler->>ContTx: ExecuteAsync(action)
     ContTx->>ContDB: BEGIN TRANSACTION
     ContTx->>ContDB: Lock Contribution (xmin verified)
-    ContTx->>ContDB: Update Status = Confirmed
+    ContTx->>ContDB: Update Status = Succeeded
     ContTx->>ContDB: Map Event -> INSERT contributions_outbox_messages (Status=Pending)
     ContTx->>ContDB: COMMIT TRANSACTION
-    Handler-->>API: 200 OK (Confirmed)
+    Handler-->>API: 200 OK (Succeeded)
     API-->>Backer: Pledge Confirmed Receipt
 
-    Note over OutboxService,ContDB: Background Polling Cycle (PeriodicTimer)
+    Note over OutboxService,ContDB: Woken by the commit signal (5 s timer as safety net)
     OutboxService->>ContDB: Claim Batch via FOR UPDATE SKIP LOCKED
     ContDB-->>OutboxService: Return Disjoint Claimed Outbox Rows (Status=Processing)
     
@@ -762,7 +756,7 @@ sequenceDiagram
         OutboxService->>OpenMeter: IngestAsync(CloudEvent: crowdfunding.pledge.confirmed)
     end
 
-    OutboxService->>ContDB: Mark Outbox Row Status = Processed
+    OutboxService->>ContDB: Delete the outbox row (delivery succeeded)
 ```
 
 ---
@@ -843,8 +837,9 @@ Uncaught exceptions must never leak raw database connection strings, SQL query t
 
 To safeguard against distributed denial-of-service (DDoS) and brute-force credential stuffing:
 - Configured in [`RateLimitingConfiguration.cs`](../src/API/CrowdFunding.API/RateLimiting/RateLimitingConfiguration.cs) using ASP.NET Core's native Partitioned Rate Limiter:
-  - **Auth Endpoints (`/api/identity/*`)**: Sliding window limit per client IP to mitigate password guessing attacks.
-  - **Pledge Endpoints (`/api/contributions/*`)**: Partitioned by authenticated `UserId` or IP address to prevent algorithmic front-running and credit card testing fraud.
+  - **Auth Endpoints (login, registration and token refresh under `/api/identity`)**: Fixed window limit per client IP to mitigate password guessing attacks.
+  - **Pledge Endpoint (`POST /api/campaigns/{campaignId}/contributions`)**: Partitioned by authenticated `UserId`, falling back to IP address, to prevent pledge flooding and credit card testing fraud.
+  - **Webhook Endpoints (`/api/webhooks/payments/stripe`, `/api/webhooks/moderation/media-analysis`)**: A third policy, `webhook-strict`, 200 requests per minute per client IP.
 
 ---
 

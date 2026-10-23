@@ -12,13 +12,9 @@ Many engineering teams believe that decomposing an application into microservice
 **The Golden Law:**  
 > *"If you take a tangled monolith and distribute it across network boundaries, you do not get microservices. You get a Distributed Monolith—which combines all the complexity of distributed systems with all the brittleness of tight coupling."*
 
-```
-     Tangled In-Process Monolith
-                 │
-      [Split across network without fixing boundaries]
-                 ▼
-     Fragile Distributed Monolith
-     (Cascading timeouts, partial failures, distributed deadlocks)
+```mermaid
+flowchart TD
+    A["Tangled In-Process Monolith"] -->|"Split across network without fixing boundaries"| B["Fragile Distributed Monolith<br/>(Cascading timeouts, partial failures, distributed deadlocks)"]
 ```
 
 The goal of architecture is **low coupling and high cohesion**. You can achieve low coupling inside a single executable.
@@ -93,15 +89,18 @@ sequenceDiagram
 
 Never force an entire codebase into a single rigid mold.
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ THE 80/20 RULE OF ENTERPRISE ARCHITECTURE:                                  │
-│                                                                             │
-│ [80% Low-Risk CRUD & Queries]            [20% High-Risk Transactional Core] │
-│ - Draft creation, user bio, lookups      - Pledges, ledger balances, refunds│
-│ - Pattern: Minimal API / Fast Slices     - Pattern: Rich DDD + Locks + CDC  │
-│ - Focus: Velocity & Low Indirection      - Focus: Financial Invariants      │
-└─────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph Low["80% Low-Risk CRUD and Queries"]
+        L1["Draft creation, user bio, lookups"]
+        L2["Pattern: Minimal API / Fast Slices"]
+        L3["Focus: Velocity and Low Indirection"]
+    end
+    subgraph High["20% High-Risk Transactional Core"]
+        H1["Pledges, ledger balances, refunds"]
+        H2["Pattern: Rich DDD + Locks + Outbox"]
+        H3["Focus: Financial Invariants"]
+    end
 ```
 
 A Principal Architect knows that **forcing a 14-file DDD pipeline onto a lookup table is just as incompetent as using raw inline SQL for a high-concurrency ledger balance update.**

@@ -30,20 +30,20 @@ graph LR
 
 ## 2. Step 1: Scaffold the Standalone Web Service Host
 
-Create the new web API project in `src/Services/`:
+Create the new web API project in `services/`:
 ```bash
-dotnet new web -n CrowdFunding.Moderation.Service -o src/Services/CrowdFunding.Moderation.Service
+dotnet new web -n CrowdFunding.Moderation.Service -o services/CrowdFunding.Moderation.Service
 ```
 
 Add references to the existing module layers:
 ```xml
-<!-- src/Services/CrowdFunding.Moderation.Service/CrowdFunding.Moderation.Service.csproj -->
+<!-- services/CrowdFunding.Moderation.Service/CrowdFunding.Moderation.Service.csproj -->
 <ItemGroup>
-  <ProjectReference Include="..\..\Modules\Moderation\CrowdFunding.Modules.Moderation.Application\CrowdFunding.Modules.Moderation.Application.csproj" />
-  <ProjectReference Include="..\..\Modules\Moderation\CrowdFunding.Modules.Moderation.Infrastructure\CrowdFunding.Modules.Moderation.Infrastructure.csproj" />
-  <ProjectReference Include="..\..\Modules\Moderation\CrowdFunding.Modules.Moderation.Contracts\CrowdFunding.Modules.Moderation.Contracts.csproj" />
-  <ProjectReference Include="..\..\BuildingBlocks\CrowdFunding.BuildingBlocks.Application\CrowdFunding.BuildingBlocks.Application.csproj" />
-  <ProjectReference Include="..\..\BuildingBlocks\CrowdFunding.BuildingBlocks.Infrastructure\CrowdFunding.BuildingBlocks.Infrastructure.csproj" />
+  <ProjectReference Include="..\..\src\Modules\Moderation\CrowdFunding.Modules.Moderation.Application\CrowdFunding.Modules.Moderation.Application.csproj" />
+  <ProjectReference Include="..\..\src\Modules\Moderation\CrowdFunding.Modules.Moderation.Infrastructure\CrowdFunding.Modules.Moderation.Infrastructure.csproj" />
+  <ProjectReference Include="..\..\src\Modules\Moderation\CrowdFunding.Modules.Moderation.Contracts\CrowdFunding.Modules.Moderation.Contracts.csproj" />
+  <ProjectReference Include="..\..\src\BuildingBlocks\CrowdFunding.BuildingBlocks.Application\CrowdFunding.BuildingBlocks.Application.csproj" />
+  <ProjectReference Include="..\..\src\BuildingBlocks\CrowdFunding.BuildingBlocks.Infrastructure\CrowdFunding.BuildingBlocks.Infrastructure.csproj" />
 </ItemGroup>
 ```
 
@@ -51,30 +51,43 @@ Add references to the existing module layers:
 
 ## 3. Step 2: Configure Dependency Injection & JWT Verification
 
-In `src/Services/CrowdFunding.Moderation.Service/Program.cs`:
-Because the system uses **asymmetric ES256 tokens and JWKS**, the new Moderation service does **not** need access to the Identity database! It simply points its JWT Bearer middleware to the monolith's JWKS endpoint:
+In `services/CrowdFunding.Moderation.Service/Program.cs`:
+Because the system uses **asymmetric ES256 tokens and JWKS**, the new Moderation service does **not** need access to the Identity database! It simply resolves its signing keys from the monolith's JWKS endpoint:
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
 
+var jwtIssuer = builder.Configuration["Authentication:Issuer"]!;
+
 // 1. Register Module Core
 builder.Services.AddModerationApplication();
 builder.Services.AddModerationInfrastructure(builder.Configuration);
+builder.Services.AddCrowdFundingMessaging(builder.Configuration);
 
-// 2. Configure Asymmetric JWT Authentication via JWKS Discovery
-builder.Services.AddAuthentication("Bearer")
+// 2. Configure Asymmetric JWT Authentication via the JWKS document
+//    Authentication:JwksUri points at the issuer's /.well-known/jwks.json
+builder.Services.Configure<JwksOptions>(builder.Configuration.GetSection(JwksOptions.SectionName));
+builder.Services.AddHttpClient<JwksSigningKeyResolver>();
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        options.Authority = builder.Configuration["Auth:Authority"]; // e.g. http://identity-service:8080
-        options.MetadataAddress = $"{builder.Configuration["Auth:Authority"]}/.well-known/jwks.json";
-        options.RequireHttpsMetadata = false;
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
-            ValidIssuer = "CrowdFundingHub",
+            ValidIssuer = jwtIssuer,
             ValidateAudience = false,
-            ValidateLifetime = true
+            ValidateIssuerSigningKey = true,
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.Zero
         };
+    });
+
+// The resolver needs an HttpClient, so it is attached after AddJwtBearer
+builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+    .Configure<JwksSigningKeyResolver>((options, resolver) =>
+    {
+        options.TokenValidationParameters.IssuerSigningKeyResolver = resolver.ResolveSigningKeys;
     });
 
 builder.Services.AddAuthorization();
@@ -88,6 +101,8 @@ app.MapControllers();
 
 app.Run();
 ```
+
+The service does not use an OpenID Connect authority or metadata address: the Identity module publishes only the JWKS document, so `JwksSigningKeyResolver` fetches it from `Authentication:JwksUri` and caches the public keys for ten minutes.
 
 ---
 
@@ -121,16 +136,18 @@ Because the monolith used **schema-per-module** with **zero cross-schema foreign
 
 In the monolith, `CampaignCreatedApplicationEvent` was polled in-process. In the microservices topology:
 1. The **Monolith** (or Campaigns microservice) publishes `CampaignCreated` to a RabbitMQ exchange or Kafka topic `campaigns.events`.
-2. The **Moderation Service** (`services/CrowdFunding.Moderation.Service`) reuses the module's existing `IEventHandler<T>` (registered with `AddEventHandlersFromAssemblies`); the RabbitMQ transport in `BuildingBlocks.Infrastructure` (built on `RabbitMQ.Client`, no MassTransit) delivers the event to it:
+2. The **Moderation Service** (`services/CrowdFunding.Moderation.Service`) reuses the module's existing `IEventHandler<T>` (registered with `AddEventHandlersFromAssemblies`). The RabbitMQ transport in `BuildingBlocks.Infrastructure` (`RabbitMqMessageBus`, built on `RabbitMQ.Client`, no MassTransit) only **publishes**: it writes the event as a CloudEvents message to the exchange. No consumer exists yet, so a subscriber that reads the exchange and calls the handlers below is the piece still to be written:
    ```csharp
-   public class CampaignCreatedHandler : IEventHandler<CampaignCreatedApplicationEvent>
+   public class CampaignCreatedApplicationEventHandler : IEventHandler<CampaignCreatedApplicationEvent>
    {
-       private readonly ICommandDispatcher _dispatcher;
-       public CampaignCreatedHandler(ICommandDispatcher dispatcher) => _dispatcher = dispatcher;
+       private readonly ICommandDispatcher _commandDispatcher;
+
+       public CampaignCreatedApplicationEventHandler(ICommandDispatcher commandDispatcher)
+           => _commandDispatcher = commandDispatcher;
 
        public async Task Handle(CampaignCreatedApplicationEvent notification, CancellationToken cancellationToken)
        {
-           await _dispatcher.DispatchAsync(
+           await _commandDispatcher.SendAsync<CreateCampaignReviewResult>(
                new CreateCampaignReviewCommand(notification.CampaignId),
                cancellationToken);
        }
@@ -171,14 +188,11 @@ Route all traffic matching `/api/moderation/*` to the new independent container:
 
 ## 7. The Deconstruction Scorecard
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ EXTRACTION METRICS:                                                         │
-│ - Domain Logic Rewritten:                 0 lines                           │
-│ - Aggregate Invariants Altered:           0 lines                           │
-│ - Repository / Query SQL Altered:         0 lines                           │
-│ - System Downtime Required:               0 seconds (Strangler Fig pattern) │
-│ - Token Validation Rework:                0 (Leveraged Asymmetric JWKS)     │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+| Extraction metric | Result |
+| :--- | :--- |
+| Domain logic rewritten | 0 lines |
+| Aggregate invariants altered | 0 lines |
+| Repository / query SQL altered | 0 lines |
+| System downtime required | 0 seconds (Strangler Fig pattern) |
+| Token validation rework | 0 (leveraged asymmetric JWKS) |
 **Conclusion:** The upfront architectural discipline of schema isolation, `.Contracts` boundaries, and asymmetric cryptography pays off completely at the moment of decomposition.

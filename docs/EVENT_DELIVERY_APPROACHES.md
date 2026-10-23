@@ -61,7 +61,7 @@ sequenceDiagram
     W->>W: publish, then delete
 ```
 
-- **Good:** delivery in milliseconds, with the same simplicity and the same correctness as A. No new infrastructure. A measured difference in this repository: the slowest of five deliveries took 5.04 seconds with the timer alone and under one second with the signal.
+- **Good:** delivery in milliseconds, with the same simplicity and the same correctness as A. No new infrastructure. A difference measured once on a local machine (not a guarantee): the slowest of five deliveries took 5.04 seconds with the timer alone and under one second with the signal. The test `OutboxWakeUpLatencyE2ETests` asserts a looser limit, under 1.5 seconds, so that a slow machine does not fail it.
 - **Bad:** the signal only reaches workers in the same process, so it is an optimisation and never the source of truth (see section 5 for why that is fine).
 - **Choose it when:** you run one deployable (a monolith) or one process per module (microservices), and you want latency without operating a broker.
 
@@ -143,7 +143,7 @@ What makes each step cheap is what was decided earlier:
 |---|---|---|
 | Events are plain contract types in each module's `Contracts` assembly | One small assembly per module | A consumer in another process can read the same type without sharing internals |
 | The worker publishes through an `IMessageBus` interface | A tiny in-process implementation | Swapping to RabbitMQ changes configuration, not the worker |
-| One outbox table and one worker per module, in the module's own schema | Slightly more tables | A module extracted into a service takes its outbox with it |
+| One outbox table and one worker for each module that publishes events (Campaigns, Contributions, Moderation), in the module's own schema | Slightly more tables | A module extracted into a service takes its outbox with it |
 | The outbox row carries an id and the consumer records handled ids (the inbox) | One small table per consumer | At-least-once delivery from any transport is safe |
 | The signal is behind an interface and is only an optimisation | One channel per module | Replacing it with LISTEN/NOTIFY or CDC changes nothing for callers |
 | Delivery is **not** coupled to a broker | No broker to run today | The broker arrives when a second consumer process exists, not before |
@@ -180,7 +180,7 @@ Four small decisions make it safe:
 1. **A one-slot channel that drops extra signals.** Ten commits while the worker is busy become one pending wake-up, not ten. The signal never grows.
 2. **A signal sent before the worker starts waiting stays in the slot.** The next wait returns at once. There is no window in which a wake-up can be missed.
 3. **Notify only after the commit returns.** Waking earlier lets the worker look, find nothing (the row is not visible yet) and go back to sleep.
-4. **The timer stays.** Failed messages are rescheduled a few seconds into the future, rows may be written by another instance or a script, and a process can restart with signals in flight. The poll interval picks all of that up. The signal is the fast path; the table is the truth.
+4. **The timer stays.** Failed messages are rescheduled a fixed 10 seconds into the future (after five failed attempts the message is dead-lettered), rows may be written by another instance or a script, and a process can restart with signals in flight. The poll interval picks all of that up. The signal is the fast path; the table is the truth.
 
 Other instances: a commit on instance A wakes A's own worker, which claims any due row in that module's table, including ones written by instance B. So at least one worker is always woken. Only writers outside the application (a manual `INSERT`, another system) rely on the timer.
 

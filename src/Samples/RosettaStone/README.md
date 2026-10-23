@@ -22,7 +22,7 @@ answer with the same shape: an RFC 9457 `application/problem+json` validation-pr
 `{ "type", "title", "status": 400, "errors": { "<field>": ["<message>"] } }` — because Tier 1
 and Tier 2 both call `Results.ValidationProblem(...)`, the identical machinery ASP.NET Core's
 MVC pipeline uses for Tier 3's `ModelState`-based validation. See
-`tests/IntegrationTests/CrowdFunding.IntegrationTests/RosettaStone/RosettaStoneParityTests.cs`
+`tests/IntegrationTests/CrowdFunding.IntegrationTests/RosettaStoneParityTests.cs`
 for the tests that assert this across all three tiers against a real Postgres instance.
 
 ## The scorecard
@@ -34,7 +34,7 @@ graph today.
 | Dimension | Tier 1: Minimal API | Tier 2: Pragmatic CQRS | Tier 3: Rich DDD + Outbox |
 | :--- | :---: | :---: | :---: |
 | **Files touched** | 1 | 3 | 14 |
-| **Lines of code** | 48 | 91 | 960 total (see note) |
+| **Lines of code** | 49 | 92 | 960 total (see note) |
 | **Assemblies involved** | 1 (`Samples.RosettaStone`) | 2 (`Samples.RosettaStone` + `BuildingBlocks.Application`) | 5 |
 | **Persistence model** | Flat record, direct `DbSet.Add` | Flat record, direct `DbSet.Add` via handler | Aggregate root, private setters, invariants enforced in the constructor/factory |
 | **Validation** | Manual `if` | `FluentValidation`, dispatched before the write | `FluentValidation`, wired through `ModelState` |

@@ -25,7 +25,7 @@ sequenceDiagram
     participant G as Payment webhook
     participant O as Contributions outbox
     participant Ca as Campaigns
-    B->>H: POST /api/contributions
+    B->>H: POST /api/campaigns/{campaignId}/contributions
     H->>H: check deadline and currency against the replicated campaign cache
     H->>C: Create (Pending) + mock payment intent
     G->>C: ConfirmPayment (Succeeded), signature and event-id checked
@@ -39,7 +39,7 @@ sequenceDiagram
 - **Queries:** `GetContributionById`, `ListContributionsByCampaign`.
 - **Event handlers:** `PledgeConfirmedMeteringEventHandler` (platform fee and CloudEvent to OpenMeter), `CampaignTerminationRefundHandler` (marks `Succeeded` pledges `Refunded` in batches of 100; state only, no gateway call), and replicated campaign read-model handlers.
 - **Webhook guard:** signature check, stale-timestamp rejection and dedupe by event id in `processed_payment_webhooks`.
-- **Concurrency:** `xmin` token on `Contribution` plus advisory locks.
+- **Concurrency:** `xmin` token on `Contribution`, plus a unique key on `(ContributorId, IdempotencyKey)` for retried pledges. The advisory lock that serialises crediting a campaign sits in Campaigns.
 
 ## Who can read a pledge
 

@@ -3,6 +3,8 @@
 > **Curriculum Focus:** Hidden Architectural Traps & Incomplete Boundary Decoupling  
 > **Key Lesson:** *"A monolith that feels clean in-process can still collapse into a fragile Distributed Monolith the moment you put a network between its modules."*
 
+> **Ticket references.** The `TICKET-0xx` names in this document identify the work items behind each change. The ticket text itself is not kept in this repository.
+
 ---
 
 ## 1. The 4 Hidden Microservice Decomposition Roadblocks
@@ -51,8 +53,8 @@ Replace synchronous RPC with **Asynchronous Replicated Read Models (Event-Carrie
 - When a contribution arrives, `Contributions` verifies campaign status against its **own local database**, achieving **100% autonomous uptime** even if the Campaigns service is down!
 
 > [!NOTE]
-> **Resolved in Reference Codebase ([`TICKET-023`](../../qa-tickets/TICKET-023-ASYNCHRONOUS-REPLICATED-READ-MODELS.md)):**  
-> `ICampaignContributionAvailabilityReader` was eliminated. The `Contributions` module now replicates published/cancelled campaign state into `contributions.campaign_read_models`, achieving 100% local query autonomy.
+> **Resolved in Reference Codebase (`TICKET-023`):**  
+> `ICampaignContributionAvailabilityReader` was eliminated. The `Contributions` module now replicates campaign state into `contributions.active_campaigns_cache`, achieving 100% local query autonomy.
 
 ---
 
@@ -73,8 +75,8 @@ Introduce a pluggable **Message Bus Abstraction** (`IMessageBus`) or leverage Ma
 - In Microservices mode: Publishes to RabbitMQ, Apache Kafka, or AWS SQS with a single configuration flag in `appsettings.json`.
 
 > [!NOTE]
-> **Resolved in Reference Codebase ([`TICKET-024`](../../qa-tickets/TICKET-024-PLUGGABLE-MESSAGE-BUS-RABBITMQ-KAFKA.md) & [`TICKET-025`](../../qa-tickets/TICKET-025-MODULAR-OUTBOX-PARTITIONING-AUTONOMOUS-WORKERS.md)):**  
-> `IMessageBus` was implemented with pluggable `InMemoryMessageBus` (local channels) and RabbitMQ support, alongside autonomous per-module outbox workers.
+> **Resolved in Reference Codebase (`TICKET-024` & `TICKET-025`):**  
+> `IMessageBus` was implemented with a pluggable `InProcessMessageBus` (calls the in-process event publisher) and a publish-only `RabbitMqMessageBus` (no consumer exists yet), alongside autonomous per-module outbox workers.
 
 ---
 
@@ -97,7 +99,7 @@ Demonstrate independent connection string configurations per module, proving tha
 
 > [!NOTE]
 > **Resolved in Reference Codebase (TICKET-026):**  
-> Hierarchical connection string resolution was introduced via `GetRequiredModuleConnectionString(...)`, allowing individual modules to connect to independent database servers while falling back to `DefaultConnection`. Per-module databases are now also the local default (`docker-compose.yml` creates one `<module>_db` per module) and are tested by `MultiDatabaseConnectionDecouplingTests`.
+> Hierarchical connection string resolution was introduced via `GetRequiredModuleConnectionString(...)`, allowing individual modules to connect to independent database servers while falling back to `DefaultConnection`. Per-module databases are now also the local default (`docker-compose.yml` creates one `<module>_db` per module) and `MultiDatabaseConnectionDecouplingTests` tests the Campaigns module on its own database.
 
 ---
 
@@ -153,5 +155,5 @@ The single best real-world demonstration of **Sagas, Event Choreography, and Com
 Leaving this unimplemented deprives architects of seeing how distributed sagas handle eventual consistency in failure scenarios!
 
 > [!NOTE]
-> **Resolved in Reference Codebase ([`TICKET-027`](../../qa-tickets/TICKET-027-DISTRIBUTED-CROWDFUNDING-LIFECYCLE-REFUND-SAGA.md)):**  
+> **Resolved in Reference Codebase (`TICKET-027`):**  
 > Both the `CampaignExpirationBackgroundService` (handling `CompleteAsSuccessful` and `ExpireAsFailed`) and the backer refund event choreography (`ContributionStatus.Refunded` and compensation saga) are fully implemented and verified in the codebase.

@@ -64,9 +64,9 @@ This directory is organized into four thematic areas serving both as **teaching 
 
 ### [02. Gap Analysis & Architectural Trade-offs](./02-gap-analysis-and-tradeoffs/)
 - **[`over-engineering-audit.md`](./02-gap-analysis-and-tradeoffs/over-engineering-audit.md)**:  
-  *Where Did We Go Too Far?* An unsparing critique of accidental complexity: 29 projects, the "14-file pipeline" for simple inserts, triple-mapping ceremony, and hand-rolled cryptographic key stores.
+  *Where Did We Go Too Far?* An unsparing critique of accidental complexity: 30 projects, the "14-file pipeline" for simple inserts, triple-mapping ceremony, and hand-rolled cryptographic key stores.
 - **[`under-engineering-audit.md`](./02-gap-analysis-and-tradeoffs/under-engineering-audit.md)**:  
-  *Where Didn't We Go Far Enough?* The hidden microservice decomposition roadblocks: synchronous cross-module query coupling (`ICampaignContributionAvailabilityReader`), in-memory outbox poller coupling, physical database connection pool contention, and incomplete crowdfunding lifecycle rules (missing refunds and expiration workers).
+  *Where Didn't We Go Far Enough?* The hidden microservice decomposition roadblocks: synchronous cross-module query coupling (the removed `ICampaignContributionAvailabilityReader`, since replaced by a replicated read model), in-memory outbox poller coupling, physical database connection pool contention, and incomplete crowdfunding lifecycle rules (missing refunds and expiration workers).
 
 ### [03. Engineering Specifications & Roadmap](./03-engineering-spec-and-roadmap/)
 - **[`transformation-spec.md`](./03-engineering-spec-and-roadmap/transformation-spec.md)**:  
@@ -103,7 +103,7 @@ flowchart LR
     Docs["These documents"] --> Check{"Checked against code"}
     Check --> Map["design-to-code-mapping-round1.md<br/>what is built, simpler, or not built"]
     Check --> Tests["docs/TESTS_THAT_TEACH.md<br/>which tests prove which rule"]
-    Check --> Tiers["docs/POLY_PATTERN_TIER_ASSIGNMENT.md<br/>3 tiers in code; this folder describes 4"]
+    Check --> Tiers["docs/POLY_PATTERN_TIER_ASSIGNMENT.md<br/>3 tiers in the code and in these documents"]
 ```
 
-The tier count differs on purpose of history, not design: the code uses three tiers, and the four-pattern description in `poly-pattern-architecture.md` adds a read-only fast path and event choreography. Treat the code's three tiers and two deciding questions as the current rule until the two are reconciled.
+The code, `docs/POLY_PATTERN_TIER_ASSIGNMENT.md`, `poly-pattern-architecture.md` and the Rosetta Stone sample agree on three tiers and the same two deciding questions. Reads are not a tier.

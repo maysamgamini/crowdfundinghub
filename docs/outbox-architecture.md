@@ -11,7 +11,7 @@ change.
 > an abstract `BackgroundService` each module subclasses and registers in its own Infrastructure
 > DI extension (`CampaignsOutboxBackgroundService`, `ContributionsOutboxBackgroundService`,
 > `ModerationOutboxBackgroundService`). The API host no longer references any module's DbContext
-> or outbox table name — three independent workers run on independent `PeriodicTimer`s inside the
+> or outbox table name — three independent workers run on their own loops (each woken by its own commit signal, with a 5 s timer as a safety net) inside the
 > same process, so a slow or failing module's outbox can no longer starve the others, and
 > extracting a module into its own service moves its outbox engine with it unchanged. Each
 > processor publishes through `IMessageBus` (`InProcessMessageBus` by default; `RabbitMqMessageBus`
@@ -55,7 +55,8 @@ coordination needed.
 1. Write: business transaction inserts an `OutboxMessage` row with `Status = Pending` (see
    `TransactionExecutor.ExecuteInternalAsync`).
 2. Claim: `ModuleOutboxProcessor` runs a `WITH claimable AS (SELECT "Id" FROM "<schema>".<table>
-   WHERE "Status" = 0 AND "ScheduledAtUtc" <= @appNow ORDER BY "ScheduledAtUtc", "Id" FOR UPDATE
+   WHERE ("Status" = 0 AND "ScheduledAtUtc" <= @appNow) OR ("Status" = 1 AND "LockedUntilUtc" < @appNow)
+   ORDER BY "ScheduledAtUtc", "Id" FOR UPDATE
    SKIP LOCKED LIMIT @batchSize) UPDATE ... SET "Status" = 1 ... RETURNING m.*` — the claim and the
    status flip happen as one atomic statement, so there's no window where two workers could both
    see a row as claimable. Status is the integer enum (Pending = 0, Processing = 1), the table is
@@ -66,9 +67,8 @@ coordination needed.
    `Type.GetType(AssemblyQualifiedName)`) and published independently — one message throwing
    never stops the rest of the batch from being attempted (no `break`).
 4. Resolve: on success the row is deleted (it has no reason to stay in the active table); on failure it either goes back to `Pending`
-   with a backed-off `ScheduledAtUtc` (if under the attempt limit) or to the terminal `DeadLetter`
-   status (if not, or if the event type/payload couldn't be resolved at all) — see
-   `DeadLetterEvent`. A crash between claim and resolve leaves the row in `Processing` with a lease
+   with `ScheduledAtUtc` set a fixed 10 seconds ahead (if under the limit of five attempts) or, if not, or if the
+   event type/payload couldn't be resolved at all, is copied to the `DeadLetterEvent` table and removed from the outbox table. A crash between claim and resolve leaves the row in `Processing` with a lease
    (`LockedUntilUtc`, written from the application clock). The claim statement also selects
    `Processing` rows whose lease has run out, and counts that as an attempt, so after the attempt limit a message
    that keeps killing its worker is dead-lettered. The inbox (`<module>_inbox_messages`, keyed by message id
@@ -85,8 +85,7 @@ coordination needed.
   was never committed either — nothing to reconcile.
 
 **Scalability limits (why this isn't the answer for every scale):**
-- **Table bloat / vacuuming pressure.** Every `UPDATE` on an outbox row (claim, then
-  processed/dead-letter) creates a new MVCC tuple version; a busy table needs `VACUUM` to keep up
+- **Table bloat / vacuuming pressure.** Every `UPDATE` on an outbox row (the claim, and a retry after a failure) and every `DELETE` creates a new MVCC tuple version; a busy table needs `VACUUM` to keep up
   or dead tuples accumulate and query planning degrades.
 - **Index contention.** The claim query's `WHERE status = 'Pending' ORDER BY scheduled_at_utc`
   hits the same partial index from every worker on every poll; at high enough frequency this

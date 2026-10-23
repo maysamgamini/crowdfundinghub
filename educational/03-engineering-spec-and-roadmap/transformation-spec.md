@@ -4,6 +4,8 @@
 > **Target Audience:** Core Engineering Team, Principal Architects  
 > **Objective:** Concrete technical specifications to transform `CrowdFundingHub` into the industry-gold-standard reference for **Monoliths Built for Frictionless Microservices Decomposition**.
 
+> **Ticket references.** The `TICKET-0xx` names in this document identify the work items behind each change. The ticket text itself is not kept in this repository.
+
 ---
 
 ## 1. Specification Overview & Epics
@@ -21,7 +23,7 @@ graph TD
 
 ---
 
-## 2. Epic 1: The Pedagogical Rosetta Stone (Status: ✅ Completed via [`TICKET-028`](../../qa-tickets/TICKET-028-PEDAGOGICAL-ROSETTA-STONE-POLY-PATTERNS.md))
+## 2. Epic 1: The Pedagogical Rosetta Stone (Status: ✅ Completed via `TICKET-028`)
 
 ### Problem Statement:
 Learners cannot intuitively understand *why* Clean Architecture or DDD is necessary because there is no baseline comparison in the codebase.
@@ -29,17 +31,17 @@ Learners cannot intuitively understand *why* Clean Architecture or DDD is necess
 ### Technical Specification:
 Create a dedicated educational namespace: `src/Samples/RosettaStone/` implementing the **same exact feature** (`CreateCampaign`) in **three distinct architectural styles**:
 
-```
-src/Samples/RosettaStone/
-├── 01-MinimalApiCrud/
-│   └── CreateCampaignMinimalEndpoint.cs (Direct DbContext write, 1 file, 48 lines)
-├── 02-PragmaticCqrs/
-│   ├── CreateCampaignEndpoint.cs        (Route endpoint)
-│   ├── CreateCampaignCommand.cs         (CQRS command + validator)
-│   └── CreateCampaignCommandHandler.cs  (Direct DbContext write, 3 files, 91 lines)
-└── 03-RichDomainModel/
-    └── README.md                        (Pointer to full production 14-file DDD pipeline)
-```
+The folder layout:
+
+- `src/Samples/RosettaStone/`
+  - `01-MinimalApiCrud/`
+    - `CreateCampaignMinimalEndpoint.cs`: direct `DbContext` write, 1 file, 49 lines
+  - `02-PragmaticCqrs/`
+    - `CreateCampaignEndpoint.cs`: route endpoint
+    - `CreateCampaignCommand.cs`: CQRS command and validator
+    - `CreateCampaignCommandHandler.cs`: direct `DbContext` write, 3 files, 92 lines in total
+  - `03-RichDomainModel/`
+    - `README.md`: pointer to the full production 14-file DDD pipeline
 
 > [!NOTE]
 > Fully implemented in [`src/Samples/RosettaStone/`](../../src/Samples/RosettaStone/README.md) with isolated `rosetta` schema, parity integration tests, and Swagger tag `RosettaStone`.
@@ -74,16 +76,18 @@ The transactional outbox poller is hardcoded to in-memory dispatching (`ServiceP
 
 ---
 
-## 4. Epic 3: Asynchronous Replicated Read Models (Status: ✅ Completed via [`TICKET-023`](../../qa-tickets/TICKET-023-ASYNCHRONOUS-REPLICATED-READ-MODELS.md))
+## 4. Epic 3: Asynchronous Replicated Read Models (Status: ✅ Completed via `TICKET-023`)
 
 ### Problem Statement:
-[`MakeContributionCommandHandler.cs`](../../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs) calls `ICampaignContributionAvailabilityReader` synchronously, creating a distributed monolith failure cascade.
+[`MakeContributionCommandHandler.cs`](../../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs) called a synchronous availability reader (`ICampaignContributionAvailabilityReader`, since removed), creating a distributed monolith failure cascade.
 
 ### Technical Specification:
 1. In `contributions` schema, create a new table:
    ```sql
-   CREATE TABLE contributions.campaign_read_models (
+   CREATE TABLE contributions.active_campaigns_cache (
        campaign_id UUID PRIMARY KEY,
+       owner_id UUID NOT NULL,
+       title VARCHAR(200) NOT NULL,
        currency VARCHAR(3) NOT NULL,
        is_active BOOLEAN NOT NULL,
        deadline_utc TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -91,17 +95,17 @@ The transactional outbox poller is hardcoded to in-memory dispatching (`ServiceP
    );
    ```
 2. In `Contributions.Application`, add event consumers for:
-   - `CampaignPublishedApplicationEvent` $\rightarrow$ Inserts/updates `campaign_read_models`.
+   - `CampaignPublishedApplicationEvent` $\rightarrow$ Inserts/updates `active_campaigns_cache`.
    - `CampaignCancelledApplicationEvent` $\rightarrow$ Marks `is_active = false`.
-3. In `MakeContributionCommandHandler`, query `campaign_read_models` locally in the `ContributionsDbContext`.
+3. In `MakeContributionCommandHandler`, query `active_campaigns_cache` locally in the `ContributionsDbContext`.
 4. **Outcome:** Zero synchronous cross-module RPC calls during pledge processing!
 
 > [!NOTE]
-> Fully implemented in the `Contributions` module. Synchronous query reader `ICampaignContributionAvailabilityReader` has been completely eliminated.
+> Fully implemented in the `Contributions` module (`ReplicatedCampaignEventHandlers` keeps the table current). The synchronous query reader `ICampaignContributionAvailabilityReader` has been removed.
 
 ---
 
-## 5. Epic 4: Complete Crowdfunding Lifecycle (Deadlines & Refunds) (Status: ✅ Completed via [`TICKET-027`](../../qa-tickets/TICKET-027-DISTRIBUTED-CROWDFUNDING-LIFECYCLE-REFUND-SAGA.md))
+## 5. Epic 4: Complete Crowdfunding Lifecycle (Deadlines & Refunds) (Status: ✅ Completed via `TICKET-027`)
 
 ### Problem Statement:
 Campaigns never complete or fail, and backer pledges cannot be refunded, leaving the core crowdfunding domain half-finished.
@@ -118,8 +122,8 @@ Campaigns never complete or fail, and backer pledges cannot be refunded, leaving
       .ToListAsync(ct);
   ```
 - For each expired campaign:
-  - If `CurrentBalance >= TargetAmount`: Dispatches `CompleteCampaignCommand` $\rightarrow$ transitions to `Successful` $\rightarrow$ emits `CampaignSucceededApplicationEvent`.
-  - If `CurrentBalance < TargetAmount`: Dispatches `FailCampaignCommand` $\rightarrow$ transitions to `Failed` $\rightarrow$ emits `CampaignFailedApplicationEvent`.
+  - If `CurrentBalance >= GoalAmount`: Dispatches `CompleteCampaignCommand` $\rightarrow$ transitions to `Successful` $\rightarrow$ emits `CampaignSucceededApplicationEvent`.
+  - If `CurrentBalance < GoalAmount`: Dispatches `FailCampaignCommand` $\rightarrow$ transitions to `Failed` $\rightarrow$ emits `CampaignFailedApplicationEvent`.
 
 #### 2. Refund Workflow in Contributions:
 - Add `Refunded` to `ContributionStatus` enum.
@@ -137,7 +141,7 @@ Campaigns never complete or fail, and backer pledges cannot be refunded, leaving
 
 ---
 
-## 6. Epic 5: Containerization & DevOps Automation (Status: 🔄 In Progress - Tracked via [`TICKET-029`](../../qa-tickets/TICKET-029-MICROSERVICE-EXTRACTION-POC-STANDALONE-SERVICE.md) & [`TICKET-040`](../../qa-tickets/TICKET-040-ARCHITECTURAL-FITNESS-FUNCTIONS-CI-CD-AUTOMATION.md))
+## 6. Epic 5: Containerization & DevOps Automation (Status: 🔄 In Progress - Tracked via `TICKET-029` & `TICKET-040`)
 
 ### Problem Statement:
 The repository requires manual local SDK setup and lacks containerized deployment artifacts and CI/CD pipelines.

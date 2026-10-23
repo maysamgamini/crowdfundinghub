@@ -15,7 +15,7 @@ When transitioning an in-process module to an autonomous microservice, the Stran
 1. **Zero Domain Logic Rewrites:** The existing domain aggregate ([`CampaignReview`](../../src/Modules/Moderation/CrowdFunding.Modules.Moderation.Domain/Aggregates/CampaignReview.cs)), application command/query handlers, validation rules, and EF Core entity mappings are reused as-is without code modifications.
 2. **Autonomous Physical Boundary:** The service boots its own independent Web API host ([`Program.cs`](Program.cs)), mounts its own PostgreSQL schema (`moderation`), and performs its own migrations (`dotnet run -- migrate`).
 3. **Decentralized Cryptographic Security:** The service authenticates incoming requests using public JWKS discovery (`/.well-known/jwks.json`) fetched from the Identity issuer over HTTP, completely independent of the monolith host.
-4. **Pluggable Message Bus Integration:** Event communication runs through `IMessageBus` (RabbitMQ in distributed mode or in-memory channel in local mode).
+4. **Pluggable Message Bus Integration:** Event publishing runs through `IMessageBus` (`RabbitMqMessageBus` in distributed mode, `InProcessMessageBus` in local mode). The RabbitMQ bus only publishes; no consumer reads the exchange yet.
 
 ```mermaid
 graph TD
@@ -23,7 +23,7 @@ graph TD
 
     subgraph ModHostContainer["Moderation Service Host Container"]
         Controller["ModerationController"]
-        Dispatcher["ICommandDispatcher / MediatR"]
+        Dispatcher["ICommandDispatcher (custom dispatcher)"]
         JWKSResolver["JwksSigningKeyResolver<br/>(Cached Public ECDSA Keys)"]
         Handlers["ApproveReviewCommandHandler<br/>(Reused Moderation.Application Assembly)"]
         DomainAgg["CampaignReview Aggregate<br/>(Reused Moderation.Domain Assembly)"]
@@ -75,17 +75,26 @@ This service is purely a **Host Packaging Assembly**. Notice its minimal [`Crowd
 ```json
 {
   "ConnectionStrings": {
-    "ModerationDb": "Host=localhost;Port=5432;Database=crowdfunding_db;Username=postgres;Password=postgres;SearchPath=moderation"
+    "ModerationDb": "Host=localhost;Port=5432;Database=crowdfundingdb;Username=postgres;Password=postgres"
   },
   "Authentication": {
-    "Issuer": "CrowdFundingHub.Identity"
+    "Issuer": "CrowdFunding.API",
+    "JwksUri": "http://localhost:8080/.well-known/jwks.json"
   },
-  "Jwks": {
-    "JwksUri": "http://localhost:5000/.well-known/jwks.json",
-    "CacheDurationMinutes": 60
+  "Messaging": {
+    "Provider": "RabbitMQ",
+    "RabbitMq": {
+      "Host": "localhost",
+      "Port": 5672,
+      "Username": "guest",
+      "Password": "guest",
+      "Exchange": "crowdfunding.events"
+    }
   }
 }
 ```
+
+There is no separate `Jwks` section. `Authentication:JwksUri` is the address of the issuer's JWKS document (bound by `JwksOptions`), and `JwksSigningKeyResolver` caches the keys it fetches for ten minutes (a constant in the class, not a setting).
 
 ### Running Database Migrations Independently
 ```bash

@@ -6,7 +6,7 @@
 **Status:** Comprehensive Architectural Audit & Remediation Blueprint  
 **Authors:** Antigravity Specialized Architecture Team (Event & Concurrency Architect, Observability & Metering Architect, Domain & Security Architect)  
 
-> **Status banner (historical audit, verified 2026-09-08).** This document audits the pre-hardening template. Most P0 and P1 items below are now implemented; where a defect is described in the present tense and has since been fixed, a "Fixed" note follows it. See [`design-to-code-mapping-round1.md`](educational/03-engineering-spec-and-roadmap/design-to-code-mapping-round1.md) for the design-to-code mapping and [`docs/TESTS_THAT_TEACH.md`](docs/TESTS_THAT_TEACH.md) for the tests that prove the behavior. OpenTelemetry and NetArchTest appear here only as proposals; they are not built.
+> **Status banner (historical audit).** This document audits the pre-hardening template. Most P0 and P1 items below are now implemented; where a defect is described in the present tense and has since been fixed, a "Fixed" note follows it. See [`design-to-code-mapping-round1.md`](educational/03-engineering-spec-and-roadmap/design-to-code-mapping-round1.md) for the design-to-code mapping and [`docs/TESTS_THAT_TEACH.md`](docs/TESTS_THAT_TEACH.md) for the tests that prove the behavior. OpenTelemetry and NetArchTest appear here only as proposals; they are not built.
 
 ---
 
@@ -110,7 +110,7 @@ The table below outlines the core architectural dimensions and highlights the cr
 
 ### 2.1 Outbox Processing, Poison Messages & Head-of-Line Blocking
 
-In [`OutboxProcessorBackgroundService.cs`](src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs#L50-L75), outbox message dispatch is implemented as follows:
+In `OutboxProcessorBackgroundService.cs`, outbox message dispatch is implemented as follows:
 
 ```csharp
 var messages = await dbContext.Set<OutboxMessage>()
@@ -316,8 +316,8 @@ Resolved by → [§3.4 #3 `pg_advisory_xact_lock`](#34-concurrency-hardening-opt
 
 ### 2.5 Complete Observability, Logging & Tracing Deficiencies
 
-1. **Near-Zero Logging Across All Modules:** In the entire repository, `ILogger` is injected into only one class: [`GlobalExceptionMiddleware.cs`](src/API/CrowdFunding.API/Middleware/GlobalExceptionMiddleware.cs). Financial transactions, contribution lifecycle changes, authentication attempts, and campaign status transitions emit zero logs.
-2. **Silent Background Failures:** In [`OutboxProcessorBackgroundService.cs`](src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs), message deserialization and dispatch exceptions are caught and written to the database column `Error`, but **no error log is emitted and no metric is incremented**.
+1. **Near-Zero Logging Across All Modules:** In the entire repository, `ILogger` is injected into only one class: `GlobalExceptionMiddleware.cs`. Financial transactions, contribution lifecycle changes, authentication attempts, and campaign status transitions emit zero logs.
+2. **Silent Background Failures:** In `OutboxProcessorBackgroundService.cs`, message deserialization and dispatch exceptions are caught and written to the database column `Error`, but **no error log is emitted and no metric is incremented**.
 3. **No Correlation IDs or Distributed Tracing:** Requests execute without a Correlation ID or W3C `traceparent` header. When an error occurs downstream during outbox processing, operators cannot trace it back to the original user request that triggered it.
 4. **No OpenTelemetry Instrumentation:** There is no integration with OpenTelemetry. Tracing of incoming HTTP requests, outgoing HTTP calls, and Entity Framework database queries is completely missing.
 
@@ -329,7 +329,7 @@ Resolved by → [§3.5 Serilog Compact JSON + `CorrelationIdMiddleware` + OpenTe
 
 ### 2.6 Error Handling Security Hazards & RFC Non-Compliance
 
-In [`GlobalExceptionMiddleware.cs`](src/API/CrowdFunding.API/Middleware/GlobalExceptionMiddleware.cs#L30-L50):
+In `GlobalExceptionMiddleware.cs`:
 
 ```csharp
 var response = new ErrorResponse(context.Response.StatusCode, exception.Message);
@@ -407,7 +407,7 @@ Resolved by → [§3.8 #2 asymmetric ES256 JWKS endpoint](#38-security-moderniza
 
 #### Complete Absence of Rate Limiting
 * No rate limiting is configured in [`Program.cs`](src/API/CrowdFunding.API/Program.cs) — confirmed by full-file search; no `AddRateLimiter` call exists anywhere in the codebase.
-* Endpoints like `/api/identity/users/login`, `/api/identity/users/register`, and `/api/contributions` are exposed to brute-force credential attacks, Sybil account creation, and card testing fraud.
+* Endpoints like `/api/identity/users/login`, `/api/identity/users/register`, and `/api/campaigns/{campaignId}/contributions` are exposed to brute-force credential attacks, Sybil account creation, and card testing fraud.
 
 Resolved by → [§3.8 #3 partitioned `System.Threading.RateLimiting` policies](#38-security-modernization-asymmetric-jwks-timing-safe-pbkdf2--rate-limiting).
 
@@ -419,7 +419,7 @@ Resolved by → [§3.8 #3 partitioned `System.Threading.RateLimiting` policies](
 
 1. **"Ghost" Modules — Wired But Behaviorally No-Op:** *(corrected 2026-09-08: the original claim that these projects are "empty" is not quite accurate — verified against source.)* `CrowdFunding.Modules.Notifications` and `CrowdFunding.Modules.CampaignUpdates` are not empty project shells; each has an `Application` layer with real `IEventHandler<T>` classes (`NotificationEventHandlers.cs`, `CampaignActivityEventHandlers.cs`) subscribed to `CampaignPublished`, `CampaignCancelled`, `ContributionPaymentConfirmed`, `CampaignReviewApproved`, and `CampaignReviewRejected` application events. However, every handler body is a no-op — literally `=> Task.CompletedTask` — so the audit's underlying conclusion still holds in substance: **neither module contains a domain aggregate, entity, repository, or any actual business rule.** They exist to demonstrate the event-subscription wiring pattern, not to deliver notification or campaign-update functionality yet.
 2. **Missing Architecture Tests:** In [`CrowdFunding.ArchitectureTests`](tests/ArchitectureTests/CrowdFunding.ArchitectureTests), tests exist only for `Campaigns` (`CampaignsModuleDependencyTests.cs`), `Contributions` (`ContributionsModuleDependencyTests.cs`), `Identity` (`IdentityModuleDependencyTests.cs`), and `Moderation` (`ModerationModuleDependencyTests.cs`) — confirmed present on disk. `Notifications` and `CampaignUpdates` are untested, and cross-module boundary isolation is not validated for those two. Resolved by → [§6.1](#61-full-netarchtest-modular-architecture-enforcement).
-3. **Empty Integration Test Suite:** In [`CrowdFunding.IntegrationTests`](tests/IntegrationTests/CrowdFunding.IntegrationTests), the test file [`UnitTest1.cs`](tests/IntegrationTests/CrowdFunding.IntegrationTests/UnitTest1.cs) is a 10-line placeholder stub:
+3. **Empty Integration Test Suite:** In [`CrowdFunding.IntegrationTests`](tests/IntegrationTests/CrowdFunding.IntegrationTests), the test file `UnitTest1.cs` is a 10-line placeholder stub:
    ```csharp
    public class UnitTest1
    {
@@ -435,56 +435,21 @@ Resolved by → [§3.8 #3 partitioned `System.Threading.RateLimiting` policies](
 
 This section presents concrete, production-ready architectures adapted directly from [`apps/backend`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/swe-prep/apps/backend).
 
-```
-┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                    TARGET ARCHITECTURAL BLUEPRINT                               │
-│                                                                                                 │
-│  [HTTP Request / Webhook]                                                                       │
-│          │                                                                                      │
-│          ▼                                                                                      │
-│  ┌─────────────────────────┐     Atomic DB Tx      ┌─────────────────────────────────────────┐  │
-│  │ Campaign Aggregate      │◄─────────────────────►│ OutboxMessage (Strictly Append-Only)    │  │
-│  │ (xmin Concurrency Token)│                       │ Id, EventType, Version, Payload, Module │  │
-│  └─────────────────────────┘                       └────────────────────┬────────────────────┘  │
-│                                                                         │                       │
-│                                                          PostgreSQL WAL (pgoutput)              │
-│                                                                         │                       │
-│                                                                         ▼                       │
-│                                                            ┌────────────────────────┐           │
-│                                                            │ Debezium CDC Connector │           │
-│                                                            └────────────┬───────────┘           │
-│                                                                         │ EventRouter           │
-│                                                                         ▼                       │
-│                                                            ┌────────────────────────┐           │
-│                                                            │ Redpanda / Kafka       │           │
-│                                                            │ Partitioned Topics     │           │
-│                                                            └────────────┬───────────┘           │
-│                                                                         │ Consumer Groups       │
-│                                 ┌───────────────────────────────────────┴───────────────┐       │
-│                                 ▼                                                       ▼       │
-│                   ┌───────────────────────────┐                           ┌───────────────────┐ │
-│                   │ BrokerConsumerHost        │                           │ OpenMeter Worker  │ │
-│                   │ (Per-Topic Consumer Loop) │                           │ (Usage Metering)  │ │
-│                   └─────────────┬─────────────┘                           └─────────┬─────────┘ │
-│                                 │                                                   │           │
-│                                 ▼                                                   ▼           │
-│                   ┌───────────────────────────┐                           ┌───────────────────┐ │
-│                   │ EventTypeRegistry         │                           │ OpenMeter Cloud-  │ │
-│                   │ (Type, Version)           │                           │ Events v1.0 API   │ │
-│                   └─────────────┬─────────────┘                           └───────────────────┘ │
-│                     Valid │     │ Unrecognized                                                  │
-│                           ▼     └─────────────────────► ┌───────────────────┐                   │
-│                   ┌───────────────────────────┐         │ DeadLetterHandler │                   │
-│                   │ IdempotentConsumer        │         │ (DeadLetterEvent) │                   │
-│                   │ (ProcessedEvent Table)    │         └───────────────────┘                   │
-│                   └─────────────┬─────────────┘                                                 │
-│                                 │ First Execution                                               │
-│                                 ▼                                                               │
-│                   ┌───────────────────────────┐                                                 │
-│                   │ Domain Handler Execution  │                                                 │
-│                   │ (Advisory Locks + Ledger) │                                                 │
-│                   └───────────────────────────┘                                                 │
-└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Req["HTTP Request / Webhook"] --> Agg
+    subgraph Tx["Atomic DB Transaction"]
+        Agg["Campaign Aggregate<br/>(xmin Concurrency Token)"] <--> Box["OutboxMessage (Strictly Append-Only)<br/>Id, EventType, Version, Payload, Module"]
+    end
+    Box -->|"PostgreSQL WAL (pgoutput)"| Deb["Debezium CDC Connector"]
+    Deb -->|"EventRouter"| Kafka["Redpanda / Kafka<br/>Partitioned Topics"]
+    Kafka -->|"Consumer Groups"| Host["BrokerConsumerHost<br/>(Per-Topic Consumer Loop)"]
+    Kafka -->|"Consumer Groups"| Meter["OpenMeter Worker<br/>(Usage Metering)"]
+    Meter --> OMApi["OpenMeter CloudEvents v1.0 API"]
+    Host --> Reg["EventTypeRegistry<br/>(Type, Version)"]
+    Reg -->|"Valid"| Idem["IdempotentConsumer<br/>(ProcessedEvent Table)"]
+    Reg -->|"Unrecognized"| DLQ["DeadLetterHandler<br/>(DeadLetterEvent)"]
+    Idem -->|"First Execution"| Dom["Domain Handler Execution<br/>(Advisory Locks + Ledger)"]
 ```
 
 > **Reference target, not the repo.** The repo's idempotent consumer is `EfInbox<TDbContext>` with a `<module>_inbox_messages` table (`MessageId`, `Consumer`); there is no `ProcessedEvent` type. See [`docs/outbox-architecture.md`](docs/outbox-architecture.md).
@@ -1217,13 +1182,13 @@ public void CampaignsModule_ShouldNotReference_OtherModuleInternals()
 }
 ```
 
-Add architecture test classes for all 6 modules: `CampaignsArchitectureTests`, `ContributionsArchitectureTests`, `IdentityArchitectureTests`, `ModerationArchitectureTests`, `NotificationsArchitectureTests`, and `CampaignUpdatesArchitectureTests`.
+Add architecture test classes for all 6 modules: `CampaignsModuleDependencyTests`, `ContributionsModuleDependencyTests`, `IdentityModuleDependencyTests`, `ModerationModuleDependencyTests`, `NotificationsModuleDependencyTests`, and `CampaignUpdatesModuleDependencyTests` (all six now exist).
 
 ---
 
 ### 6.2 Testcontainers-Backed Integration Testing Suite
 
-Replace the placeholder [`UnitTest1.cs`](tests/IntegrationTests/CrowdFunding.IntegrationTests/UnitTest1.cs) with a complete integration test framework using `Testcontainers.PostgreSql`:
+Replace the placeholder `UnitTest1.cs` with a complete integration test framework using `Testcontainers.PostgreSql`:
 
 #### 1. Custom Web Application Factory (`CrowdFundingWebAppFactory.cs`):
 ```csharp

@@ -54,7 +54,7 @@ sequenceDiagram
     participant Ext as External API (SendGrid / Cloud Function)
 
     Note over API,Ext: Attempting Naive In-Memory Dual Write
-    Client->>API: POST /api/contributions (Confirm)
+    Client->>API: POST /api/campaigns/{campaignId}/contributions/{contributionId}/confirm-payment
     API->>DB: BEGIN TRANSACTION & UPDATE contribution
     API->>Ext: POST /v3/mail/send (Network Call)
     Note over Ext: Email Sent to Customer!
@@ -75,16 +75,16 @@ To make `CrowdFundingHub` an indisputable reference for enterprise architects, t
 * **Resilience Mechanics:**
   - The background worker claims the outbox record using `FOR UPDATE SKIP LOCKED`.
   - The email client dispatches the email with idempotent client tokens (`X-Message-Id`).
-  - Exponential backoff handles transient SMTP or HTTP 429 rate-limiting without blocking the user's HTTP request.
+  - A fixed retry delay (10 seconds, up to five attempts, then the dead-letter table) handles transient SMTP or HTTP 429 rate-limiting without blocking the user's HTTP request.
 
 ### Feature 2: Asynchronous Cloud Function Invocation (Media Safety & AI Moderation)
 * **The Business Need:** When creators upload campaign story media (hero images, pitch videos, rich text), campaigns must undergo automated media safety and AI toxicity analysis before moderation approval.
 * **Why Outbox Is Mandatory:** Running computer vision analysis, NSFW detection, or LLM copyright checks synchronously inside `POST /api/campaigns` adds 5–15 seconds of latency and risks HTTP gateway timeouts (Cloudflare / ALB 30s limits).
 * **Architecture:**
   1. Creator submits campaign with image URLs.
-  2. Transaction commits campaign in `PendingMediaAnalysis` state and writes `CampaignMediaUploadedApplicationEvent` to Outbox.
+  2. Transaction commits campaign in a `PendingMediaAnalysis` state (illustrative: the real `CampaignStatus` values are Draft, Published, Successful, Failed and Cancelled) and writes `CampaignMediaUploadedApplicationEvent` to Outbox.
   3. Outbox worker invokes an **AWS Lambda or GCP Cloud Function** webhook.
-  4. The Cloud Function executes asynchronously, processes the image, and calls back `POST /api/webhooks/media-analysis-result` with cryptographic HMAC validation.
+  4. The Cloud Function executes asynchronously, processes the image, and calls back `POST /api/webhooks/moderation/media-analysis` with cryptographic HMAC validation.
   5. The callback transitions the review to `ReadyForHumanReview` or `AutoRejected`.
 
 ```mermaid
@@ -98,11 +98,11 @@ sequenceDiagram
 
     Creator->>API: POST /api/campaigns (with pitch images)
     API->>OB: Atomically Save Campaign + Outbox Event (CampaignMediaUploaded)
-    API-->>Creator: 201 Created (Status: PendingMediaAnalysis)
+    API-->>Creator: 201 Created (illustrative status: PendingMediaAnalysis)
     
     OB->>CF: Dispatch Asynchronous Trigger (HTTP / SQS)
     Note over CF: Cloud Function analyzes media via Computer Vision
-    CF->>API: POST /api/webhooks/media-analysis (HMAC Signed)
+    CF->>API: POST /api/webhooks/moderation/media-analysis (HMAC Signed)
     API->>Mod: RecordAnalysisResult(passed: true, confidence: 0.98)
     Mod->>OB: Emit ReviewReadyForModeratorApplicationEvent
 ```
@@ -110,12 +110,12 @@ sequenceDiagram
 ### Feature 3: Payment Gateway Intent & Webhook Reconciliation Saga (Stripe / Adyen)
 * **The Business Need:** Modern payments do not complete in a single synchronous call. They involve Payment Intents, 3D Secure (3DS) biometric challenges, and asynchronous payment provider webhooks.
 * **Why Outbox & Rich DDD Are Mandatory:**
-  - Backer initiates pledge $\to$ `Contribution` aggregate created in `PendingPayment` state with a client secret.
+  - Backer initiates pledge $\to$ `Contribution` aggregate created in the `Pending` state with a client secret.
   - User completes 3DS challenge on Stripe.
-  - Stripe sends `payment_intent.succeeded` webhook to `POST /api/contributions/stripe-webhook`.
+  - Stripe sends `payment_intent.succeeded` webhook to `POST /api/webhooks/payments/stripe`.
   - **The Race Hazard:** The webhook may arrive *before* the user's browser redirects back to the API!
   - *(Not everything here is built; see the "What is not built" box under the matrix in section 4.)*
-  - **The Solution:** The `Contribution` aggregate enforces state machine invariants (`PendingPayment` $\to$ `Succeeded`). The webhook handler writes a `ProcessPaymentConfirmationCommand` to the outbox, ensuring idempotent ledger updates even if Stripe retries the webhook 5 times.
+  - **The Solution:** The `Contribution` aggregate enforces state machine invariants (`Pending` $\to$ `Succeeded`; the real `ContributionStatus` values are Pending, Succeeded, Failed and Refunded). The webhook handler writes a `ProcessPaymentConfirmationCommand` to the outbox, ensuring idempotent ledger updates even if Stripe retries the webhook 5 times.
 
 ### Feature 4: Reward Perk Tier Allocation & Inventory Reservation (Rich DDD State Machine)
 * **The Business Need:** A campaign offers "Early Bird" reward tiers (e.g. "Only 50 units available at $199").
