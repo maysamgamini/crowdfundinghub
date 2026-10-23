@@ -59,9 +59,12 @@ public sealed class ContributionsController : ControllerBase
     /// <param name="currency">Optional currency filter (e.g. USD, EUR).</param>
     /// <param name="status">Optional contribution status filter (Pending, Succeeded, Failed).</param>
     /// <param name="cancellationToken">Cancellation token for asynchronous operation.</param>
-    /// <response code="200">Returns the requested page of contributions.</response>
+    /// <response code="200">Returns the requested page of contributions. A backer sees only their own, the campaign's owner sees all without payment references, and a payments manager sees everything.</response>
+    /// <response code="401">Unauthorized if the request lacks a valid Bearer token.</response>
+    [Authorize]
     [HttpGet]
     [ProducesResponseType(typeof(PagedResponse<ListContributionsResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<PagedResponse<ListContributionsResponse>>> ListByCampaign(
         [FromRoute] Guid campaignId,
         [FromQuery] int? pageNumber,
@@ -151,10 +154,13 @@ public sealed class ContributionsController : ControllerBase
     /// <param name="campaignId">The unique identifier of the campaign.</param>
     /// <param name="contributionId">The unique identifier of the contribution.</param>
     /// <param name="cancellationToken">Cancellation token for asynchronous operation.</param>
-    /// <response code="200">Returns the contribution details.</response>
-    /// <response code="404">Contribution not found for the given campaign.</response>
+    /// <response code="200">Returns the contribution details. The backer who made it, the campaign's owner (without payment references) and a payments manager may read it.</response>
+    /// <response code="401">Unauthorized if the request lacks a valid Bearer token.</response>
+    /// <response code="404">Contribution not found for the given campaign, or not visible to the caller.</response>
+    [Authorize]
     [HttpGet("{contributionId:guid}")]
     [ProducesResponseType(typeof(GetContributionByIdResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<GetContributionByIdResponse>> GetById(
         [FromRoute] Guid campaignId,

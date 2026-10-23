@@ -264,6 +264,8 @@ public sealed class CoverageGapE2ETests
     public async Task GetContributionById_WithUnknownId_ShouldReturnNotFound()
     {
         using var client = _factory.CreateClient();
+        var (_, token) = await client.RegisterAndLoginAsync(ApiTestExtensions.UniqueEmail("get-contribution-unknown"), "Backer");
+        client.SetBearerToken(token);
 
         var response = await client.GetAsync($"/api/campaigns/{Guid.NewGuid()}/contributions/{Guid.NewGuid()}");
 

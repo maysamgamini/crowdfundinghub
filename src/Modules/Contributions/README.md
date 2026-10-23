@@ -41,6 +41,20 @@ sequenceDiagram
 - **Webhook guard:** signature check, stale-timestamp rejection and dedupe by event id in `processed_payment_webhooks`.
 - **Concurrency:** `xmin` token on `Contribution` plus advisory locks.
 
+## Who can read a pledge
+
+A pledge shows who backed what and its payment references, so the read endpoints need a token and are scoped by role.
+
+| Caller | List pledges of a campaign | One pledge |
+|---|---|---|
+| No token | 401 | 401 |
+| The backer | only their own | their own, in full |
+| Another backer | empty list | 404 (the same answer as for an id that does not exist) |
+| The campaign's owner | all, without payment references | without payment references or payment intent |
+| A payments manager | all, in full | in full |
+
+The campaign's owner comes from Contributions' own replicated copy of the campaign, so the check needs no call into Campaigns. The rules live in the query handlers (`ContributionVisibility`), so they hold whichever host serves the module.
+
 ## Safe retries
 
 `POST /api/campaigns/{id}/contributions` accepts an optional `Idempotency-Key` header. A retry with the same key returns the first pledge (`200`, `Idempotent-Replayed: true`); the same key with a different request is a `409`; a unique index on (backer, key) decides simultaneous requests.

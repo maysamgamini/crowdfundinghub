@@ -938,7 +938,7 @@ public sealed class ListContributionsByCampaignQueryHandlerTests
 
         var page = new PagedResult<ListContributionsByCampaignResult>(contributions, 1, 10, 1);
         var readService = new FakeContributionReadService(page);
-        var handler = new ListContributionsByCampaignQueryHandler(readService);
+        var handler = new ListContributionsByCampaignQueryHandler(readService, new TestCurrentUser { UserId = Guid.NewGuid(), Permissions = [PermissionConstants.ContributionsPaymentsManage] }, new FakeActiveCampaignCacheRepository(exists: true, isActive: true));
         var filter = new ListContributionsByCampaignFilter(Guid.NewGuid(), "USD", "Succeeded");
 
         var result = await handler.Handle(
@@ -978,7 +978,7 @@ public sealed class GetContributionByIdQueryHandlerTests
                 new DateTime(2026, 4, 6, 12, 10, 0, DateTimeKind.Utc))
         ];
         var readService = new FakeContributionReadService(new PagedResult<ListContributionsByCampaignResult>(contributions, 1, 10, 1));
-        var handler = new GetContributionByIdQueryHandler(readService);
+        var handler = new GetContributionByIdQueryHandler(readService, new TestCurrentUser { UserId = Guid.NewGuid(), Permissions = [PermissionConstants.ContributionsPaymentsManage] }, new FakeActiveCampaignCacheRepository(exists: true, isActive: true));
 
         var result = await handler.Handle(new GetContributionByIdQuery(campaignId, contributionId), CancellationToken.None);
 
@@ -990,7 +990,7 @@ public sealed class GetContributionByIdQueryHandlerTests
     public async Task Handle_ShouldThrow_WhenContributionWasNotFound()
     {
         var readService = new FakeContributionReadService(new PagedResult<ListContributionsByCampaignResult>([], 1, 10, 0));
-        var handler = new GetContributionByIdQueryHandler(readService);
+        var handler = new GetContributionByIdQueryHandler(readService, new TestCurrentUser { UserId = Guid.NewGuid(), Permissions = [PermissionConstants.ContributionsPaymentsManage] }, new FakeActiveCampaignCacheRepository(exists: true, isActive: true));
         var campaignId = Guid.NewGuid();
         var contributionId = Guid.NewGuid();
 
