@@ -25,6 +25,10 @@ public static class OutboxClaimQuery
         // and the Pending -> Processing transition happen in one statement (CTE + UPDATE ...
         // RETURNING) so there is no window between "select candidate rows" and "mark them
         // claimed" for a second worker to slip into.
+        // "Due" is judged on the application clock, the same clock that wrote ScheduledAtUtc. Judging
+        // it on the database's now() made a row look as if it were scheduled in the future whenever
+        // the database host's clock ran even a few milliseconds behind the application's (as a
+        // container's does), so a batch started right after an event was queued could skip it.
         // The module's schema comes from the model, so the statement hits the right table
         // whatever schema the module's DbContext maps to.
         var schema = dbContext.Model.FindEntityType(typeof(OutboxMessage))?.GetSchema();
@@ -35,7 +39,7 @@ public static class OutboxClaimQuery
                 SELECT "Id"
                 FROM {{qualifiedTable}}
                 WHERE "Status" = {{(int)OutboxMessageStatus.Pending}}
-                  AND "ScheduledAtUtc" <= now()
+                  AND "ScheduledAtUtc" <= {3}
                 ORDER BY "ScheduledAtUtc", "Id"
                 FOR UPDATE SKIP LOCKED
                 LIMIT {0}
@@ -50,7 +54,7 @@ public static class OutboxClaimQuery
             """;
 
         return dbContext.Set<OutboxMessage>()
-            .FromSqlRaw(sql, batchSize, workerId, (int)lockDuration.TotalMilliseconds)
+            .FromSqlRaw(sql, batchSize, workerId, (int)lockDuration.TotalMilliseconds, DateTime.UtcNow)
             .ToListAsync(cancellationToken);
     }
 }

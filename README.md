@@ -6,6 +6,20 @@
 
 ---
 
+## Run it on your machine (backend only)
+
+Needs the .NET 10 SDK and a Docker-compatible runtime. Docker Desktop works; so does [Colima](https://github.com/abiosoft/colima) (`brew install colima docker docker-compose`, then `colima start`).
+
+```bash
+docker compose up -d          # PostgreSQL with one database per module, plus Redis
+dotnet run --project src/API/CrowdFunding.API
+```
+
+Each module connects to its own database (`identity_db`, `campaigns_db`, ...) and applies its own migrations at startup. If port 5432 or 6379 is taken, set `CF_PG_PORT` / `CF_REDIS_PORT` and override the matching `ConnectionStrings__*` settings.
+
+Integration tests start their own databases with Testcontainers. With Colima, export `DOCKER_HOST=unix://$HOME/.colima/default/docker.sock` and `TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock` first.
+
+
 ## 1. Executive Summary & Project Goal
 
 Most microservices migrations fail not because distributed systems are inherently flawed, but because **the monolith was never architected for decomposition**. When organizations attempt to break apart a typical legacy monolith, they encounter shared database tables, cross-schema SQL joins, synchronous in-process query coupling, dual-write state corruption, and symmetric secret sprawl.

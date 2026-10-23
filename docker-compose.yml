@@ -1,21 +1,20 @@
 services:
   crowdfunding-db:
     image: postgres:16
-    container_name: crowdfunding-db
     environment:
-      POSTGRES_DB: crowdfundingdb
+      POSTGRES_DB: postgres
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      - "${CF_PG_PORT:-5432}:5432"
     volumes:
       - crowdfunding_postgres_data:/var/lib/postgresql/data
+      - ./deploy/postgres/init-module-databases.sh:/docker-entrypoint-initdb.d/10-module-databases.sh:ro
 
   crowdfunding-redis:
     image: redis:7-alpine
-    container_name: crowdfunding-redis
     ports:
-      - "6379:6379"
+      - "${CF_REDIS_PORT:-6379}:6379"
 
 volumes:
   crowdfunding_postgres_data:
