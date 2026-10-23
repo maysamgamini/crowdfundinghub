@@ -39,4 +39,11 @@ public sealed class WebhookSubscriptionRepository : IWebhookSubscriptionReposito
         _dbContext.WebhookSubscriptions.Update(subscription);
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
+
+    public async Task<WebhookSubscription?> ReloadAsync(WebhookSubscription subscription, CancellationToken cancellationToken)
+    {
+        var entry = _dbContext.Entry(subscription);
+        await entry.ReloadAsync(cancellationToken);
+        return entry.State == EntityState.Detached ? null : subscription;
+    }
 }

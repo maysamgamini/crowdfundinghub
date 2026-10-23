@@ -1,6 +1,8 @@
 using System.Text;
 using CrowdFunding.Modules.CampaignUpdates.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.CampaignUpdates.Infrastructure.Security;
+using CrowdFunding.Modules.CampaignUpdates.Domain.Aggregates;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -69,6 +71,8 @@ public sealed class WebhookDispatcherBackgroundService : BackgroundService
                 continue;
             }
 
+            var delivered = false;
+
             try
             {
                 using var httpClient = httpClientFactory.CreateClient(nameof(WebhookDispatcherBackgroundService));
@@ -92,6 +96,7 @@ public sealed class WebhookDispatcherBackgroundService : BackgroundService
 
                 task.MarkDelivered();
                 subscription.RecordDeliverySuccess();
+                delivered = true;
             }
             catch (Exception exception)
             {
@@ -105,7 +110,46 @@ public sealed class WebhookDispatcherBackgroundService : BackgroundService
             }
 
             await taskRepository.UpdateAsync(task, cancellationToken);
+            await SaveDeliveryOutcomeAsync(subscriptionRepository, subscription, task.SubscriptionId, delivered, logger, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Saves the delivery outcome on the subscription. The delivery can take seconds, so the owner
+    /// may have deleted the subscription meanwhile; the stale save is then refused by the xmin
+    /// token. The outcome is applied again to the current row, unless the owner's deletion won.
+    /// </summary>
+    private static async Task SaveDeliveryOutcomeAsync(
+        IWebhookSubscriptionRepository subscriptionRepository,
+        WebhookSubscription subscription,
+        Guid subscriptionId,
+        bool delivered,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
             await subscriptionRepository.UpdateAsync(subscription, cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            var current = await subscriptionRepository.ReloadAsync(subscription, cancellationToken);
+            if (current is null || !current.IsActive)
+            {
+                logger.LogInformation("Webhook subscription {SubscriptionId} was deactivated during delivery; keeping it inactive.", subscriptionId);
+                return;
+            }
+
+            if (delivered)
+            {
+                current.RecordDeliverySuccess();
+            }
+            else
+            {
+                current.RecordDeliveryFailure(maxConsecutiveFailures: 5);
+            }
+
+            await subscriptionRepository.UpdateAsync(current, cancellationToken);
         }
     }
 }

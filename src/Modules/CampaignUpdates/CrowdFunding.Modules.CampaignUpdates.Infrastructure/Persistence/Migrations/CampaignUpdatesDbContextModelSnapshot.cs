@@ -113,6 +113,12 @@ namespace CrowdFunding.Modules.CampaignUpdates.Infrastructure.Persistence.Migrat
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CampaignId", "IsActive");

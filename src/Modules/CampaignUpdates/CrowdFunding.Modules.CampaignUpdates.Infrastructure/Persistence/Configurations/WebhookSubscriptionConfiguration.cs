@@ -20,5 +20,15 @@ public sealed class WebhookSubscriptionConfiguration : IEntityTypeConfiguration<
         builder.Property(x => x.CreatedAtUtc).IsRequired();
 
         builder.HasIndex(x => new { x.CampaignId, x.IsActive });
+
+        // PostgreSQL system column used as an optimistic concurrency token. The dispatcher loads a
+        // subscription, makes an HTTP call, then saves; without the token that stale save could
+        // switch a subscription the owner deleted in the meantime back on. A stale write now throws
+        // DbUpdateConcurrencyException instead.
+        builder.Property<uint>("xmin")
+            .HasColumnName("xmin")
+            .HasColumnType("xid")
+            .ValueGeneratedOnAddOrUpdate()
+            .IsConcurrencyToken();
     }
 }

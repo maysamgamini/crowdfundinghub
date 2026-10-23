@@ -37,11 +37,16 @@ aggregates or tables carry an `xmin` token: `Campaign`, `Contribution` and `Refr
 | Moderation | CreateCampaignReview, Approve, Reject | Tier 3 | Stay 3 (`CampaignReview` raises events) |
 | Moderation | RecordMediaAnalysis | Tier 3 | Candidate for Tier 2: check whether it raises an event |
 | Notifications | UpdateNotificationPreferences, Unsubscribe, GetNotificationPreferences | Tier 2 (done): handlers in Infrastructure use NotificationsDbContext directly; one INSERT ... ON CONFLICT write | Tier 2 |
-| CampaignUpdates | RegisterWebhookSubscription, DeleteWebhookSubscription | Tier 3 shape | Tier 2: no events, no concurrency token |
+| CampaignUpdates | RegisterWebhookSubscription, DeleteWebhookSubscription | Tier 3 shape | Stays Tier 3. Checked and rejected as a Tier 2 candidate: the dispatcher reads a subscription, makes an HTTP call of up to 5 seconds, then saves it back, and a stale save re-activated a subscription the owner had just deleted (reproduced by `WebhookSubscriptionConcurrencyTests`). It now has an `xmin` token, so that question 2 ("can concurrent writes corrupt this data?") is answered yes |
 | Identity | Login, Logout, RefreshAccessToken, Register, AssignRole, GrantPermission, Deactivate, SeedAdmin | Tier 3 shape | Stay 3 for refresh tokens (`xmin`); the rest need review, security rules apply |
 | All modules | Queries | Query handlers, several read through `AsNoTracking` | Already the fast read path; no change |
 
 "Candidate" means the classification still has to be confirmed in the code before anything moves.
+
+## Lessons from applying the two questions
+
+- Classifying by the shape of the handler is not enough. CampaignUpdates subscriptions looked like plain CRUD, but the dispatcher's long read-modify-write made them a concurrency risk. Test question 2 by looking at every writer of the table, not only the feature's own handlers.
+- Remaining gap: if the dispatcher's save lands between the owner's load and save in the delete handler, the owner's request now gets a `DbUpdateConcurrencyException` (an HTTP 500) instead of a clean 409.
 
 ## What is not done yet
 

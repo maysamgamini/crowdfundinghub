@@ -16,4 +16,8 @@ public interface IWebhookSubscriptionRepository
     Task<IReadOnlyList<WebhookSubscription>> GetByCampaignIdAsync(Guid campaignId, CancellationToken cancellationToken);
 
     Task UpdateAsync(WebhookSubscription subscription, CancellationToken cancellationToken);
+
+    /// <summary>Re-reads the subscription's current stored state after a concurrency conflict.
+    /// Returns null if the row no longer exists.</summary>
+    Task<WebhookSubscription?> ReloadAsync(WebhookSubscription subscription, CancellationToken cancellationToken);
 }
