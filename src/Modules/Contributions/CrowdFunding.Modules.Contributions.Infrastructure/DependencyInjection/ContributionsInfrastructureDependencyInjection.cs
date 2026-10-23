@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Infrastructure.Outbox;
 ﻿using CrowdFunding.BuildingBlocks.Infrastructure.Events;
 using CrowdFunding.BuildingBlocks.Infrastructure.Configuration;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
@@ -37,6 +38,7 @@ public static class ContributionsInfrastructureDependencyInjection
         services.AddScoped<IContributionReadService, ContributionReadService>();
         services.AddScoped<IContributionTransactionExecutor, ContributionTransactionExecutor>();
         services.AddSingleton<IContributionDateTimeProvider, SystemDateTimeProvider>();
+        services.AddOutboxSignal<ContributionsDbContext>();
         services.AddHostedService<ContributionsOutboxBackgroundService>();
 
         return services;

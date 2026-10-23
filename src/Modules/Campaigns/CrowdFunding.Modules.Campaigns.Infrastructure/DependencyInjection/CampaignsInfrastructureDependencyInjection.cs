@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Infrastructure.Outbox;
 ﻿using CrowdFunding.BuildingBlocks.Infrastructure.Events;
 using CrowdFunding.BuildingBlocks.Infrastructure.Configuration;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
@@ -55,6 +56,7 @@ public static class CampaignsInfrastructureDependencyInjection
                 sp.GetRequiredService<ILogger<CachedCampaignReadService>>()));
         services.AddScoped<ICampaignTransactionExecutor, CampaignTransactionExecutor>();
         services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();
+        services.AddOutboxSignal<CampaignsDbContext>();
         services.AddHostedService<CampaignsOutboxBackgroundService>();
         services.AddHostedService<CampaignExpirationBackgroundService>();
         services.AddHostedService<RewardTierReservationScavengerBackgroundService>();

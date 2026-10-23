@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Application.Outbox;
 using CrowdFunding.BuildingBlocks.Domain.Common;
 using CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Transactions;
@@ -16,9 +17,12 @@ public sealed class ModerationTransactionExecutor : IModerationTransactionExecut
 {
     private readonly ModerationDbContext _dbContext;
 
-    public ModerationTransactionExecutor(ModerationDbContext dbContext)
+    private readonly IOutboxSignal<ModerationDbContext>? _outboxSignal;
+
+    public ModerationTransactionExecutor(ModerationDbContext dbContext, IOutboxSignal<ModerationDbContext>? outboxSignal = null)
     {
         _dbContext = dbContext;
+        _outboxSignal = outboxSignal;
     }
 
     public Task ExecuteAsync(Func<CancellationToken, Task> action, CancellationToken cancellationToken)
@@ -54,6 +58,14 @@ public sealed class ModerationTransactionExecutor : IModerationTransactionExecut
                 if (transaction is not null)
                 {
                     await transaction.CommitAsync(cancellationToken);
+
+                    // The rows are durable now, so wake this module's outbox worker instead of
+                    // leaving them to wait for its next timer tick. Waking before the commit would
+                    // let the worker look, find nothing, and go back to sleep.
+                    if (outboxMessages.Length > 0)
+                    {
+                        _outboxSignal?.Notify();
+                    }
                 }
             }
 

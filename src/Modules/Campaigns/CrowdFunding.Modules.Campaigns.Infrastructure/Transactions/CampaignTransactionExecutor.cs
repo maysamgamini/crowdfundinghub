@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Application.Outbox;
 using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Domain.Common;
 using CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
@@ -32,11 +33,18 @@ public sealed class CampaignTransactionExecutor : ICampaignTransactionExecutor
     // exactly the point at which the outermost transaction has committed.
     private readonly List<string> _pendingCacheKeys = [];
 
-    public CampaignTransactionExecutor(CampaignsDbContext dbContext, IDistributedCache cache, ILogger<CampaignTransactionExecutor> logger)
+    private readonly IOutboxSignal<CampaignsDbContext>? _outboxSignal;
+
+    public CampaignTransactionExecutor(
+        CampaignsDbContext dbContext,
+        IDistributedCache cache,
+        ILogger<CampaignTransactionExecutor> logger,
+        IOutboxSignal<CampaignsDbContext>? outboxSignal = null)
     {
         _dbContext = dbContext;
         _cache = cache;
         _logger = logger;
+        _outboxSignal = outboxSignal;
     }
 
     /// <inheritdoc/>
@@ -99,6 +107,13 @@ public sealed class CampaignTransactionExecutor : ICampaignTransactionExecutor
                 if (transaction is not null)
                 {
                     await transaction.CommitAsync(cancellationToken);
+
+                    // The rows are durable now, so wake this module's outbox worker instead of
+                    // leaving them to wait for its next timer tick.
+                    if (outboxMessages.Length > 0)
+                    {
+                        _outboxSignal?.Notify();
+                    }
 
                     // Only the call that owns the transaction flushes the queue, and only after
                     // CommitAsync has actually returned — a concurrent reader can no longer observe

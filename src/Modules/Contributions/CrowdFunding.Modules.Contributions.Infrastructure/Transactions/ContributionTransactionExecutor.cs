@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Application.Outbox;
 using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Domain.Common;
 using CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
@@ -5,10 +6,12 @@ using CrowdFunding.Modules.Contributions.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPaymentConfirmed;
 using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPaymentFailed;
 using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionRefunded;
+using CrowdFunding.Modules.Contributions.Domain.Aggregates;
 using CrowdFunding.Modules.Contributions.Domain.Events;
 using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Npgsql;
 
 namespace CrowdFunding.Modules.Contributions.Infrastructure.Transactions;
 
@@ -19,9 +22,12 @@ public sealed class ContributionTransactionExecutor : IContributionTransactionEx
 {
     private readonly ContributionsDbContext _dbContext;
 
-    public ContributionTransactionExecutor(ContributionsDbContext dbContext)
+    private readonly IOutboxSignal<ContributionsDbContext>? _outboxSignal;
+
+    public ContributionTransactionExecutor(ContributionsDbContext dbContext, IOutboxSignal<ContributionsDbContext>? outboxSignal = null)
     {
         _dbContext = dbContext;
+        _outboxSignal = outboxSignal;
     }
 
     public Task ExecuteAsync(Func<CancellationToken, Task> action, CancellationToken cancellationToken)
@@ -57,6 +63,14 @@ public sealed class ContributionTransactionExecutor : IContributionTransactionEx
                 if (transaction is not null)
                 {
                     await transaction.CommitAsync(cancellationToken);
+
+                    // The rows are durable now, so wake this module's outbox worker instead of
+                    // leaving them to wait for its next timer tick. Waking before the commit would
+                    // let the worker look, find nothing, and go back to sleep.
+                    if (outboxMessages.Length > 0)
+                    {
+                        _outboxSignal?.Notify();
+                    }
                 }
             }
 
@@ -75,6 +89,18 @@ public sealed class ContributionTransactionExecutor : IContributionTransactionEx
             throw new ConcurrencyConflictException(
                 "The aggregate was modified by another transaction. Retry with a fresh read.", ex);
         }
+        catch (DbUpdateException ex) when (IsIdempotencyKeyViolation(ex))
+        {
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+            }
+
+            // The failed insert is still tracked as Added; drop it so the caller's re-read of the
+            // winning pledge is not confused by a half-saved twin.
+            _dbContext.ChangeTracker.Clear();
+            throw new IdempotencyKeyAlreadyUsedException(ex);
+        }
         catch
         {
             if (transaction is not null)
@@ -92,6 +118,13 @@ public sealed class ContributionTransactionExecutor : IContributionTransactionEx
             }
         }
     }
+
+    private static bool IsIdempotencyKeyViolation(DbUpdateException exception)
+        => exception.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation,
+            ConstraintName: ContributionIndexes.IdempotencyKey
+        };
 
     private static OutboxMessage MapApplicationEvent(BaseEvent domainEvent)
     {

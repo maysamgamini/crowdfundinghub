@@ -12,7 +12,7 @@ Paths are relative to the repo root. `CAMP` = `src/Modules/Campaigns/CrowdFundin
 | Design step | Module | Status | Guarded by |
 |---|---|---|---|
 | 1.1 Where the money sits for 30 days | Contributions | NOT BUILT (charge-now state model only, payment gateway is a mock) | `ContributionDomainTests` |
-| 1.2 Double-click creates two pledges | Contributions | NOT BUILT | none |
+| 1.2 Double-click creates two pledges | Contributions | MATCHES (optional `Idempotency-Key` header, unique index per backer and key) | `PledgeIdempotencyTests`, `PledgeIdempotencyE2ETests` |
 | 1.3 The total on the page vs the pledges | Campaigns | SIMPLER VARIANT (idempotency table plus a locked counter) | `CampaignContributionConcurrencyTests` |
 | 1.4 Limited tier oversold | Campaigns | MATCHES (lock, invariant, 15-minute hold); no database CHECK | `RewardTierConcurrencyE2ETests` |
 | 1.5 Pledge after the deadline | Contributions, Campaigns | NOT BUILT (no closing fence) | partial |
@@ -74,11 +74,12 @@ sequenceDiagram
 - **Tests:** `ContributionDomainTests`, `MakeContributionCommandHandlerTests`, `ContributionAndOutboxE2ETests`.
 - **Why it differs:** the code uses the charge-now model the design rejects, a deliberate simpler choice that the design's own "See It Built" section acknowledges.
 
-### Step 1.2: double-click creates two pledges: NOT BUILT
+### Step 1.2: double-click creates two pledges: MATCHES
 
 - **Design:** an idempotency key or client-supplied pledge ID makes a retry return the first pledge.
-- **Code:** nothing. `Contribution.Create` always generates a new ID, and two POSTs create two Pending contributions. Only a rate limiter (`ContributionsController.cs:103`) slows repeats.
-- **Tests:** none.
+- **Code:** `POST /api/campaigns/{id}/contributions` accepts an optional `Idempotency-Key` header (1 to 100 printable ASCII characters). The key is stored on the `Contribution` and a unique index on `(ContributorId, IdempotencyKey)` where the key is not null decides races (`ContributionConfiguration.cs`, `ContributionIndexes.IdempotencyKey`). `MakeContributionCommandHandler` looks the key up first, before any campaign check, so a retry after the deadline still gets the first pledge. A retry returns `200` with `Idempotent-Replayed: true`; the same key with a different amount, currency, campaign or reward reservation is a `409`; simultaneous requests are settled by the index and the losers read the winner. `ContributionTransactionExecutor` turns that specific unique violation into `IdempotencyKeyAlreadyUsedException`.
+- **Differences from the design:** the key is optional, so a client that sends none still gets a new pledge each time; keys are scoped to the backer, not global; there is no expiry on stored keys.
+- **Tests:** `PledgeIdempotencyTests` (unit: replay, mismatch, retry after the campaign closed, lost race) and `PledgeIdempotencyE2ETests` (twelve simultaneous requests create one pledge; mismatch is a conflict; two backers may share a key; a malformed key is rejected).
 
 ### Step 1.3: the total vs the pledges: SIMPLER VARIANT
 
@@ -154,7 +155,7 @@ The loop's "See It Built" section describes the reference code ahead of the code
 
 | Gap | Design step | Suggested ticket |
 |---|---|---|
-| No idempotency on pledge creation | 1.2 | Add an idempotency key or client pledge ID with a unique index |
+| ~~No idempotency on pledge creation~~ **Closed:** `Idempotency-Key` header with a unique index per backer and key | 1.2 | Done |
 | No closing fence; late confirmations dead-letter without refund | 1.5 | Add an ENDED state and refund late confirmations |
 | Outbox rows stuck in `Processing` are never reclaimed | outbox | Reclaim on lock expiry, or correct the docs |
 | Ledger lacks entry kind, sign check, trigger, refund entries | 1.3 | Decide whether to build it or change the design text |
@@ -169,13 +170,14 @@ The loop's "See It Built" section describes the reference code ahead of the code
 flowchart LR
     A["First reading"] --> B{"Re-checked against main"}
     B -->|changed| C["Inbox built<br/>Schemas built<br/>Outbox due-clock bug fixed<br/>Database per module locally"]
-    B -->|still true| D["No pledge idempotency<br/>No closing fence<br/>Ledger has no kind, sign check, trigger<br/>Outbox rows stuck in Processing<br/>Success/failure email stubs"]
+    B -->|still true| D["No closing fence<br/>Ledger has no kind, sign check, trigger<br/>Outbox rows stuck in Processing<br/>Success/failure email stubs"]
     B -->|drifted| E["Line numbers only"]
 ```
 
 - **Outbox stuck rows (still true).** `OutboxClaimQuery` claims `Pending` rows only. `LockedUntilUtc` is written on claim and never read, so a row left in `Processing` by a crashed worker stays there. `docs/TRADE_OFFS_AND_LIMITATIONS.md` still says such rows are reclaimed.
 - **Outbox due-clock (new, fixed).** The claim query compared an application-set `ScheduledAtUtc` with the database's `now()`; a database clock slightly behind made just-queued rows unclaimable. It now compares against the application clock. One leftover inconsistency: `LockedUntilUtc` is still set from the database clock, harmless today because nothing reads it, but it matters the moment the reclaim above is built.
-- **Pledge idempotency, closing fence, ledger shape, success/failure email (still true).** Searches for an idempotency key on `MakeContribution`, check constraints, triggers and ledger entry kinds found nothing. The notification handlers for published, cancelled and review events are still `Task.CompletedTask`.
+- **Pledge idempotency (new, built).** See step 1.2.
+- **Closing fence, ledger shape, success/failure email (still true).** Searches for check constraints, triggers and ledger entry kinds found nothing. The notification handlers for published, cancelled and review events are still `Task.CompletedTask`.
 - **Webhook subscriptions (new).** A stale background save could re-activate a deleted subscription; fixed with an `xmin` token and covered by `WebhookSubscriptionConcurrencyTests`. It also fixed the tier assignment for that feature (stays Tier 3).
 - **Tests added since the first reading:** `InboxRetryTests`, `ModuleSchemaRulesTests`, `NotificationPreferencesTier2Tests`, `WebhookSubscriptionConcurrencyTests`. See `docs/TESTS_THAT_TEACH.md`.
 - **Still untested:** the reservation scavenger and outbox crash recovery.

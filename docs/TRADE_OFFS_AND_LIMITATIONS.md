@@ -823,7 +823,7 @@ Prior to promoting CrowdFunding Hub to high-traffic production environments, the
 
 The detailed lists live in [`TESTS_THAT_TEACH.md`](TESTS_THAT_TEACH.md) ("Gaps") and `educational/03-engineering-spec-and-roadmap/design-to-code-mapping-round1.md` (section 6). In short:
 
-- No pledge idempotency key, and no closing fence on a campaign.
+- No closing fence on a campaign.
 - The ledger lacks an entry kind, a sign check and a trigger.
 - Refunds are state-only: no gateway money movement and no ledger reversal.
 - Success and failure emails are not built.

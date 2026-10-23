@@ -41,7 +41,7 @@ process claims and publishes those rows.
 
 ### Option A — PostgreSQL-native, `FOR UPDATE SKIP LOCKED` (chosen)
 
-The outbox table is polled directly by one or more instances of `ModuleOutboxProcessor<TDbContext>` (one subclass per module, for example `CampaignsOutboxBackgroundService`).
+The outbox table is drained by one or more instances of `ModuleOutboxProcessor<TDbContext>` (one subclass per module, for example `CampaignsOutboxBackgroundService`). The worker does not rely on its timer alone: the transaction executor calls `IOutboxSignal<TDbContext>.Notify()` right after the commit that wrote outbox rows, which wakes the worker at once, and the poll interval (five seconds) remains as a safety net. See [EVENT_DELIVERY_APPROACHES.md](./EVENT_DELIVERY_APPROACHES.md) for the alternatives and when to choose each.
 Naively, `SELECT ... WHERE status = 'Pending'` run by two replicas at once returns the *same* rows
 to both, and both then publish and both then try to mark the rows processed — duplicate delivery.
 PostgreSQL's `FOR UPDATE SKIP LOCKED` clause fixes this natively: a `SELECT ... FOR UPDATE SKIP
@@ -91,7 +91,7 @@ coordination needed.
   hits the same partial index from every worker on every poll; at high enough frequency this
   becomes a hot spot even though `SKIP LOCKED` prevents workers from blocking each other on the
   *rows*.
-- **Polling overhead.** Workers hit the database on a fixed interval whether or not there's
+- **Polling overhead (reduced by the wake-up signal, which removes the delay but not the safety-net query).** Workers hit the database on a fixed interval whether or not there's
   anything to do, consuming connection-pool slots and CPU even at zero load.
 
 Net effect: this approach scales well into the **hundreds to low thousands of events/second**

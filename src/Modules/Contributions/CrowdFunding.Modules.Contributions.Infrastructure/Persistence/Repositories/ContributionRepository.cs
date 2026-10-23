@@ -42,6 +42,14 @@ public sealed class ContributionRepository : IContributionRepository
     }
 
     /// <inheritdoc/>
+    public Task<Contribution?> GetByIdempotencyKeyAsync(Guid contributorId, string idempotencyKey, CancellationToken cancellationToken)
+    {
+        return _dbContext.Contributions
+            .AsNoTracking()
+            .SingleOrDefaultAsync(x => x.ContributorId == contributorId && x.IdempotencyKey == idempotencyKey, cancellationToken);
+    }
+
+    /// <inheritdoc/>
     public Task UpdateAsync(Contribution contribution, CancellationToken cancellationToken)
     {
         _dbContext.Contributions.Update(contribution);

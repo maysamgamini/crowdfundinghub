@@ -93,26 +93,33 @@ public sealed class ContributionsController : ControllerBase
     /// </summary>
     /// <param name="campaignId">The unique identifier of the target campaign.</param>
     /// <param name="request">The contribution request containing amount and currency.</param>
+    /// <param name="idempotencyKey">Optional <c>Idempotency-Key</c> header, 1 to 100 printable ASCII characters. Send the same key when retrying a request that may not have completed (a timeout, a dropped connection, a double click) and the backer gets the first pledge back instead of a second one.</param>
     /// <param name="cancellationToken">Cancellation token for asynchronous operation.</param>
     /// <response code="201">Contribution created successfully in Pending status.</response>
     /// <response code="400">Invalid contribution amount, currency mismatch, or validation errors.</response>
     /// <response code="401">Unauthorized if the request lacks a valid Bearer token.</response>
+    /// <response code="200">A retry: the same backer already used this <c>Idempotency-Key</c> for this request, so the first pledge is returned and the response carries <c>Idempotent-Replayed: true</c>.</response>
+    /// <response code="409">The <c>Idempotency-Key</c> was already used by this backer for a different request.</response>
     /// <response code="403">Forbidden if the caller lacks the 'campaigns:contribute' permission.</response>
     /// <response code="404">Target campaign not found or not active.</response>
     [Authorize(Policy = PermissionConstants.CampaignsContribute)]
     [EnableRateLimiting(RateLimitingConfiguration.PaymentPolicy)]
     [HttpPost]
     [ProducesResponseType(typeof(MakeContributionResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(MakeContributionResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<MakeContributionResponse>> Create(
         [FromRoute] Guid campaignId,
         [FromBody] MakeContributionRequest request,
+        [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
         CancellationToken cancellationToken)
     {
-        var command = new MakeContributionCommand(campaignId, request.Amount, request.Currency, request.RewardTierReservationId);
+        var command = new MakeContributionCommand(
+            campaignId, request.Amount, request.Currency, request.RewardTierReservationId, idempotencyKey);
         var validationResult = await _validator.ValidateAsync(command, cancellationToken);
 
         if (!validationResult.IsValid)
@@ -123,6 +130,13 @@ public sealed class ContributionsController : ControllerBase
 
         var result = await _commandDispatcher.SendAsync<MakeContributionResult>(command, cancellationToken);
         var response = _mapper.Map<MakeContributionResponse>(result);
+
+        // A retry with a key already used by this backer returns the first pledge unchanged.
+        if (result.IsReplay)
+        {
+            Response.Headers["Idempotent-Replayed"] = "true";
+            return Ok(response);
+        }
 
         // Location must point at the created resource itself (RFC 9110 §10.3.2), not the
         // collection it lives in — a client following it previously landed back on the

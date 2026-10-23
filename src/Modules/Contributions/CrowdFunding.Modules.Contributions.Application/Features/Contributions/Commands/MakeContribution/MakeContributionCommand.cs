@@ -7,4 +7,5 @@ public sealed record MakeContributionCommand(
     Guid CampaignId,
     decimal Amount,
     string Currency,
-    Guid? RewardTierReservationId = null);
+    Guid? RewardTierReservationId = null,
+    string? IdempotencyKey = null);

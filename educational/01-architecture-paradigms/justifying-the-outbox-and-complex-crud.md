@@ -152,7 +152,6 @@ To guide students and engineering teams, use this concrete rubric:
 
 > **What is not built.** The code does not yet deliver everything these rows promise:
 > - The inbox has a crash window: the handler runs first and the inbox row is recorded after it, so a crash between the two re-runs the handler on redelivery. Consumers must be idempotent.
-> - `MakeContribution` has no pledge idempotency key, so a client retry creates a second pledge.
 > - There is no closing fence: nothing stops a pledge being confirmed against a campaign that closes at the same moment.
 > - Success and failure emails are not built.
 

@@ -149,11 +149,11 @@ flowchart LR
         B1["Outbox with SKIP LOCKED claims"]
         B2["Per-module schema, inbox, database"]
         B3["xmin and advisory-lock concurrency"]
+        B6["Idempotent pledge creation"]
         B4["Reward tier reservations, expiry, state-only refunds"]
         B5["Replicated profile with quorum witness"]
     end
     subgraph Open["Open gaps"]
-        O1["Pledge idempotency key"]
         O2["Closing fence at the deadline"]
         O3["Outbox rows stuck in Processing are not reclaimed"]
         O4["Ledger has no entry kind, sign check or trigger"]

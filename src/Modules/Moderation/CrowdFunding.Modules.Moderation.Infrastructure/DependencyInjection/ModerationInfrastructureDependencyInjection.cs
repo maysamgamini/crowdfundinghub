@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Infrastructure.Outbox;
 ﻿using CrowdFunding.BuildingBlocks.Infrastructure.Events;
 using CrowdFunding.BuildingBlocks.Infrastructure.Configuration;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Persistence;
@@ -37,6 +38,7 @@ public static class ModerationInfrastructureDependencyInjection
         services.AddScoped<ICampaignReviewReadService, CampaignReviewReadService>();
         services.AddScoped<IModerationTransactionExecutor, ModerationTransactionExecutor>();
         services.AddSingleton<IModerationDateTimeProvider, SystemDateTimeProvider>();
+        services.AddOutboxSignal<ModerationDbContext>();
         services.AddHostedService<ModerationOutboxBackgroundService>();
 
         return services;

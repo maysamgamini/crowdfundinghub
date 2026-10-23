@@ -15,6 +15,8 @@ public interface IContributionRepository
     /// See TICKET-033.</summary>
     Task<Contribution?> GetByExternalPaymentIntentIdAsync(string externalPaymentIntentId, CancellationToken cancellationToken);
 
+    Task<Contribution?> GetByIdempotencyKeyAsync(Guid contributorId, string idempotencyKey, CancellationToken cancellationToken);
+
     Task UpdateAsync(Contribution contribution, CancellationToken cancellationToken);
 
     /// <summary>Loads every currently-Succeeded contribution for a campaign, for the refund

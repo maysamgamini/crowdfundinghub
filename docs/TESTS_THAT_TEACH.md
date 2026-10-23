@@ -59,6 +59,8 @@ quadrantChart
 | `ModuleSchemaRulesTests` | Each module's tables live in its own schema, each module has its own migration history, and no foreign key crosses a schema. | Turns "schema isolation" from a diagram into a check that runs against a real database. |
 | `OutboxLeanTableE2ETests`, `ContributionAndOutboxE2ETests` | A business change and its event commit together or not at all; dispatch is claimed with `SKIP LOCKED`. | The transactional outbox end to end. |
 | `RefundSagaE2ETests`, `PaymentGatewayWebhookReconciliationE2ETests` | A multi-module flow completes by events, and duplicate webhooks are harmless. | Eventual consistency between modules without a distributed transaction. |
+| `PledgeIdempotencyE2ETests`, `PledgeIdempotencyTests` | A retried pledge returns the first one; twelve simultaneous requests with one key create exactly one pledge; the same key with a different request is a conflict. | The guarantee is a unique index, not application code. Delete the index or the lookup and the tests fail, which is the lesson. |
+| `OutboxWakeUpLatencyE2ETests`, `OutboxSignalTests` | An event reaches its consumer in under a second with no manual drain; without the wake-up the slowest delivery is the five-second timer. | Measures a design choice instead of asserting it. Remove the `Notify()` call and the test fails with the number. |
 | `NotificationPreferencesTier2Tests` | A Tier 2 feature works with no aggregate or repository. | The poly-pattern in practice: small features stay small. |
 | `ReplicatedReadModelResilienceTests` | A module keeps serving from its replicated read model when the source module is down. | Why replicated read models exist. |
 
@@ -76,7 +78,7 @@ These were run against the real stack, not simulated.
 | Stop the standby, then write | The write waited and was never acknowledged, then timed out on the client. Other modules kept serving. This is the consistency-first choice. |
 | Bring the standby back | Writes resumed at once; a write that had stalled committed after the standby returned. |
 
-The last point is worth a lesson on its own: a client timeout does not cancel a commit that is waiting for its standby, so a timed-out request may still become durable later. Idempotency keys exist for this reason.
+The last point is worth a lesson on its own: a client timeout does not cancel a commit that is waiting for its standby, so a timed-out request may still become durable later. Idempotency keys exist for this reason, and `MakeContribution` now accepts one (see `PledgeIdempotencyE2ETests`).
 
 ## Tests that are not worth a student's time
 

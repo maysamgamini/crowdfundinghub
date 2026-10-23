@@ -5,4 +5,5 @@
 /// </summary>
 public sealed record MakeContributionResult(
     Guid ContributionId,
-    string Status);
+    string Status,
+    bool IsReplay = false);

@@ -898,6 +898,9 @@ internal sealed class FakeRefundableContributionRepository : IContributionReposi
     public Task<Contribution?> GetByExternalPaymentIntentIdAsync(string externalPaymentIntentId, CancellationToken cancellationToken)
         => Task.FromResult(_contributions.FirstOrDefault(x => x.ExternalPaymentIntentId == externalPaymentIntentId));
 
+    public Task<Contribution?> GetByIdempotencyKeyAsync(Guid contributorId, string idempotencyKey, CancellationToken cancellationToken)
+        => Task.FromResult(_contributions.FirstOrDefault(x => x.ContributorId == contributorId && x.IdempotencyKey == idempotencyKey));
+
     public Task UpdateAsync(Contribution contribution, CancellationToken cancellationToken)
         => Task.CompletedTask;
 
@@ -1059,6 +1062,13 @@ internal sealed class FakeContributionRepository : IContributionRepository
     {
         SavedContribution = contribution;
         return Task.CompletedTask;
+    }
+
+    public Task<Contribution?> GetByIdempotencyKeyAsync(Guid contributorId, string idempotencyKey, CancellationToken cancellationToken)
+    {
+        var match = new[] { _contribution, SavedContribution }
+            .FirstOrDefault(x => x is not null && x.ContributorId == contributorId && x.IdempotencyKey == idempotencyKey);
+        return Task.FromResult(match);
     }
 
     public Task<Contribution?> GetByIdAsync(Guid contributionId, CancellationToken cancellationToken)

@@ -34,7 +34,7 @@ flowchart LR
 | `IdentityController` | `POST register`, `login`, `refresh`, `logout`; `GET me`; `POST users/{userId}/roles`, `users/{userId}/permissions`, `users/{userId}/deactivate` |
 | `CampaignsController` | `GET /api/campaigns` (paged, filtered), `POST /api/campaigns`, `GET {id}`, `POST {id}/publish`, `POST {id}/cancel` (owner or admin) |
 | `RewardTiersController` | `POST`, `GET`, `GET {rewardTierId}`, `POST {rewardTierId}/reserve` under a campaign |
-| `ContributionsController` | `GET`, `POST`, `GET {contributionId}`, `POST {contributionId}/confirm-payment`, `POST {contributionId}/fail-payment` under a campaign |
+| `ContributionsController` | `GET`, `POST` (optional `Idempotency-Key` header: a retry returns the first pledge with `200` and `Idempotent-Replayed: true`, a different request under the same key is `409`), `GET {contributionId}`, `POST {contributionId}/confirm-payment`, `POST {contributionId}/fail-payment` under a campaign |
 | `CampaignWebhookSubscriptionsController` | `POST`, `GET`, `GET {subscriptionId}`, `DELETE {subscriptionId}` under a campaign |
 | `ModerationController` | `GET` reviews, `GET {campaignId}`, `POST {campaignId}/approve`, `POST {campaignId}/reject` |
 | `NotificationsController` | `GET preferences`, `PUT preferences`, `POST unsubscribe` (Tier 2 handlers) |

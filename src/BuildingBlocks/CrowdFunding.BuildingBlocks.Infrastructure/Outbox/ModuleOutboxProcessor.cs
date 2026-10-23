@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using CrowdFunding.BuildingBlocks.Application.Events;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
+using CrowdFunding.BuildingBlocks.Application.Outbox;
 using CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -34,6 +35,13 @@ public abstract class ModuleOutboxProcessor<TDbContext> : BackgroundService, IOu
     private readonly IServiceProvider _serviceProvider;
     private readonly string _tableName;
     private readonly TimeSpan _pollInterval;
+    private readonly IOutboxSignal<TDbContext>? _signal;
+
+    // One batch at a time per module inside this process. Two concurrent batches here would only
+    // fight over the same rows (the SKIP LOCKED claim keeps them correct across processes). It also
+    // makes the manual drain used by tests wait for a batch the background loop already started,
+    // instead of finding nothing to claim and returning while that batch is still running.
+    private readonly SemaphoreSlim _batchGate = new(1, 1);
     private readonly string _workerId = $"{Environment.MachineName}:{Environment.ProcessId}:{typeof(TDbContext).Name}";
 
     protected ModuleOutboxProcessor(IServiceProvider serviceProvider, string tableName, TimeSpan pollInterval)
@@ -41,22 +49,54 @@ public abstract class ModuleOutboxProcessor<TDbContext> : BackgroundService, IOu
         _serviceProvider = serviceProvider;
         _tableName = tableName;
         _pollInterval = pollInterval;
+        _signal = serviceProvider.GetService<IOutboxSignal<TDbContext>>();
     }
 
     /// <inheritdoc/>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using var timer = new PeriodicTimer(_pollInterval);
-
+        // Sleep until a commit wakes us, with the poll interval as a safety net for rows nobody
+        // signalled for (another instance wrote them, a signal was lost across a restart, or a
+        // failed message came due for its retry). When a batch comes back full there is probably more
+        // waiting, so go round again at once instead of sleeping.
         while (!stoppingToken.IsCancellationRequested)
         {
-            await ProcessBatchAsync(stoppingToken);
-            await timer.WaitForNextTickAsync(stoppingToken);
+            var claimed = await ProcessBatchCoreAsync(stoppingToken);
+
+            if (claimed >= BatchSize)
+            {
+                continue;
+            }
+
+            if (_signal is null)
+            {
+                await Task.Delay(_pollInterval, stoppingToken);
+            }
+            else
+            {
+                await _signal.WaitAsync(_pollInterval, stoppingToken);
+            }
         }
     }
 
     /// <inheritdoc/>
     public async Task ProcessBatchAsync(CancellationToken cancellationToken)
+        => await ProcessBatchCoreAsync(cancellationToken);
+
+    private async Task<int> ProcessBatchCoreAsync(CancellationToken cancellationToken)
+    {
+        await _batchGate.WaitAsync(cancellationToken);
+        try
+        {
+            return await ProcessClaimedBatchAsync(cancellationToken);
+        }
+        finally
+        {
+            _batchGate.Release();
+        }
+    }
+
+    private async Task<int> ProcessClaimedBatchAsync(CancellationToken cancellationToken)
     {
         await using var scope = _serviceProvider.CreateAsyncScope();
         var services = scope.ServiceProvider;
@@ -71,7 +111,7 @@ public abstract class ModuleOutboxProcessor<TDbContext> : BackgroundService, IOu
 
         if (messages.Count == 0)
         {
-            return;
+            return 0;
         }
 
         var nowUtc = DateTime.UtcNow;
@@ -131,6 +171,7 @@ public abstract class ModuleOutboxProcessor<TDbContext> : BackgroundService, IOu
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
+        return messages.Count;
     }
 
     /// <summary>

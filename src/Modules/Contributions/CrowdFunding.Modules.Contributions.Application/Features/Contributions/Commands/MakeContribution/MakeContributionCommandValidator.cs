@@ -18,5 +18,12 @@ public sealed class MakeContributionCommandValidator : AbstractValidator<MakeCon
         RuleFor(x => x.Currency)
             .NotEmpty()
             .Length(3);
+
+        // Optional. Printable ASCII only, so a key can travel in a header and a log line safely.
+        RuleFor(x => x.IdempotencyKey)
+            .MaximumLength(Domain.Aggregates.Contribution.MaxIdempotencyKeyLength)
+            .Matches("^[\\x21-\\x7E]+$")
+            .WithMessage("The idempotency key must be 1 to 100 printable ASCII characters with no spaces.")
+            .When(x => x.IdempotencyKey is not null);
     }
 }

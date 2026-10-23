@@ -159,6 +159,10 @@ namespace CrowdFunding.Modules.Contributions.Infrastructure.Persistence.Migratio
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<string>("PaymentGateway")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
@@ -193,6 +197,11 @@ namespace CrowdFunding.Modules.Contributions.Infrastructure.Persistence.Migratio
                         .HasFilter("\"ExternalPaymentIntentId\" IS NOT NULL");
 
                     b.HasIndex("CampaignId", "CreatedAtUtc");
+
+                    b.HasIndex("ContributorId", "IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_contributions_ContributorId_IdempotencyKey")
+                        .HasFilter("\"IdempotencyKey\" IS NOT NULL");
 
                     b.ToTable("contributions", "contributions");
                 });

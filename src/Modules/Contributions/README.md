@@ -41,7 +41,35 @@ sequenceDiagram
 - **Webhook guard:** signature check, stale-timestamp rejection and dedupe by event id in `processed_payment_webhooks`.
 - **Concurrency:** `xmin` token on `Contribution` plus advisory locks.
 
-**Not built:** an idempotency key on pledge creation, a closing fence at the deadline, and charge-once settlement. See `educational/03-engineering-spec-and-roadmap/design-to-code-mapping-round1.md`.
+## Safe retries
+
+`POST /api/campaigns/{id}/contributions` accepts an optional `Idempotency-Key` header. A retry with the same key returns the first pledge (`200`, `Idempotent-Replayed: true`); the same key with a different request is a `409`; a unique index on (backer, key) decides simultaneous requests.
+
+```mermaid
+sequenceDiagram
+    participant B as Backer
+    participant H as MakeContributionHandler
+    participant Db as contributions.contributions
+    B->>H: POST with Idempotency-Key k
+    H->>Db: pledge for (backer, k)?
+    alt found, same request
+        Db-->>H: first pledge
+        H-->>B: 200 Idempotent-Replayed
+    else found, different request
+        H-->>B: 409 Conflict
+    else not found
+        H->>Db: INSERT (unique on backer and key)
+        alt lost the race
+            Db-->>H: unique violation
+            H->>Db: read the winner
+            H-->>B: 200 Idempotent-Replayed
+        else inserted
+            H-->>B: 201 Created
+        end
+    end
+```
+
+**Not built:** a closing fence at the deadline, and charge-once settlement. See `educational/03-engineering-spec-and-roadmap/design-to-code-mapping-round1.md`.
 
 ## Data and messaging
 

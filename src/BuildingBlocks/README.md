@@ -48,6 +48,7 @@ sequenceDiagram
     participant Db as module schema
     participant Pub as ServiceProviderEventPublisher
     participant H as IEventHandler
+    Note over P: sleeps on IOutboxSignal, woken by a commit, 5 s safety-net timer
     P->>Db: claim Pending rows (SKIP LOCKED), mark Processing
     P->>Pub: publish with InboxMessageContext.MessageId
     Pub->>Db: already in inbox for this handler? skip
@@ -55,5 +56,7 @@ sequenceDiagram
     Pub->>Db: record (MessageId, handler) in inbox, ON CONFLICT DO NOTHING
     P->>Db: mark Processed, or schedule retry, or dead-letter after 5 attempts
 ```
+
+How the worker is woken, and the alternatives (LISTEN/NOTIFY, change data capture), are compared in [`docs/EVENT_DELIVERY_APPROACHES.md`](../../docs/EVENT_DELIVERY_APPROACHES.md).
 
 Known limits: the inbox record is written after the handler, so a crash in between runs the handler once more; the RabbitMQ path does not set a message id, so it skips the inbox; inbox rows are never pruned; outbox rows left in `Processing` by a crashed worker are not reclaimed.

@@ -39,6 +39,13 @@ public sealed class Contribution : BaseEntity
     /// available inventory for an abandoned or declined checkout.</summary>
     public Guid? RewardTierReservationId { get; private set; }
 
+    /// <summary>The client-chosen key that makes creating this pledge safe to retry. A second
+    /// request from the same backer with the same key returns this pledge instead of creating
+    /// another. Null when the client sent no key (the old behaviour: every request is a new pledge).</summary>
+    public string? IdempotencyKey { get; private set; }
+
+    public const int MaxIdempotencyKeyLength = 100;
+
     private Contribution()
     {
     }
@@ -50,7 +57,8 @@ public sealed class Contribution : BaseEntity
         Money money,
         ContributionStatus status,
         DateTime createdAtUtc,
-        Guid? rewardTierReservationId)
+        Guid? rewardTierReservationId,
+        string? idempotencyKey)
     {
         Id = id;
         CampaignId = campaignId;
@@ -59,6 +67,7 @@ public sealed class Contribution : BaseEntity
         Status = status;
         CreatedAtUtc = createdAtUtc;
         RewardTierReservationId = rewardTierReservationId;
+        IdempotencyKey = idempotencyKey;
     }
 
     public static Contribution Create(
@@ -67,7 +76,8 @@ public sealed class Contribution : BaseEntity
         decimal amount,
         string currency,
         DateTime createdAtUtc,
-        Guid? rewardTierReservationId = null)
+        Guid? rewardTierReservationId = null,
+        string? idempotencyKey = null)
     {
         if (campaignId == Guid.Empty)
         {
@@ -77,6 +87,11 @@ public sealed class Contribution : BaseEntity
         if (contributorId == Guid.Empty)
         {
             throw new ArgumentException("ContributorId is required.", nameof(contributorId));
+        }
+
+        if (idempotencyKey is not null && (idempotencyKey.Length == 0 || idempotencyKey.Length > MaxIdempotencyKeyLength))
+        {
+            throw new ArgumentException($"The idempotency key must be 1 to {MaxIdempotencyKeyLength} characters.", nameof(idempotencyKey));
         }
 
         var money = new Money(amount, currency);
@@ -93,7 +108,8 @@ public sealed class Contribution : BaseEntity
             money,
             ContributionStatus.Pending,
             createdAtUtc,
-            rewardTierReservationId);
+            rewardTierReservationId,
+            idempotencyKey);
     }
 
     /// <summary>

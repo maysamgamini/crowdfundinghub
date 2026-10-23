@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Security;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
@@ -38,6 +39,20 @@ public sealed class MakeContributionCommandHandler : ICommandHandler<MakeContrib
     {
         EnsureCanContribute();
 
+        // A retry of an earlier request is answered from what that request created, before any
+        // campaign check: the deadline may have passed since the first attempt, and the backer
+        // must still be told what happened to the pledge they already made.
+        if (command.IdempotencyKey is not null)
+        {
+            var earlier = await _contributionRepository.GetByIdempotencyKeyAsync(
+                _currentUser.UserId, command.IdempotencyKey, cancellationToken);
+
+            if (earlier is not null)
+            {
+                return ReplayOf(earlier, command);
+            }
+        }
+
         // Reads Contributions' own locally replicated campaign snapshot rather than calling back
         // into Campaigns synchronously (TICKET-023) — see ReplicatedCampaignEventHandlers.
         var campaign = await _activeCampaignCacheRepository.GetAsync(command.CampaignId, cancellationToken);
@@ -77,7 +92,8 @@ public sealed class MakeContributionCommandHandler : ICommandHandler<MakeContrib
             command.Amount,
             command.Currency,
             _dateTimeProvider.UtcNow,
-            command.RewardTierReservationId);
+            command.RewardTierReservationId,
+            command.IdempotencyKey);
 
         // In a real integration this id/reference comes back from creating a PaymentIntent (or
         // equivalent) with the external gateway before the client is redirected to complete
@@ -85,12 +101,42 @@ public sealed class MakeContributionCommandHandler : ICommandHandler<MakeContrib
         // correlation key an inbound webhook reconciles against in ReconcilePaymentWebhookCommandHandler.
         contribution.AttachPaymentIntent($"pi_mock_{contribution.Id:N}", "Mock");
 
-        await _transactionExecutor.ExecuteAsync(async ct =>
+        try
         {
-            await _contributionRepository.AddAsync(contribution, ct);
-        }, cancellationToken);
+            await _transactionExecutor.ExecuteAsync(async ct =>
+            {
+                await _contributionRepository.AddAsync(contribution, ct);
+            }, cancellationToken);
+        }
+        catch (IdempotencyKeyAlreadyUsedException) when (command.IdempotencyKey is not null)
+        {
+            // Two requests with the same key arrived together and the other one inserted first.
+            // The unique index decided; answer with the winner.
+            var winner = await _contributionRepository.GetByIdempotencyKeyAsync(
+                _currentUser.UserId, command.IdempotencyKey, cancellationToken)
+                ?? throw new InvalidOperationException("The pledge that holds this idempotency key could not be found.");
+
+            return ReplayOf(winner, command);
+        }
 
         return new MakeContributionResult(contribution.Id, contribution.Status.ToString());
+    }
+
+    private static MakeContributionResult ReplayOf(Contribution earlier, MakeContributionCommand command)
+    {
+        var sameRequest =
+            earlier.CampaignId == command.CampaignId
+            && earlier.Money.Amount == command.Amount
+            && string.Equals(earlier.Money.Currency, command.Currency, StringComparison.OrdinalIgnoreCase)
+            && earlier.RewardTierReservationId == command.RewardTierReservationId;
+
+        if (!sameRequest)
+        {
+            throw new ResourceConflictException(
+                "This idempotency key was already used for a different request. Use a new key for a new pledge.");
+        }
+
+        return new MakeContributionResult(earlier.Id, earlier.Status.ToString(), IsReplay: true);
     }
 
     private void EnsureCanContribute()
