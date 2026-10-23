@@ -1,0 +1,91 @@
+# Tests that teach
+
+Most of the 400-odd tests in this repository protect the code. A handful do something more useful for a learner: each one **proves a design rule** that would otherwise be a claim in a lesson. This page lists them, says what each one teaches, and says honestly which tests are not worth a student's time.
+
+## The three layers
+
+```mermaid
+flowchart TB
+    subgraph Fast["Seconds, no Docker"]
+        U["Unit tests: 284<br/>domain rules, handlers, value objects"]
+        A["Architecture tests: 22<br/>who may reference whom"]
+    end
+    subgraph Slow["Minutes, real PostgreSQL via Testcontainers"]
+        I["Integration tests<br/>races, outbox, inbox, schemas, webhooks"]
+    end
+    subgraph Drills["By hand, replicated stack"]
+        D["Failure drills<br/>kill a primary, stop a standby"]
+    end
+    U --> I
+    A --> I
+    I --> D
+```
+
+| Layer | Run it | Needs Docker | Teaches |
+|---|---|---|---|
+| Unit | `dotnet test tests/UnitTests/CrowdFunding.UnitTests` | no | Domain rules live in aggregates and are testable without infrastructure. |
+| Architecture | `dotnet test tests/ArchitectureTests/CrowdFunding.ArchitectureTests` | no | Boundaries are enforced by the build, not by reviewers' memory. |
+| Integration | `dotnet test tests/IntegrationTests/CrowdFunding.IntegrationTests` | yes | What only a real database can show: concurrency, transactions, schemas. |
+| Drills | see `docs/LOCAL_DISTRIBUTION_AND_HA_PLAN.md` | yes | What happens to consistency when a node dies. |
+
+## The tests worth studying
+
+```mermaid
+quadrantChart
+    title Value to a student
+    x-axis Easy to read --> Hard to read
+    y-axis Teaches little --> Teaches a lot
+    quadrant-1 Study with care
+    quadrant-2 Read first
+    quadrant-3 Skip
+    quadrant-4 Skim
+    Module dependency tests: [0.2, 0.85]
+    Contribution concurrency: [0.6, 0.9]
+    Webhook subscription concurrency: [0.55, 0.9]
+    Inbox retry: [0.65, 0.8]
+    Schema rules: [0.45, 0.75]
+    Outbox lean table: [0.5, 0.55]
+    Tier 2 preferences: [0.3, 0.6]
+    Swagger documentation: [0.2, 0.1]
+    Getter and DTO unit tests: [0.1, 0.1]
+```
+
+| Test | What it proves | Why a student should read it |
+|---|---|---|
+| `*ModuleDependencyTests` (architecture) | A module's Application and Domain never reference another module's internals; Tier 2 handlers depend only on their own `DbContext` and clock. | Shortest path to understanding module boundaries. A broken rule fails the build with the offending type named. |
+| `ContributionConcurrencyTests`, `CampaignContributionConcurrencyTests`, `RewardTierConcurrencyE2ETests` | Many simultaneous contributions never oversell a reward tier or lose a pledge total. | Shows **why** the xmin token, advisory lock and unique key exist. Remove the guard and the test fails; that is the lesson. |
+| `WebhookSubscriptionConcurrencyTests` | A stale background save cannot re-activate a subscription that an owner deleted. | Found a real lost-update bug while converting a feature to Tier 2, so it teaches the tier rule "can concurrent writes corrupt it?" with evidence. |
+| `InboxRetryTests` | A handler that fails is retried; one that succeeded is not run twice for the same message. | Makes at-least-once delivery and idempotent consumers concrete. It also documents the crash window that remains. |
+| `ModuleSchemaRulesTests` | Each module's tables live in its own schema, each module has its own migration history, and no foreign key crosses a schema. | Turns "schema isolation" from a diagram into a check that runs against a real database. |
+| `OutboxLeanTableE2ETests`, `ContributionAndOutboxE2ETests` | A business change and its event commit together or not at all; dispatch is claimed with `SKIP LOCKED`. | The transactional outbox end to end. |
+| `RefundSagaE2ETests`, `PaymentGatewayWebhookReconciliationE2ETests` | A multi-module flow completes by events, and duplicate webhooks are harmless. | Eventual consistency between modules without a distributed transaction. |
+| `NotificationPreferencesTier2Tests` | A Tier 2 feature works with no aggregate or repository. | The poly-pattern in practice: small features stay small. |
+| `ReplicatedReadModelResilienceTests` | A module keeps serving from its replicated read model when the source module is down. | Why replicated read models exist. |
+
+## The outbox clock bug as a case study
+
+The integration suite once failed 26 of 92 tests at random. A first guess, a race between the background timer and the test, was wrong, and serialising the work changed nothing. The real cause: the claim query compared a row's application-set `ScheduledAtUtc` with the database's `now()`, and a container clock a few milliseconds behind made a just-queued row look "not yet due". Lesson for students: **a flaky test is a bug report; chase the cause instead of adding retries**, and never compare timestamps produced by two different clocks.
+
+## Failure drills (run on the replicated profile)
+
+These were run against the real stack, not simulated.
+
+| Drill | Result observed |
+|---|---|
+| Stop a module's primary while the API runs | A replica was promoted; the first request after the stop took about 30 s (the connection waited for a new primary), then the API recovered with no restart and the data written earlier was intact. |
+| Stop the standby, then write | The write waited and was never acknowledged, then timed out on the client. Other modules kept serving. This is the consistency-first choice. |
+| Bring the standby back | Writes resumed at once; a write that had stalled committed after the standby returned. |
+
+The last point is worth a lesson on its own: a client timeout does not cancel a commit that is waiting for its standby, so a timed-out request may still become durable later. Idempotency keys exist for this reason.
+
+## Tests that are not worth a student's time
+
+- `SwaggerDocumentationTests` and similar: they guard documentation output, not design.
+- Unit tests of plain getters, DTO mapping and trivial value objects: useful as regression nets, but they teach nothing about architecture.
+- `RosettaStoneParityTests`: valuable only once you study the Rosetta sample.
+
+## Gaps
+
+- No test yet fails when a Tier 1 or Tier 2 feature reads another module's tables with raw SQL.
+- The inbox crash window (handler succeeds, process dies before the record is written) has no test, only a note.
+- The failure drills are run by hand; they are not automated.

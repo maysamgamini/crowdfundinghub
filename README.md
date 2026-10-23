@@ -19,6 +19,17 @@ Each module connects to its own database (`identity_db`, `campaigns_db`, ...) an
 
 Integration tests start their own databases with Testcontainers. With Colima, export `DOCKER_HOST=unix://$HOME/.colima/default/docker.sock` and `TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock` first.
 
+### Replicated profile (two nodes per module, quorum witness)
+
+```bash
+colima start --memory 8                              # Colima only; Docker Desktop: give it 8 GB
+docker compose -f docker-compose.ha.yml up -d        # 16 database nodes + 3 etcd witnesses + Redis (~3.5 GB, 2-3 minutes to settle)
+ASPNETCORE_ENVIRONMENT=HA dotnet run --project src/API/CrowdFunding.API -- migrate
+ASPNETCORE_ENVIRONMENT=HA dotnet run --project src/API/CrowdFunding.API
+```
+
+Every module database is a primary plus a synchronous standby (`synchronous_commit = remote_apply`, strict mode), and the etcd group decides who may be primary. If the standby is down, writes to that module wait instead of being accepted unreplicated. See `docs/LOCAL_DISTRIBUTION_AND_HA_PLAN.md` and `docs/TESTS_THAT_TEACH.md` for the drills.
+
 
 ## 1. Executive Summary & Project Goal
 

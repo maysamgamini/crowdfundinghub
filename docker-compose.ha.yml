@@ -1,0 +1,427 @@
+# Replicated profile: every module database is a two-node Patroni cluster (primary + synchronous standby),
+# and a shared three-member etcd group is the witness that decides which node may be primary.
+# Start it with:  docker compose -f docker-compose.ha.yml up -d
+# Needs roughly 6 GB of memory for the container VM (Colima: colima start --memory 8).
+x-etcd: &etcd
+  image: quay.io/coreos/etcd:v3.5.16
+  restart: unless-stopped
+x-pg: &pg
+  image: ghcr.io/zalando/spilo-16:3.3-p1
+  restart: unless-stopped
+  depends_on: [etcd1, etcd2, etcd3]
+services:
+  etcd1:
+    <<: *etcd
+    command: >
+      etcd --name etcd1 --data-dir /etcd-data
+      --listen-client-urls http://0.0.0.0:2379 --advertise-client-urls http://etcd1:2379
+      --listen-peer-urls http://0.0.0.0:2380 --initial-advertise-peer-urls http://etcd1:2380
+      --initial-cluster etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380 --initial-cluster-state new --initial-cluster-token crowdfunding-witness
+    volumes: [etcd1_data:/etcd-data]
+  etcd2:
+    <<: *etcd
+    command: >
+      etcd --name etcd2 --data-dir /etcd-data
+      --listen-client-urls http://0.0.0.0:2379 --advertise-client-urls http://etcd2:2379
+      --listen-peer-urls http://0.0.0.0:2380 --initial-advertise-peer-urls http://etcd2:2380
+      --initial-cluster etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380 --initial-cluster-state new --initial-cluster-token crowdfunding-witness
+    volumes: [etcd2_data:/etcd-data]
+  etcd3:
+    <<: *etcd
+    command: >
+      etcd --name etcd3 --data-dir /etcd-data
+      --listen-client-urls http://0.0.0.0:2379 --advertise-client-urls http://etcd3:2379
+      --listen-peer-urls http://0.0.0.0:2380 --initial-advertise-peer-urls http://etcd3:2380
+      --initial-cluster etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380 --initial-cluster-state new --initial-cluster-token crowdfunding-witness
+    volumes: [etcd3_data:/etcd-data]
+  identity-a:
+    <<: *pg
+    hostname: identity-a
+    ports: ["6000:5432"]
+    environment:
+      SCOPE: identity
+      PGVERSION: "16"
+      ETCD3_HOSTS: "etcd1:2379,etcd2:2379,etcd3:2379"
+      PGPASSWORD_SUPERUSER: postgres
+      PGPASSWORD_ADMIN: postgres
+      PGPASSWORD_STANDBY: standby
+      SPILO_CONFIGURATION: |
+        bootstrap:
+          dcs:
+            synchronous_mode: true
+            synchronous_mode_strict: true
+            postgresql:
+              parameters:
+                synchronous_commit: remote_apply
+          post_init: /scripts/create-module-database.sh identity_db
+    volumes:
+      - identity_a_data:/home/postgres/pgdata
+      - ./deploy/ha/create-module-database.sh:/scripts/create-module-database.sh:ro
+  identity-b:
+    <<: *pg
+    hostname: identity-b
+    ports: ["6001:5432"]
+    environment:
+      SCOPE: identity
+      PGVERSION: "16"
+      ETCD3_HOSTS: "etcd1:2379,etcd2:2379,etcd3:2379"
+      PGPASSWORD_SUPERUSER: postgres
+      PGPASSWORD_ADMIN: postgres
+      PGPASSWORD_STANDBY: standby
+      SPILO_CONFIGURATION: |
+        bootstrap:
+          dcs:
+            synchronous_mode: true
+            synchronous_mode_strict: true
+            postgresql:
+              parameters:
+                synchronous_commit: remote_apply
+          post_init: /scripts/create-module-database.sh identity_db
+    volumes:
+      - identity_b_data:/home/postgres/pgdata
+      - ./deploy/ha/create-module-database.sh:/scripts/create-module-database.sh:ro
+  campaigns-a:
+    <<: *pg
+    hostname: campaigns-a
+    ports: ["6010:5432"]
+    environment:
+      SCOPE: campaigns
+      PGVERSION: "16"
+      ETCD3_HOSTS: "etcd1:2379,etcd2:2379,etcd3:2379"
+      PGPASSWORD_SUPERUSER: postgres
+      PGPASSWORD_ADMIN: postgres
+      PGPASSWORD_STANDBY: standby
+      SPILO_CONFIGURATION: |
+        bootstrap:
+          dcs:
+            synchronous_mode: true
+            synchronous_mode_strict: true
+            postgresql:
+              parameters:
+                synchronous_commit: remote_apply
+          post_init: /scripts/create-module-database.sh campaigns_db
+    volumes:
+      - campaigns_a_data:/home/postgres/pgdata
+      - ./deploy/ha/create-module-database.sh:/scripts/create-module-database.sh:ro
+  campaigns-b:
+    <<: *pg
+    hostname: campaigns-b
+    ports: ["6011:5432"]
+    environment:
+      SCOPE: campaigns
+      PGVERSION: "16"
+      ETCD3_HOSTS: "etcd1:2379,etcd2:2379,etcd3:2379"
+      PGPASSWORD_SUPERUSER: postgres
+      PGPASSWORD_ADMIN: postgres
+      PGPASSWORD_STANDBY: standby
+      SPILO_CONFIGURATION: |
+        bootstrap:
+          dcs:
+            synchronous_mode: true
+            synchronous_mode_strict: true
+            postgresql:
+              parameters:
+                synchronous_commit: remote_apply
+          post_init: /scripts/create-module-database.sh campaigns_db
+    volumes:
+      - campaigns_b_data:/home/postgres/pgdata
+      - ./deploy/ha/create-module-database.sh:/scripts/create-module-database.sh:ro
+  contributions-a:
+    <<: *pg
+    hostname: contributions-a
+    ports: ["6020:5432"]
+    environment:
+      SCOPE: contributions
+      PGVERSION: "16"
+      ETCD3_HOSTS: "etcd1:2379,etcd2:2379,etcd3:2379"
+      PGPASSWORD_SUPERUSER: postgres
+      PGPASSWORD_ADMIN: postgres
+      PGPASSWORD_STANDBY: standby
+      SPILO_CONFIGURATION: |
+        bootstrap:
+          dcs:
+            synchronous_mode: true
+            synchronous_mode_strict: true
+            postgresql:
+              parameters:
+                synchronous_commit: remote_apply
+          post_init: /scripts/create-module-database.sh contributions_db
+    volumes:
+      - contributions_a_data:/home/postgres/pgdata
+      - ./deploy/ha/create-module-database.sh:/scripts/create-module-database.sh:ro
+  contributions-b:
+    <<: *pg
+    hostname: contributions-b
+    ports: ["6021:5432"]
+    environment:
+      SCOPE: contributions
+      PGVERSION: "16"
+      ETCD3_HOSTS: "etcd1:2379,etcd2:2379,etcd3:2379"
+      PGPASSWORD_SUPERUSER: postgres
+      PGPASSWORD_ADMIN: postgres
+      PGPASSWORD_STANDBY: standby
+      SPILO_CONFIGURATION: |
+        bootstrap:
+          dcs:
+            synchronous_mode: true
+            synchronous_mode_strict: true
+            postgresql:
+              parameters:
+                synchronous_commit: remote_apply
+          post_init: /scripts/create-module-database.sh contributions_db
+    volumes:
+      - contributions_b_data:/home/postgres/pgdata
+      - ./deploy/ha/create-module-database.sh:/scripts/create-module-database.sh:ro
+  moderation-a:
+    <<: *pg
+    hostname: moderation-a
+    ports: ["6030:5432"]
+    environment:
+      SCOPE: moderation
+      PGVERSION: "16"
+      ETCD3_HOSTS: "etcd1:2379,etcd2:2379,etcd3:2379"
+      PGPASSWORD_SUPERUSER: postgres
+      PGPASSWORD_ADMIN: postgres
+      PGPASSWORD_STANDBY: standby
+      SPILO_CONFIGURATION: |
+        bootstrap:
+          dcs:
+            synchronous_mode: true
+            synchronous_mode_strict: true
+            postgresql:
+              parameters:
+                synchronous_commit: remote_apply
+          post_init: /scripts/create-module-database.sh moderation_db
+    volumes:
+      - moderation_a_data:/home/postgres/pgdata
+      - ./deploy/ha/create-module-database.sh:/scripts/create-module-database.sh:ro
+  moderation-b:
+    <<: *pg
+    hostname: moderation-b
+    ports: ["6031:5432"]
+    environment:
+      SCOPE: moderation
+      PGVERSION: "16"
+      ETCD3_HOSTS: "etcd1:2379,etcd2:2379,etcd3:2379"
+      PGPASSWORD_SUPERUSER: postgres
+      PGPASSWORD_ADMIN: postgres
+      PGPASSWORD_STANDBY: standby
+      SPILO_CONFIGURATION: |
+        bootstrap:
+          dcs:
+            synchronous_mode: true
+            synchronous_mode_strict: true
+            postgresql:
+              parameters:
+                synchronous_commit: remote_apply
+          post_init: /scripts/create-module-database.sh moderation_db
+    volumes:
+      - moderation_b_data:/home/postgres/pgdata
+      - ./deploy/ha/create-module-database.sh:/scripts/create-module-database.sh:ro
+  notifications-a:
+    <<: *pg
+    hostname: notifications-a
+    ports: ["6040:5432"]
+    environment:
+      SCOPE: notifications
+      PGVERSION: "16"
+      ETCD3_HOSTS: "etcd1:2379,etcd2:2379,etcd3:2379"
+      PGPASSWORD_SUPERUSER: postgres
+      PGPASSWORD_ADMIN: postgres
+      PGPASSWORD_STANDBY: standby
+      SPILO_CONFIGURATION: |
+        bootstrap:
+          dcs:
+            synchronous_mode: true
+            synchronous_mode_strict: true
+            postgresql:
+              parameters:
+                synchronous_commit: remote_apply
+          post_init: /scripts/create-module-database.sh notifications_db
+    volumes:
+      - notifications_a_data:/home/postgres/pgdata
+      - ./deploy/ha/create-module-database.sh:/scripts/create-module-database.sh:ro
+  notifications-b:
+    <<: *pg
+    hostname: notifications-b
+    ports: ["6041:5432"]
+    environment:
+      SCOPE: notifications
+      PGVERSION: "16"
+      ETCD3_HOSTS: "etcd1:2379,etcd2:2379,etcd3:2379"
+      PGPASSWORD_SUPERUSER: postgres
+      PGPASSWORD_ADMIN: postgres
+      PGPASSWORD_STANDBY: standby
+      SPILO_CONFIGURATION: |
+        bootstrap:
+          dcs:
+            synchronous_mode: true
+            synchronous_mode_strict: true
+            postgresql:
+              parameters:
+                synchronous_commit: remote_apply
+          post_init: /scripts/create-module-database.sh notifications_db
+    volumes:
+      - notifications_b_data:/home/postgres/pgdata
+      - ./deploy/ha/create-module-database.sh:/scripts/create-module-database.sh:ro
+  campaignupdates-a:
+    <<: *pg
+    hostname: campaignupdates-a
+    ports: ["6050:5432"]
+    environment:
+      SCOPE: campaignupdates
+      PGVERSION: "16"
+      ETCD3_HOSTS: "etcd1:2379,etcd2:2379,etcd3:2379"
+      PGPASSWORD_SUPERUSER: postgres
+      PGPASSWORD_ADMIN: postgres
+      PGPASSWORD_STANDBY: standby
+      SPILO_CONFIGURATION: |
+        bootstrap:
+          dcs:
+            synchronous_mode: true
+            synchronous_mode_strict: true
+            postgresql:
+              parameters:
+                synchronous_commit: remote_apply
+          post_init: /scripts/create-module-database.sh campaignupdates_db
+    volumes:
+      - campaignupdates_a_data:/home/postgres/pgdata
+      - ./deploy/ha/create-module-database.sh:/scripts/create-module-database.sh:ro
+  campaignupdates-b:
+    <<: *pg
+    hostname: campaignupdates-b
+    ports: ["6051:5432"]
+    environment:
+      SCOPE: campaignupdates
+      PGVERSION: "16"
+      ETCD3_HOSTS: "etcd1:2379,etcd2:2379,etcd3:2379"
+      PGPASSWORD_SUPERUSER: postgres
+      PGPASSWORD_ADMIN: postgres
+      PGPASSWORD_STANDBY: standby
+      SPILO_CONFIGURATION: |
+        bootstrap:
+          dcs:
+            synchronous_mode: true
+            synchronous_mode_strict: true
+            postgresql:
+              parameters:
+                synchronous_commit: remote_apply
+          post_init: /scripts/create-module-database.sh campaignupdates_db
+    volumes:
+      - campaignupdates_b_data:/home/postgres/pgdata
+      - ./deploy/ha/create-module-database.sh:/scripts/create-module-database.sh:ro
+  audit-a:
+    <<: *pg
+    hostname: audit-a
+    ports: ["6060:5432"]
+    environment:
+      SCOPE: audit
+      PGVERSION: "16"
+      ETCD3_HOSTS: "etcd1:2379,etcd2:2379,etcd3:2379"
+      PGPASSWORD_SUPERUSER: postgres
+      PGPASSWORD_ADMIN: postgres
+      PGPASSWORD_STANDBY: standby
+      SPILO_CONFIGURATION: |
+        bootstrap:
+          dcs:
+            synchronous_mode: true
+            synchronous_mode_strict: true
+            postgresql:
+              parameters:
+                synchronous_commit: remote_apply
+          post_init: /scripts/create-module-database.sh audit_db
+    volumes:
+      - audit_a_data:/home/postgres/pgdata
+      - ./deploy/ha/create-module-database.sh:/scripts/create-module-database.sh:ro
+  audit-b:
+    <<: *pg
+    hostname: audit-b
+    ports: ["6061:5432"]
+    environment:
+      SCOPE: audit
+      PGVERSION: "16"
+      ETCD3_HOSTS: "etcd1:2379,etcd2:2379,etcd3:2379"
+      PGPASSWORD_SUPERUSER: postgres
+      PGPASSWORD_ADMIN: postgres
+      PGPASSWORD_STANDBY: standby
+      SPILO_CONFIGURATION: |
+        bootstrap:
+          dcs:
+            synchronous_mode: true
+            synchronous_mode_strict: true
+            postgresql:
+              parameters:
+                synchronous_commit: remote_apply
+          post_init: /scripts/create-module-database.sh audit_db
+    volumes:
+      - audit_b_data:/home/postgres/pgdata
+      - ./deploy/ha/create-module-database.sh:/scripts/create-module-database.sh:ro
+  rosettastone-a:
+    <<: *pg
+    hostname: rosettastone-a
+    ports: ["6070:5432"]
+    environment:
+      SCOPE: rosettastone
+      PGVERSION: "16"
+      ETCD3_HOSTS: "etcd1:2379,etcd2:2379,etcd3:2379"
+      PGPASSWORD_SUPERUSER: postgres
+      PGPASSWORD_ADMIN: postgres
+      PGPASSWORD_STANDBY: standby
+      SPILO_CONFIGURATION: |
+        bootstrap:
+          dcs:
+            synchronous_mode: true
+            synchronous_mode_strict: true
+            postgresql:
+              parameters:
+                synchronous_commit: remote_apply
+          post_init: /scripts/create-module-database.sh rosettastone_db
+    volumes:
+      - rosettastone_a_data:/home/postgres/pgdata
+      - ./deploy/ha/create-module-database.sh:/scripts/create-module-database.sh:ro
+  rosettastone-b:
+    <<: *pg
+    hostname: rosettastone-b
+    ports: ["6071:5432"]
+    environment:
+      SCOPE: rosettastone
+      PGVERSION: "16"
+      ETCD3_HOSTS: "etcd1:2379,etcd2:2379,etcd3:2379"
+      PGPASSWORD_SUPERUSER: postgres
+      PGPASSWORD_ADMIN: postgres
+      PGPASSWORD_STANDBY: standby
+      SPILO_CONFIGURATION: |
+        bootstrap:
+          dcs:
+            synchronous_mode: true
+            synchronous_mode_strict: true
+            postgresql:
+              parameters:
+                synchronous_commit: remote_apply
+          post_init: /scripts/create-module-database.sh rosettastone_db
+    volumes:
+      - rosettastone_b_data:/home/postgres/pgdata
+      - ./deploy/ha/create-module-database.sh:/scripts/create-module-database.sh:ro
+  crowdfunding-redis:
+    image: redis:7-alpine
+    ports: ["${CF_REDIS_PORT:-6379}:6379"]
+volumes:
+  etcd1_data:
+  etcd2_data:
+  etcd3_data:
+  identity_a_data:
+  identity_b_data:
+  campaigns_a_data:
+  campaigns_b_data:
+  contributions_a_data:
+  contributions_b_data:
+  moderation_a_data:
+  moderation_b_data:
+  notifications_a_data:
+  notifications_b_data:
+  campaignupdates_a_data:
+  campaignupdates_b_data:
+  audit_a_data:
+  audit_b_data:
+  rosettastone_a_data:
+  rosettastone_b_data:
