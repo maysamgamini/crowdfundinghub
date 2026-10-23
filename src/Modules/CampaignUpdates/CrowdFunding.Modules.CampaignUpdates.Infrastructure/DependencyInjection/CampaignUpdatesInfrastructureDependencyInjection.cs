@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Infrastructure.Events;
 using CrowdFunding.BuildingBlocks.Infrastructure.Configuration;
 using CrowdFunding.Modules.CampaignUpdates.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.CampaignUpdates.Application.Abstractions.Services;
@@ -24,6 +25,8 @@ public static class CampaignUpdatesInfrastructureDependencyInjection
         services.AddDbContext<CampaignUpdatesDbContext>(options =>
             options.UseNpgsql(connectionString, npgsql =>
                 npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "campaignupdates")));
+
+        services.AddInbox<CampaignUpdatesDbContext>(typeof(CrowdFunding.Modules.CampaignUpdates.Application.DependencyInjection.CampaignUpdatesApplicationDependencyInjection).Assembly);
 
         services.AddScoped<ICampaignOwnerCacheRepository, CampaignOwnerCacheRepository>();
         services.AddScoped<IWebhookSubscriptionRepository, WebhookSubscriptionRepository>();

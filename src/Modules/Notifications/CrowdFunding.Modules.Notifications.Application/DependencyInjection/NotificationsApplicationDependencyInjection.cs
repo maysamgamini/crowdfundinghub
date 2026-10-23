@@ -14,10 +14,8 @@ public static class NotificationsApplicationDependencyInjection
     /// <returns>The configured service collection.</returns>
     public static IServiceCollection AddNotificationsApplication(this IServiceCollection services)
     {
-        services.AddScoped<Features.Preferences.Queries.GetNotificationPreferences.GetNotificationPreferencesQueryHandler>();
-        services.AddScoped<Features.Preferences.Commands.UpdateNotificationPreferences.UpdateNotificationPreferencesCommandHandler>();
-        services.AddScoped<Features.Preferences.Commands.Unsubscribe.UnsubscribeCommandHandler>();
-
+        // The preference handlers are Tier 2 and live in the Infrastructure project; the host
+        // registers them by scanning that assembly.
         return services;
     }
 }

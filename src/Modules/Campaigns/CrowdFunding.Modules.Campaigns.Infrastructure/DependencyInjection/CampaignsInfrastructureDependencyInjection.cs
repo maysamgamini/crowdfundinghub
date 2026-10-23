@@ -1,4 +1,5 @@
-﻿using CrowdFunding.BuildingBlocks.Infrastructure.Configuration;
+﻿using CrowdFunding.BuildingBlocks.Infrastructure.Events;
+using CrowdFunding.BuildingBlocks.Infrastructure.Configuration;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Transactions;
@@ -33,6 +34,8 @@ public static class CampaignsInfrastructureDependencyInjection
         services.AddDbContext<CampaignsDbContext>(options =>
             options.UseNpgsql(connectionString, npgsql =>
                 npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "campaigns")));
+
+        services.AddInbox<CampaignsDbContext>(typeof(CrowdFunding.Modules.Campaigns.Application.DependencyInjection.CampaignsApplicationDependencyInjection).Assembly);
 
         services.AddStackExchangeRedisCache(options =>
         {

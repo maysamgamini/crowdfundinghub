@@ -59,6 +59,23 @@ namespace CrowdFunding.Modules.Moderation.Infrastructure.Persistence.Migrations
                     b.ToTable("moderation_dead_letter_events", "moderation");
                 });
 
+            modelBuilder.Entity("CrowdFunding.BuildingBlocks.Infrastructure.Persistence.InboxMessage", b =>
+                {
+                    b.Property<Guid>("MessageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Consumer")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<DateTime>("ProcessedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("MessageId", "Consumer");
+
+                    b.ToTable("moderation_inbox_messages", "moderation");
+                });
+
             modelBuilder.Entity("CrowdFunding.BuildingBlocks.Infrastructure.Persistence.OutboxMessage", b =>
                 {
                     b.Property<Guid>("Id")

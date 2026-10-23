@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Infrastructure.Events;
 using CrowdFunding.BuildingBlocks.Infrastructure.Configuration;
 using CrowdFunding.Modules.Notifications.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Notifications.Application.Abstractions.Services;
@@ -24,6 +25,8 @@ public static class NotificationsInfrastructureDependencyInjection
         services.AddDbContext<NotificationsDbContext>(options =>
             options.UseNpgsql(connectionString, npgsql =>
                 npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "notifications")));
+
+        services.AddInbox<NotificationsDbContext>(typeof(CrowdFunding.Modules.Notifications.Application.DependencyInjection.NotificationsApplicationDependencyInjection).Assembly);
 
         services.AddScoped<ICampaignTitleCacheRepository, CampaignTitleCacheRepository>();
         services.AddScoped<INotificationPreferenceRepository, NotificationPreferenceRepository>();

@@ -35,10 +35,47 @@ public sealed class ServiceProviderEventPublisher : IEventPublisher
             static type => type.GetMethod(nameof(IEventHandler<object>.Handle))
                            ?? throw new InvalidOperationException($"Handler type '{type.FullName}' does not expose Handle."));
 
+        var messageId = _serviceProvider.GetService<InboxMessageContext>()?.MessageId;
+
         foreach (var handler in handlers)
         {
-            var task = (Task)handleMethod.Invoke(handler, [notification, cancellationToken])!;
-            await task;
+            var inbox = messageId is null ? null : ResolveInbox(handler!.GetType().Assembly);
+            var consumer = handler!.GetType().FullName!;
+
+            // A retried message skips the handlers that already finished on an earlier attempt.
+            if (inbox is not null && await inbox.HasProcessedAsync(messageId!.Value, consumer, cancellationToken))
+            {
+                continue;
+            }
+
+            await InvokeAsync(handleMethod, handler, notification, cancellationToken);
+
+            if (inbox is not null)
+            {
+                await inbox.MarkProcessedAsync(messageId!.Value, consumer, DateTime.UtcNow, cancellationToken);
+            }
+        }
+    }
+
+    private IInbox? ResolveInbox(Assembly handlerAssembly)
+    {
+        var binding = _serviceProvider.GetServices<InboxBinding>()
+            .FirstOrDefault(x => x.HandlerAssembly == handlerAssembly);
+
+        return binding is null ? null : (IInbox)_serviceProvider.GetRequiredService(binding.InboxType);
+    }
+
+    // MethodInfo.Invoke wraps a handler's synchronous throw in TargetInvocationException; unwrap it
+    // so callers see the handler's own exception whether it threw before or after its first await.
+    private static async Task InvokeAsync(MethodInfo handleMethod, object handler, object notification, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await (Task)handleMethod.Invoke(handler, [notification, cancellationToken])!;
+        }
+        catch (TargetInvocationException exception) when (exception.InnerException is not null)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
         }
     }
 }

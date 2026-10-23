@@ -25,6 +25,7 @@ public sealed class CampaignsDbContext : DbContext
     {
         // Every table of this module lives in its own PostgreSQL schema.
         modelBuilder.HasDefaultSchema("campaigns");
+        modelBuilder.ConfigureInbox("campaigns_inbox_messages");
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(CampaignsDbContext).Assembly);
         modelBuilder.ConfigureOutbox("campaigns_outbox_messages");
         modelBuilder.ConfigureDeadLetter("campaigns_dead_letter_events");

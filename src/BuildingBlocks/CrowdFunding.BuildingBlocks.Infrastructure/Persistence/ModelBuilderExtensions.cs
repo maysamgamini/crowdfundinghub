@@ -62,4 +62,23 @@ public static class ModelBuilderExtensions
 
         return modelBuilder;
     }
+
+    /// <summary>
+    /// Maps the <see cref="InboxMessage"/> entity to the specified table of the module's schema.
+    /// </summary>
+    /// <param name="modelBuilder">The model builder being configured.</param>
+    /// <param name="tableName">The target table name (e.g. "campaigns_inbox_messages").</param>
+    /// <returns>The configured model builder.</returns>
+    public static ModelBuilder ConfigureInbox(this ModelBuilder modelBuilder, string tableName)
+    {
+        modelBuilder.Entity<InboxMessage>(builder =>
+        {
+            builder.ToTable(tableName);
+            builder.HasKey(x => new { x.MessageId, x.Consumer });
+            builder.Property(x => x.Consumer).HasMaxLength(512).IsRequired();
+            builder.Property(x => x.ProcessedAtUtc).IsRequired();
+        });
+
+        return modelBuilder;
+    }
 }

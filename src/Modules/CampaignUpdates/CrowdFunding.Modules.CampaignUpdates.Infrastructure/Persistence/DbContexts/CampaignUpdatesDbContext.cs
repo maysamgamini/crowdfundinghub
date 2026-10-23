@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
 using CrowdFunding.Modules.CampaignUpdates.Domain.Aggregates;
 using CrowdFunding.Modules.CampaignUpdates.Infrastructure.Persistence.ReadModels;
 using Microsoft.EntityFrameworkCore;
@@ -22,6 +23,7 @@ public sealed class CampaignUpdatesDbContext : DbContext
     {
         // Every table of this module lives in its own PostgreSQL schema.
         modelBuilder.HasDefaultSchema("campaignupdates");
+        modelBuilder.ConfigureInbox("campaignupdates_inbox_messages");
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(CampaignUpdatesDbContext).Assembly);
         base.OnModelCreating(modelBuilder);
     }

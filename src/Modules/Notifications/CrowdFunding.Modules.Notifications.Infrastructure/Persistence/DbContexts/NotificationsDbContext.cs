@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
 using CrowdFunding.Modules.Notifications.Infrastructure.Persistence.ReadModels;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,6 +21,7 @@ public sealed class NotificationsDbContext : DbContext
     {
         // Every table of this module lives in its own PostgreSQL schema.
         modelBuilder.HasDefaultSchema("notifications");
+        modelBuilder.ConfigureInbox("notifications_inbox_messages");
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(NotificationsDbContext).Assembly);
         base.OnModelCreating(modelBuilder);
     }

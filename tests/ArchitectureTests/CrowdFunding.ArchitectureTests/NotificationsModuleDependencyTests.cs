@@ -1,5 +1,6 @@
 using System.Reflection;
 using CrowdFunding.Modules.Notifications.Application.Events;
+using CrowdFunding.Modules.Notifications.Infrastructure.Features.Preferences;
 
 namespace CrowdFunding.ArchitectureTests;
 
@@ -45,6 +46,36 @@ public sealed class NotificationsModuleDependencyTests
         {
             Assert.DoesNotContain(forbidden, referencedAssemblyNames);
         }
+    }
+
+    [Fact]
+    public void Tier2PreferenceHandlers_ShouldOnlyDependOnTheModulesOwnDbContextAndClock()
+    {
+        var tier2Types = typeof(UnsubscribeCommandHandler).Assembly.GetTypes()
+            .Where(type => type.Namespace == typeof(UnsubscribeCommandHandler).Namespace && type.IsPublic)
+            .ToArray();
+
+        Assert.NotEmpty(tier2Types);
+
+        foreach (var type in tier2Types)
+        {
+            var dependencies = type.GetConstructors().SelectMany(c => c.GetParameters()).Select(p => p.ParameterType.Name);
+
+            Assert.All(dependencies, name => Assert.Contains(name, new[] { "NotificationsDbContext", "INotificationsDateTimeProvider" }));
+        }
+    }
+
+    [Fact]
+    public void Infrastructure_ShouldNotReference_OtherModulesInternals()
+    {
+        var referencedAssemblyNames = GetReferencedAssemblyNames(typeof(UnsubscribeCommandHandler).Assembly);
+
+        var forbidden = referencedAssemblyNames.Where(name =>
+            name.StartsWith("CrowdFunding.Modules.", StringComparison.Ordinal)
+            && !name.StartsWith("CrowdFunding.Modules.Notifications.", StringComparison.Ordinal)
+            && !name.EndsWith(".Contracts", StringComparison.Ordinal));
+
+        Assert.Empty(forbidden);
     }
 
     private static IReadOnlyCollection<string> GetReferencedAssemblyNames(Assembly assembly)

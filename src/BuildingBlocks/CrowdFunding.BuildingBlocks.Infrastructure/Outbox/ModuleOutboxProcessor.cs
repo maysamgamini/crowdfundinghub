@@ -65,6 +65,7 @@ public abstract class ModuleOutboxProcessor<TDbContext> : BackgroundService, IOu
         var messageBus = services.GetRequiredService<IMessageBus>();
         var eventTypeRegistry = services.GetRequiredService<EventTypeRegistry>();
         var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger(GetType());
+        var inboxContext = services.GetRequiredService<InboxMessageContext>();
 
         var messages = await dbContext.ClaimPendingBatchAsync(_tableName, _workerId, BatchSize, LockDuration, cancellationToken);
 
@@ -100,6 +101,7 @@ public abstract class ModuleOutboxProcessor<TDbContext> : BackgroundService, IOu
 
             try
             {
+                inboxContext.MessageId = message.Id;
                 await messageBus.PublishAsync(applicationEvent!, cancellationToken);
                 // Delete-on-success (TICKET-038 Strategy A): no UPDATE-then-keep-forever: a
                 // successfully published message has no further reason to exist in the active

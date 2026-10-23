@@ -115,6 +115,8 @@ builder.Services.AddRequestHandlersFromAssemblies(
     typeof(ContributionsApplicationDependencyInjection).Assembly,
     typeof(ModerationApplicationDependencyInjection).Assembly,
     typeof(NotificationsApplicationDependencyInjection).Assembly,
+    // Notifications preferences are a Tier 2 feature: their handlers live in Infrastructure.
+    typeof(NotificationsInfrastructureDependencyInjection).Assembly,
     typeof(CampaignUpdatesApplicationDependencyInjection).Assembly);
 
 builder.Services.AddEventTypeRegistry(

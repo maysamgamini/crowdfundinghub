@@ -23,6 +23,23 @@ namespace CrowdFunding.Modules.CampaignUpdates.Infrastructure.Persistence.Migrat
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("CrowdFunding.BuildingBlocks.Infrastructure.Persistence.InboxMessage", b =>
+                {
+                    b.Property<Guid>("MessageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Consumer")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<DateTime>("ProcessedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("MessageId", "Consumer");
+
+                    b.ToTable("campaignupdates_inbox_messages", "campaignupdates");
+                });
+
             modelBuilder.Entity("CrowdFunding.Modules.CampaignUpdates.Domain.Aggregates.WebhookDeliveryTask", b =>
                 {
                     b.Property<Guid>("Id")

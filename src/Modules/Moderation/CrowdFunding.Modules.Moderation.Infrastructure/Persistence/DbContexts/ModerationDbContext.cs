@@ -22,6 +22,7 @@ public sealed class ModerationDbContext : DbContext
     {
         // Every table of this module lives in its own PostgreSQL schema.
         modelBuilder.HasDefaultSchema("moderation");
+        modelBuilder.ConfigureInbox("moderation_inbox_messages");
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(ModerationDbContext).Assembly);
         modelBuilder.ConfigureOutbox("moderation_outbox_messages");
         modelBuilder.ConfigureDeadLetter("moderation_dead_letter_events");

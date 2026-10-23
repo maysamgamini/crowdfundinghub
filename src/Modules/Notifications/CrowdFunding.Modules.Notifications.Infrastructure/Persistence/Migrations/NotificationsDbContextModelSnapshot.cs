@@ -23,6 +23,23 @@ namespace CrowdFunding.Modules.Notifications.Infrastructure.Persistence.Migratio
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("CrowdFunding.BuildingBlocks.Infrastructure.Persistence.InboxMessage", b =>
+                {
+                    b.Property<Guid>("MessageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Consumer")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<DateTime>("ProcessedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("MessageId", "Consumer");
+
+                    b.ToTable("notifications_inbox_messages", "notifications");
+                });
+
             modelBuilder.Entity("CrowdFunding.Modules.Notifications.Domain.Aggregates.NotificationPreference", b =>
                 {
                     b.Property<Guid>("UserId")

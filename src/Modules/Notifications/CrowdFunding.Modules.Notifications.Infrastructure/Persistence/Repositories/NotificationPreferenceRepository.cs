@@ -22,19 +22,4 @@ public sealed class NotificationPreferenceRepository : INotificationPreferenceRe
         return _dbContext.NotificationPreferences
             .FirstOrDefaultAsync(x => x.UserId == userId, cancellationToken);
     }
-
-    public async Task UpsertAsync(NotificationPreference preference, CancellationToken cancellationToken)
-    {
-        var existing = await _dbContext.NotificationPreferences.FindAsync([preference.UserId], cancellationToken);
-        if (existing is null)
-        {
-            _dbContext.NotificationPreferences.Add(preference);
-        }
-        else
-        {
-            existing.Update(preference.CampaignUpdatesEnabled, preference.MarketingAnnouncementsEnabled, preference.UpdatedAtUtc);
-        }
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
-    }
 }

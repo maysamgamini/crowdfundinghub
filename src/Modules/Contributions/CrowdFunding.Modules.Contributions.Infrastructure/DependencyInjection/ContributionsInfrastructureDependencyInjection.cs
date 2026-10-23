@@ -1,4 +1,5 @@
-﻿using CrowdFunding.BuildingBlocks.Infrastructure.Configuration;
+﻿using CrowdFunding.BuildingBlocks.Infrastructure.Events;
+using CrowdFunding.BuildingBlocks.Infrastructure.Configuration;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Transactions;
@@ -27,6 +28,8 @@ public static class ContributionsInfrastructureDependencyInjection
         services.AddDbContext<ContributionsDbContext>(options =>
             options.UseNpgsql(connectionString, npgsql =>
                 npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "contributions")));
+
+        services.AddInbox<ContributionsDbContext>(typeof(CrowdFunding.Modules.Contributions.Application.DependencyInjection.ContributionsApplicationDependencyInjection).Assembly);
 
         services.AddScoped<IContributionRepository, ContributionRepository>();
         services.AddScoped<IPaymentWebhookIdempotencyStore, PaymentWebhookIdempotencyStore>();

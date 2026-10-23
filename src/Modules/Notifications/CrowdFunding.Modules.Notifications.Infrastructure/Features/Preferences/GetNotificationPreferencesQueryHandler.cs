@@ -1,29 +1,32 @@
 using CrowdFunding.BuildingBlocks.Application.Messaging;
-using CrowdFunding.Modules.Notifications.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Notifications.Application.Abstractions.Services;
+using CrowdFunding.Modules.Notifications.Application.Features.Preferences.Queries.GetNotificationPreferences;
 using CrowdFunding.Modules.Notifications.Domain.Aggregates;
+using CrowdFunding.Modules.Notifications.Infrastructure.Persistence.DbContexts;
+using Microsoft.EntityFrameworkCore;
 
-namespace CrowdFunding.Modules.Notifications.Application.Features.Preferences.Queries.GetNotificationPreferences;
+namespace CrowdFunding.Modules.Notifications.Infrastructure.Features.Preferences;
 
 /// <summary>
-/// Handles retrieving user notification preferences, returning defaults if not yet configured.
+/// Tier 2 query handler: reads the user's preferences straight from the module's DbContext and
+/// returns the defaults when the user has never saved any.
 /// </summary>
 public sealed class GetNotificationPreferencesQueryHandler : IQueryHandler<GetNotificationPreferencesQuery, GetNotificationPreferencesResult>
 {
-    private readonly INotificationPreferenceRepository _repository;
+    private readonly NotificationsDbContext _dbContext;
     private readonly INotificationsDateTimeProvider _dateTimeProvider;
 
-    public GetNotificationPreferencesQueryHandler(
-        INotificationPreferenceRepository repository,
-        INotificationsDateTimeProvider dateTimeProvider)
+    public GetNotificationPreferencesQueryHandler(NotificationsDbContext dbContext, INotificationsDateTimeProvider dateTimeProvider)
     {
-        _repository = repository;
+        _dbContext = dbContext;
         _dateTimeProvider = dateTimeProvider;
     }
 
     public async Task<GetNotificationPreferencesResult> Handle(GetNotificationPreferencesQuery query, CancellationToken cancellationToken)
     {
-        var preference = await _repository.GetByUserIdAsync(query.UserId, cancellationToken)
+        var preference = await _dbContext.NotificationPreferences
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.UserId == query.UserId, cancellationToken)
             ?? NotificationPreference.CreateDefault(query.UserId, _dateTimeProvider.UtcNow);
 
         return new GetNotificationPreferencesResult(

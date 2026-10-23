@@ -25,6 +25,7 @@ public sealed class ContributionsDbContext : DbContext
     {
         // Every table of this module lives in its own PostgreSQL schema.
         modelBuilder.HasDefaultSchema("contributions");
+        modelBuilder.ConfigureInbox("contributions_inbox_messages");
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(ContributionsDbContext).Assembly);
         modelBuilder.ConfigureOutbox("contributions_outbox_messages");
         modelBuilder.ConfigureDeadLetter("contributions_dead_letter_events");

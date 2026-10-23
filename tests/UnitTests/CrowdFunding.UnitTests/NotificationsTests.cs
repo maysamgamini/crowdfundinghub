@@ -145,35 +145,8 @@ public sealed class NotificationsTests
         Assert.Null(recordingHandler.LastRequest);
     }
 
-    [Fact]
-    public async Task NotificationPreferences_QueryAndCommandHandlers_ShouldManagePreferencesCorrectly()
-    {
-        var repo = new NullNotificationPreferenceRepository();
-        var clock = new FixedDateTimeProvider();
-        var getHandler = new CrowdFunding.Modules.Notifications.Application.Features.Preferences.Queries.GetNotificationPreferences.GetNotificationPreferencesQueryHandler(repo, clock);
-        var updateHandler = new CrowdFunding.Modules.Notifications.Application.Features.Preferences.Commands.UpdateNotificationPreferences.UpdateNotificationPreferencesCommandHandler(repo, clock);
-        var unsubHandler = new CrowdFunding.Modules.Notifications.Application.Features.Preferences.Commands.Unsubscribe.UnsubscribeCommandHandler(repo, clock);
-
-        var userId = Guid.NewGuid();
-
-        // 1. Defaults when not yet saved (campaign updates default true, marketing announcements default false per GDPR)
-        var initial = await getHandler.Handle(new CrowdFunding.Modules.Notifications.Application.Features.Preferences.Queries.GetNotificationPreferences.GetNotificationPreferencesQuery(userId), CancellationToken.None);
-        Assert.True(initial.CampaignUpdatesEnabled);
-        Assert.False(initial.MarketingAnnouncementsEnabled);
-
-        // 2. Explicit update
-        var updated = await updateHandler.Handle(new CrowdFunding.Modules.Notifications.Application.Features.Preferences.Commands.UpdateNotificationPreferences.UpdateNotificationPreferencesCommand(userId, false, true), CancellationToken.None);
-        Assert.False(updated.CampaignUpdatesEnabled);
-        Assert.True(updated.MarketingAnnouncementsEnabled);
-
-        // 3. One-click unsubscribe
-        var unsub = await unsubHandler.Handle(new CrowdFunding.Modules.Notifications.Application.Features.Preferences.Commands.Unsubscribe.UnsubscribeCommand(userId), CancellationToken.None);
-        Assert.True(unsub.Unsubscribed);
-
-        var finalState = await getHandler.Handle(new CrowdFunding.Modules.Notifications.Application.Features.Preferences.Queries.GetNotificationPreferences.GetNotificationPreferencesQuery(userId), CancellationToken.None);
-        Assert.False(finalState.CampaignUpdatesEnabled);
-        Assert.False(finalState.MarketingAnnouncementsEnabled);
-    }
+    // The preference handlers are Tier 2 (they use the DbContext directly), so they are covered
+    // against a real database in NotificationPreferencesTier2Tests in the integration test project.
 
     private sealed class FailingHttpMessageHandler : HttpMessageHandler
     {

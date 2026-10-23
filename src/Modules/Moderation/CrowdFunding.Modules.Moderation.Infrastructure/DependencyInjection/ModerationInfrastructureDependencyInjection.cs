@@ -1,4 +1,5 @@
-﻿using CrowdFunding.BuildingBlocks.Infrastructure.Configuration;
+﻿using CrowdFunding.BuildingBlocks.Infrastructure.Events;
+using CrowdFunding.BuildingBlocks.Infrastructure.Configuration;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Services;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Transactions;
@@ -28,6 +29,8 @@ public static class ModerationInfrastructureDependencyInjection
         services.AddDbContext<ModerationDbContext>(options =>
             options.UseNpgsql(connectionString, npgsql =>
                 npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "moderation")));
+
+        services.AddInbox<ModerationDbContext>(typeof(CrowdFunding.Modules.Moderation.Application.DependencyInjection.ModerationApplicationDependencyInjection).Assembly);
 
         services.AddScoped<ICampaignReviewStatusReader, CampaignReviewStatusReader>();
         services.AddScoped<ICampaignReviewRepository, CampaignReviewRepository>();

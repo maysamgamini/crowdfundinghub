@@ -15,6 +15,7 @@ public static class MessagingDependencyInjection
     public static IServiceCollection AddCrowdFundingMessaging(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddScoped<IEventPublisher, ServiceProviderEventPublisher>();
+        services.AddScoped<InboxMessageContext>();
 
         var provider = configuration["Messaging:Provider"] ?? "InProcess";
 
