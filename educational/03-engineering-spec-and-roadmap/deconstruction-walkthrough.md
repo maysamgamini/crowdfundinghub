@@ -93,11 +93,14 @@ app.Run();
 
 ## 4. Step 3: Physical Database Splitting (Database-per-Service)
 
-Because the monolith used **schema-per-module** with **zero cross-schema foreign keys**, splitting the database is a pure operational task:
+Because the monolith used **schema-per-module** with **zero cross-schema foreign keys**, splitting the database is a pure operational task. Two topologies exist: a single shared database with one schema per module (the dump below targets the `moderation` schema), and the local default in `docker-compose.yml`, where each module already has its own database (`moderation_db`), so the dump is taken from `moderation_db` instead.
 
 1. **Dump the moderation schema from the monolith database:**
    ```bash
+   # Shared-database topology
    pg_dump -h localhost -U postgres -d crowdfundingdb --schema=moderation -F c -b -v -f moderation_schema.dump
+   # Per-module-database topology (local default)
+   pg_dump -h localhost -U postgres -d moderation_db --schema=moderation -F c -b -v -f moderation_schema.dump
    ```
 2. **Restore into the dedicated Moderation database server:**
    ```bash
@@ -118,18 +121,18 @@ Because the monolith used **schema-per-module** with **zero cross-schema foreign
 
 In the monolith, `CampaignCreatedApplicationEvent` was polled in-process. In the microservices topology:
 1. The **Monolith** (or Campaigns microservice) publishes `CampaignCreated` to a RabbitMQ exchange or Kafka topic `campaigns.events`.
-2. The **Moderation Service** registers a MassTransit consumer:
+2. The **Moderation Service** (`services/CrowdFunding.Moderation.Service`) reuses the module's existing `IEventHandler<T>` (registered with `AddEventHandlersFromAssemblies`); the RabbitMQ transport in `BuildingBlocks.Infrastructure` (built on `RabbitMQ.Client`, no MassTransit) delivers the event to it:
    ```csharp
-   public class CampaignCreatedConsumer : IConsumer<CampaignCreatedApplicationEvent>
+   public class CampaignCreatedHandler : IEventHandler<CampaignCreatedApplicationEvent>
    {
        private readonly ICommandDispatcher _dispatcher;
-       public CampaignCreatedConsumer(ICommandDispatcher dispatcher) => _dispatcher = dispatcher;
+       public CampaignCreatedHandler(ICommandDispatcher dispatcher) => _dispatcher = dispatcher;
 
-       public async Task Consume(ConsumeContext<CampaignCreatedApplicationEvent> context)
+       public async Task Handle(CampaignCreatedApplicationEvent notification, CancellationToken cancellationToken)
        {
            await _dispatcher.DispatchAsync(
-               new CreateCampaignReviewCommand(context.Message.CampaignId), 
-               context.CancellationToken);
+               new CreateCampaignReviewCommand(notification.CampaignId),
+               cancellationToken);
        }
    }
    ```

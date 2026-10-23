@@ -57,13 +57,13 @@ graph TB
         subgraph "In-Memory Orchestration"
             Dispatchers["ICommandDispatcher / IQueryDispatcher"]
             EventPub["IEventPublisher / ServiceProviderEventPublisher"]
-            OutboxWorker["OutboxProcessorBackgroundService<br/>(SKIP LOCKED Poller, 5s Interval)"]
+            OutboxWorker["ModuleOutboxProcessor<br/>(SKIP LOCKED Poller, 5s Interval)"]
             SignalRHub["SignalR CampaignHub<br/>(In-Memory Group Dispatch)"]
         end
     end
 
     subgraph "Storage & Caching Layer"
-        subgraph "PostgreSQL 16 (crowdfundingdb)"
+        subgraph "PostgreSQL 16 (database per module locally)"
             SchemaCamp["campaigns Schema<br/>- campaigns (xmin)<br/>- contribution_ledger_entries<br/>- campaigns_outbox_messages<br/>- campaigns_dead_letter_events"]
             SchemaCont["contributions Schema<br/>- contributions<br/>- contributions_outbox_messages"]
             SchemaMod["moderation Schema<br/>- campaign_reviews<br/>- moderation_outbox_messages"]
@@ -162,44 +162,41 @@ graph LR
 
 ### 2.2 Single Database with Schema Isolation vs. Database-Per-Service
 
-CrowdFunding Hub hosts all module tables inside a single PostgreSQL database (`crowdfundingdb`), isolating modules through separate database schemas and dedicated EF Core contexts:
+CrowdFunding Hub gives every module its own PostgreSQL schema and dedicated EF Core context. There are six modules (Identity, Campaigns, Contributions, Moderation, Notifications, CampaignUpdates), plus the Audit and RosettaStone contexts, for example:
 - [`CampaignsDbContext`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Persistence/DbContexts/CampaignsDbContext.cs)
 - [`ContributionsDbContext`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Infrastructure/Persistence/DbContexts/ContributionsDbContext.cs)
 - [`IdentityDbContext`](../src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Persistence/DbContexts/IdentityDbContext.cs)
 - [`ModerationDbContext`](../src/Modules/Moderation/CrowdFunding.Modules.Moderation.Infrastructure/Persistence/DbContexts/ModerationDbContext.cs)
 
-Each module registers an isolated EF migration history table via `npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "<schema>")`.
+Each module registers an isolated EF migration history table via `npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "<schema>")`. Where those schemas live is a configuration choice. A single shared database is only the `DefaultConnection` fallback; the local run (`docker-compose.yml`, `appsettings.Development.json`) uses **one database per module** (`identity_db`, `campaigns_db`, and so on), and `docker-compose.ha.yml` gives each of those a two-node Patroni cluster with a shared three-member etcd witness.
 
 ```mermaid
 graph TB
-    subgraph "Single Database / Schema Isolation (Current)"
-        DB1[("PostgreSQL: crowdfundingdb")]
-        subgraph DB1
-            S_Camp["campaigns Schema"]
-            S_Cont["contributions Schema"]
-            S_Id["identity Schema"]
-            S_Mod["moderation Schema"]
-        end
-        API1["CrowdFunding Host"] --> DB1
+    subgraph "Shared Database (DefaultConnection fallback)"
+        DB1[("PostgreSQL: one database")]
+        S_Camp["campaigns schema"] --> DB1
+        S_Cont["contributions schema"] --> DB1
+        S_Id["identity schema"] --> DB1
+        API1["CrowdFunding Host"] --> S_Camp
+        API1 --> S_Cont
+        API1 --> S_Id
     end
 
-    subgraph "Database-Per-Service (Alternative)"
-        DB_C[("PostgreSQL: campaigns_db")]
-        DB_P[("PostgreSQL: contributions_db")]
-        DB_I[("PostgreSQL: identity_db")]
-        S_CampSvc["Campaigns Service"] --> DB_C
-        S_ContSvc["Contributions Service"] --> DB_P
-        S_IdSvc["Identity Service"] --> DB_I
+    subgraph "Database per Module (local and HA, current)"
+        API2["CrowdFunding Host"] --> DB_C[("campaigns_db")]
+        API2 --> DB_P[("contributions_db")]
+        API2 --> DB_I[("identity_db")]
+        DB_C -.-> HA["HA profile: Patroni pair per database,<br/>etcd witness decides the primary"]
     end
 ```
 
 #### Comparison Matrix
 
-| Dimension | Single Database + Schema Isolation | Database-Per-Service |
+| Dimension | Single Database + Schema Isolation (fallback) | Database-Per-Module / Service (local and HA) |
 | :--- | :--- | :--- |
 | **Operational Overhead** | **Trivial**: Single PostgreSQL instance to provision, backup, monitor, patch, replicate, and failover. | **High**: Multiplied maintenance; $N$ primary databases, $N$ replica sets, $N$ connection pools, independent backup schedules. |
 | **Resource Contention ("Noisy Neighbor")**| **High**: Heavy write volume on contributions consumes disk IOPS, WAL write bandwidth, and buffer pool shared with Identity. | **Zero**: Physical isolation guarantees that an IOPS surge in Contributions has zero physical impact on Identity or Campaigns. |
-| **Connection Pooling** | **Shared Pool Pressure**: Each application instance allocates connection pool slots across all 4 DbContexts from a shared DB ceiling. | **Independent Pools**: Each service has its own dedicated connection pool tuned specifically to its own concurrency profile. |
+| **Connection Pooling** | **Shared Pool Pressure**: Each application instance allocates connection pool slots across every module DbContext from a shared DB ceiling. | **Independent Pools**: Each service has its own dedicated connection pool tuned specifically to its own concurrency profile. |
 | **Data Boundary Enforcement**| **Application-Enforced**: Schemas prevent accidental cross-entity relationships, but nothing physically prevents raw SQL cross-schema joins. | **Strict Physical Isolation**: Foreign keys and cross-service queries are physically impossible at the network and driver levels. |
 | **Cross-Module Reporting** | **Simple**: Analytical queries or ETL pipelines can perform efficient read-only cross-schema queries if authorized. | **Complex**: Requires cross-database federated queries, data lake ingestion (e.g. via Debezium), or expensive API composition. |
 | **Point-in-Time Recovery** | **Coarse-Grained**: Restoring the database rolls back *all* modules together to the target timestamp. | **Independent**: Can restore `Contributions` to 10:00 AM without reverting unrelated campaigns or identity registrations. |
@@ -211,7 +208,7 @@ graph TB
 > By creating distinct schemas and mapping dedicated DbContexts with schema-isolated migration tables (`__EFMigrationsHistory`), the codebase establishes clean architectural boundaries. If a decision is later made to extract `Contributions` into an autonomous service, its entire database schema can be dumped via `pg_dump -n contributions` and restored into a dedicated database instance with zero schema refactoring.
 >
 > **The Vulnerability:**  
-> The single database instance remains a **single point of failure (SPOF)** and a shared I/O bottleneck. A runaway transaction holding an exclusive lock on `campaigns` does not directly lock `contributions`, but WAL disk contention or CPU saturation on the Postgres host will degrade all modules uniformly.
+> In the shared-database configuration the single instance remains a **single point of failure (SPOF)** and a shared I/O bottleneck. A runaway transaction holding an exclusive lock on `campaigns` does not directly lock `contributions`, but WAL disk contention or CPU saturation on the Postgres host will degrade all modules uniformly.
 
 ---
 
@@ -219,14 +216,14 @@ graph TB
 
 To guarantee reliable at-least-once messaging without dual-write race conditions, write handlers persist domain events as [`OutboxMessage`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxMessage.cs) rows within the business transaction.
 
-The codebase implements **Option A: PostgreSQL-native Polling Outbox using `FOR UPDATE SKIP LOCKED`** via [`OutboxClaimQuery`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxClaimQuery.cs) executed by [`OutboxProcessorBackgroundService`](../src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs).
+The codebase implements **Option A: PostgreSQL-native Polling Outbox using `FOR UPDATE SKIP LOCKED`** via [`OutboxClaimQuery`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxClaimQuery.cs) executed by [`ModuleOutboxProcessor<TDbContext>`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Outbox/ModuleOutboxProcessor.cs), a generic worker with one subclass per module (for example `CampaignsOutboxBackgroundService`).
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant App as Web Request Handler
-    participant DB as PostgreSQL (crowdfundingdb)
-    participant Worker as OutboxProcessorBackgroundService
+    participant DB as PostgreSQL (module database)
+    participant Worker as ModuleOutboxProcessor
     participant Handlers as Module Event Handlers
 
     Note over App,DB: Business Transaction Boundary
@@ -236,7 +233,7 @@ sequenceDiagram
     Note over App,DB: Both state and intent are atomically committed
 
     loop Every 5 Seconds (PeriodicTimer)
-        Worker->>DB: 4. CTE: SELECT FOR UPDATE SKIP LOCKED LIMIT 20
+        Worker->>DB: 4. CTE: SELECT Pending rows due on the app clock, FOR UPDATE SKIP LOCKED LIMIT 20
         DB-->>Worker: 5. UPDATE Status = Processing, LockedUntilUtc = now()+30s RETURNING *
         loop For Each Claimed Outbox Message
             Worker->>Handlers: 6. Publish Application Event (In-Process)
@@ -248,6 +245,8 @@ sequenceDiagram
         end
     end
 ```
+
+"Due" is judged on the application clock (`"ScheduledAtUtc" <= {3}`, bound to `DateTime.UtcNow`) because a database clock lagging the application's left just-queued rows unclaimable (26 of 92 integration tests failed at random). `LockedUntilUtc` is still set from the database `now()`.
 
 #### The CDC Alternative (Debezium + Kafka / Redpanda)
 
@@ -278,7 +277,7 @@ sequenceDiagram
 | **Database Polling Overhead** | **Continuous**: Workers query the database every 5 seconds per module regardless of whether new events exist. | **Zero Polling**: Database pushes changes via replication stream; zero query load or connection churn. |
 | **Multi-Worker Coordination** | **Built-in (`SKIP LOCKED`)**: Concurrent workers claim non-overlapping batches atomically without distributed locks. | **Partition Consumer Groups**: Handled natively by Kafka consumer group rebalancing across worker pods. |
 | **Event Replayability** | **Limited**: Once marked `Processed`, replaying requires manual SQL status manipulation. | **Native**: Consumers can rewind Kafka topic offsets to reprocess historical events arbitrarily. |
-| **Failure Blast Radius** | **Local**: If the worker crashes, locks expire after `LockDuration` (30s) and are reclaimed. | **Infrastructure Dependency**: If Kafka or Debezium crashes, WAL logs accumulate on Postgres disk, risking disk full outages. |
+| **Failure Blast Radius** | **Local**: If the worker crashes, `LockedUntilUtc` is written (30s) but nothing reads it for the outbox, so rows the worker had claimed stay in `Processing` (see 3.3, Scenario A). | **Infrastructure Dependency**: If Kafka or Debezium crashes, WAL logs accumulate on Postgres disk, risking disk full outages. |
 
 #### Mathematical Model of MVCC Write Amplification
 
@@ -291,6 +290,10 @@ At a modest volume of $100\text{ events/sec}$, the database generates:
 $$200\text{ dead tuples/sec} \times 86,400\text{ sec/day} = 17,280,000\text{ dead tuples/day}$$
 
 Without aggressive `autovacuum` tuning (specifically lowering `autovacuum_vacuum_scale_factor` to `0.05` and increasing `autovacuum_cost_limit`), the partial index `ix_*_pending` and the heap pages suffer severe bloat, degrading claim query response times and consuming significant disk I/O.
+
+#### 2.3.1 The per-module inbox (consumer side)
+
+Each module keeps a `<module>_inbox_messages` table keyed `(MessageId, Consumer)`, where `Consumer` is the handler's full type name ([`EfInbox`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/EfInbox.cs), used by [`ServiceProviderEventPublisher`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Events/ServiceProviderEventPublisher.cs)). The handler runs first; only after it succeeds is the pair recorded with `INSERT ... ON CONFLICT DO NOTHING`. A crash between the handler and the record therefore re-runs the handler once, so handlers must still tolerate a repeat. Only in-process outbox dispatch sets a message id, so the RabbitMQ path bypasses the inbox. Inbox rows are never pruned. See the retry test in [`TESTS_THAT_TEACH.md`](TESTS_THAT_TEACH.md).
 
 ---
 
@@ -515,7 +518,7 @@ graph TD
 - **Degradation Behavior**: Any concurrency exceeding 65 requests/second targeting the *same* campaign aggregate will queue inside the database driver. Once the queue exceeds the connection pool limit (`MaxPoolSize=100`), incoming HTTP requests fail immediately with Npgsql connection timeout exceptions.
 
 #### 2. Outbox Dispatch Latency Floor & Queue Starvation
-- **Root Cause**: In [`OutboxProcessorBackgroundService.cs`](../src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs#L18), constants are configured as:
+- **Root Cause**: In [`ModuleOutboxProcessor.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Outbox/ModuleOutboxProcessor.cs), constants are configured as:
   ```csharp
   private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
   private const int BatchSize = 20;
@@ -565,7 +568,7 @@ The following operational matrix defines the tested safe ranges, warning thresho
 ```mermaid
 graph TD
     subgraph "Failure Analysis Scenarios"
-        F1["Scenario A: Worker Crash During Outbox Batch"] --> R1["LockDuration = 30s expires<br/>Row reclaimed by next poll cycle<br/>At-least-once guarantee preserved"]
+        F1["Scenario A: Worker Crash During Outbox Batch"] --> R1["Claimed rows stay in Processing<br/>Nothing reclaims them (LockedUntilUtc is never read)<br/>Stranded until an operator resets them"]
         F2["Scenario B: Invalid Currency in Event Payload"] --> R2["TryResolve fails -> Routed to DeadLetterEvent<br/>Remaining batch items continue processing<br/>Zero head-of-line blocking"]
         F3["Scenario C: Database Network Drop"] --> R3["Advisory locks auto-released by Postgres<br/>Transactions roll back cleanly<br/>Zero orphaned locks"]
     end
@@ -574,11 +577,11 @@ graph TD
 #### Scenario A: Worker Crash Mid-Batch
 - **Event**: An API container crashes or is terminated by the host while executing `eventPublisher.PublishAsync()` for message 5 of a 20-message claimed batch.
 - **System Defense**: In [`OutboxClaimQuery.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxClaimQuery.cs#L41), the claim sets `"LockedUntilUtc" = now() + (30000 || ' milliseconds')::interval`.
-- **Result**: The remaining unprocessed rows remain in `Processing` status for up to 30 seconds. Once `LockedUntilUtc <= now()`, subsequent worker iterations or healthy replicas automatically reclaim and reprocess the messages. **Zero message loss.**
+- **Result**: The remaining unprocessed rows remain in `Processing` status for up to 30 seconds. `LockedUntilUtc` is written but never read for the outbox: the claim query selects only `Status = Pending`, so no worker or replica picks these rows up again. They are **stranded** until an operator resets them to `Pending`. Only `WebhookDeliveryTaskRepository` reclaims expired `Processing` rows, and that is a different table. No test covers outbox crash recovery. The consumer-side inbox (2.3.1) does not help here; it only deduplicates redelivery.
 
 #### Scenario B: Poison / Corrupt Event Payload
 - **Event**: A serialized JSON payload in the outbox cannot be deserialized, or its CLR type cannot be resolved by `EventTypeRegistry`.
-- **System Defense**: In [`OutboxProcessorBackgroundService.cs`](../src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs#L78), if `message.TryResolve(...)` returns `false`, the processor marks the row as `DeadLetter`, writes an audited record to `DeadLetterEvent`, logs an alert, and executes `continue`.
+- **System Defense**: In [`ModuleOutboxProcessor.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Outbox/ModuleOutboxProcessor.cs), if `message.TryResolve(...)` returns `false`, the processor marks the row as `DeadLetter`, writes an audited record to `DeadLetterEvent`, logs an alert, and executes `continue`.
 - **Result**: **No Head-of-Line Blocking.** The single corrupt message is permanently isolated without blocking the remaining 19 messages in the batch.
 
 #### Scenario C: Database Network Drop During Advisory-Locked Mutation
@@ -644,7 +647,7 @@ Engineering should initiate the transition between architectural phases when the
 *Focus: Maximize single-process throughput, enable horizontal web scaling, and eliminate outbox dispatch latency without adding distributed infrastructure.*
 
 #### 1. Implement Dynamic Outbox Polling & Queue Draining
-- **Change**: Modify [`OutboxProcessorBackgroundService.cs`](../src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs) to eliminate the fixed 5-second sleep when a full batch is retrieved.
+- **Change**: Modify [`ModuleOutboxProcessor.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Outbox/ModuleOutboxProcessor.cs) to eliminate the fixed 5-second sleep when a full batch is retrieved.
 - **Implementation**:
   ```csharp
   // If the batch claimed equals BatchSize, poll immediately for the next batch!
@@ -785,7 +788,7 @@ graph TB
 | Decision Area | Selected Pattern | Alternative Pattern | Primary Justification | Key Trade-off / Downside Accepted |
 | :--- | :--- | :--- | :--- | :--- |
 | **System Boundary** | **Modular Monolith** | Distributed Microservices | Maximize developer velocity; zero network overhead; atomic transactional boundary options. | Single process failure domain; coarse-grained scaling. |
-| **Data Persistence** | **Single Database + Schemas** | Database-per-Service | Low operational overhead; single backup target; zero cross-database query complexity. | Shared connection pool ceiling; potential for noisy neighbor I/O contention. |
+| **Data Persistence** | **Schema per module; one shared database as the fallback, one database per module locally (Patroni pairs in the HA profile)** | Database-per-Service | Schema boundaries and per-schema migration history hold either way; the shared fallback has a single backup target. | Shared fallback: connection pool ceiling and noisy neighbor I/O. Per-module databases: more instances to back up and migrate. |
 | **Outbox Dispatch** | **PostgreSQL `SKIP LOCKED`** | CDC (Debezium / Kafka) | Zero extra infrastructure; native ACID consistency; simple operational surface. | 5-second dispatch latency floor; MVCC dead tuple bloat from status updates. |
 | **Aggregate Locking** | **`pg_advisory_xact_lock`** | Distributed Redis Redlock | ACID transaction-bound; automatic rollback on failure; zero risk of orphaned locks. | Ties up active DB connection while waiting; caps single-campaign writes to ~65 TPS. |
 | **Cross-Module Reads**| **Synchronous In-Process Adapter** | Replicated Eventual Consistency | Absolute strong consistency; prevents charging backers on cancelled campaigns. | In-process coupling between modules; shared execution thread. |
@@ -798,7 +801,7 @@ graph TB
 Prior to promoting CrowdFunding Hub to high-traffic production environments, the operations and engineering teams must complete the following mandatory remediations:
 
 - [ ] **Configure Redis Backplane for SignalR**: Call `AddStackExchangeRedis()` in `Program.cs` before provisioning more than 1 container replica.
-- [ ] **Tune Outbox Polling Loop**: Update `OutboxProcessorBackgroundService` to immediately drain batches when `batch.Count == BatchSize` rather than sleeping for 5 seconds.
+- [ ] **Tune Outbox Polling Loop**: Update `ModuleOutboxProcessor` to immediately drain batches when `batch.Count == BatchSize` rather than sleeping for 5 seconds.
 - [ ] **Tune PostgreSQL Autovacuum**: Apply aggressive vacuum parameters to all `*_outbox_messages` tables:
   ```sql
   ALTER TABLE campaigns_outbox_messages SET (
@@ -807,8 +810,21 @@ Prior to promoting CrowdFunding Hub to high-traffic production environments, the
   );
   ```
 - [ ] **Establish Outbox Purge Job**: Implement a scheduled cleanup job to purge `Processed` outbox rows older than 7 days.
+- [ ] **Establish Inbox Purge Job**: Nothing prunes `<module>_inbox_messages`; add a scheduled job to delete inbox rows older than the longest redelivery window.
 - [ ] **Set Metric Alarms**:
   - Alert if `Outbox Lag (p95)` exceeds **15 seconds**.
   - Alert if PostgreSQL `Connection Pool Utilization` exceeds **75%**.
   - Alert if `DeadLetterEvent` row count increases by $> 0$.
   - Alert if average duration of `pg_advisory_xact_lock` execution exceeds **50 ms**.
+
+---
+
+### Known Gaps
+
+The detailed lists live in [`TESTS_THAT_TEACH.md`](TESTS_THAT_TEACH.md) ("Gaps") and `educational/03-engineering-spec-and-roadmap/design-to-code-mapping-round1.md` (section 6). In short:
+
+- No pledge idempotency key, and no closing fence on a campaign.
+- The ledger lacks an entry kind, a sign check and a trigger.
+- Refunds are state-only: no gateway money movement and no ledger reversal.
+- Success and failure emails are not built.
+- The campaign scavenger and outbox crash recovery are untested, and the inbox crash window has only a note.

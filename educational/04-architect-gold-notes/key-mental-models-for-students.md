@@ -229,6 +229,6 @@ sequenceDiagram
 6. **Thou shalt sign tokens with asymmetric cryptography and publish public keys via JWKS.**
 7. **Thou shalt not route queries through write repositories; project directly from data to DTO.**
 8. **Thou shalt right-size each vertical slice: keep simple CRUD simple, and save heavy DDD for mission-critical aggregates.**
-9. **Thou shalt automate boundary enforcement in CI via architecture unit tests (`NetArchTest`).**
+9. **Thou shalt automate boundary enforcement in CI via architecture unit tests (plain xUnit over referenced assemblies; the NetArchTest library is an option, not used here).**
 10. **Thou shalt design systems so that extracting a microservice requires zero lines of business logic rewritten.**
 

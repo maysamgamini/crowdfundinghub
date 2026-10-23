@@ -6,6 +6,8 @@
 **Status:** Comprehensive Architectural Audit & Remediation Blueprint  
 **Authors:** Antigravity Specialized Architecture Team (Event & Concurrency Architect, Observability & Metering Architect, Domain & Security Architect)  
 
+> **Status banner (historical audit, verified 2026-09-08).** This document audits the pre-hardening template. Most P0 and P1 items below are now implemented; where a defect is described in the present tense and has since been fixed, a "Fixed" note follows it. See [`design-to-code-mapping-round1.md`](educational/03-engineering-spec-and-roadmap/design-to-code-mapping-round1.md) for the design-to-code mapping and [`docs/TESTS_THAT_TEACH.md`](docs/TESTS_THAT_TEACH.md) for the tests that prove the behavior. OpenTelemetry and NetArchTest appear here only as proposals; they are not built.
+
 ---
 
 ## Table of Contents
@@ -79,7 +81,7 @@
 
 A comprehensive architectural audit was conducted comparing [`apps/crowdfundinghub-main`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/swe-prep/apps/crowdfundinghub-main) (the original modular monolith starter template) against [`apps/backend`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/swe-prep/apps/backend) (`hiTechies`, an evolved enterprise-grade implementation).
 
-While `crowdfundinghub-main` demonstrates clean domain-driven concepts (CQRS pattern via MediatR, aggregate roots, domain events, and transaction executors), **it remains in an early, pre-production state burdened by fatal operational, concurrency, and reliability bottlenecks**. Crucially, the architectural improvements built into `apps/backend` (such as append-only outbox messaging, CDC event streaming, asymmetric cryptographic authentication, structured JSON telemetry, and hardened test harnesses) **have not yet been backported** to `crowdfundinghub-main`.
+While `crowdfundinghub-main` demonstrates clean domain-driven concepts (CQRS pattern via a custom `ICommandDispatcher`, aggregate roots, domain events, and transaction executors), **it remains in an early, pre-production state burdened by fatal operational, concurrency, and reliability bottlenecks**. Crucially, the architectural improvements built into `apps/backend` (such as append-only outbox messaging, CDC event streaming, asymmetric cryptographic authentication, structured JSON telemetry, and hardened test harnesses) **have not yet been backported** to `crowdfundinghub-main`.
 
 The table below outlines the core architectural dimensions and highlights the critical gaps:
 
@@ -91,7 +93,7 @@ The table below outlines the core architectural dimensions and highlights the cr
 | **Serialization Safety** | Stores and resolves CLR `Type.GetType(AssemblyQualifiedName)`. | Decoupled `EventEnvelope` (`EventType`, `Version`) resolved via `EventTypeRegistry`. | 🔴 **High Vulnerability**: Class renames, namespace changes, or runtime version bumps break existing persisted events. |
 | **Domain Event Mapping** | Switch expression in transaction executors terminates in `_ => null` silent drop. | Fail-safe routing; unmapped events are either routed to dead-letter handler or raise audited warnings. | 🔴 **Data Loss Hazard**: New domain events added without explicit mappings are silently discarded without logging or errors. |
 | **Campaign Goal & Pledge Concurrency** | Unprotected read-modify-write in EF Core. No concurrency token (`xmin`/rowversion). | PostgreSQL `pg_advisory_xact_lock` + append-only ledger entries (`EfEconomyStore`). | 🔴 **Financial Data Corruption**: Rapid concurrent pledges cause lost updates, permanently losing funds from `RaisedAmount`. |
-| **Double-Pledge Protection** | `AddContributionToCampaignCommand` omits `ContributionId`. Blind balance addition. | Built-in idempotency: `IdempotentConsumer` (`ProcessedEvent`) and unique index on `SourceEventId`. | 🔴 **Financial Data Corruption**: At-least-once message redelivery results in double-crediting campaign totals. |
+| **Double-Pledge Protection** | `AddContributionToCampaignCommand` omits `ContributionId`. Blind balance addition. | Built-in idempotency: `IdempotentConsumer` (`ProcessedEvent`; this repo's equivalent is `EfInbox` with `<module>_inbox_messages`) and unique index on `SourceEventId`. | 🔴 **Financial Data Corruption**: At-least-once message redelivery results in double-crediting campaign totals. |
 | **Structured Logging & Tracing** | Zero structured logging. Only 1 file (`GlobalExceptionMiddleware`) references `ILogger`. No correlation IDs. | Serilog Compact JSON sink (`logs/hitechies-.json`), `CorrelationIdMiddleware`, W3C trace propagation. | 🔴 **Operational Blindness**: Financial pledges, background jobs, and payment states execute in near-complete silence. |
 | **HTTP Error Specification** | Legacy middleware returning proprietary `{ StatusCode, Message }`. Leaks SQL syntax on 500. | ASP.NET Core `IExceptionHandler` returning RFC 9457 `ProblemDetails` with sanitized 500 and `traceId`. | 🔴 **Security Hazard**: Leaks internal database table names and connection parameters to untrusted clients. |
 | **Database Migrations** | `ApplyMigrationsAsync()` hardcoded to `IsDevelopment()`. Colliding `public.__EFMigrationsHistory`. | CLI runner `dotnet run -- migrate` + schema-isolated `__EFMigrationsHistory` + divergence check (`42P07`). | 🔴 **Deployment Failure**: No automated migration runner for CI/CD or staging/production container init jobs. |
@@ -147,6 +149,8 @@ if (messages.Count > 0)
 
 Resolved by → [§3.1 Append-Only Outbox & Debezium CDC](#31-append-only-outbox--debezium-change-data-capture-cdc) or [§3.3 `SKIP LOCKED` alternative](#33-high-performance-postgresql-native-alternative-option-a-skip-locked), combined with [§3.2's `DeadLetterHandler`](#32-stable-schema-envelopes--durable-dead-letter-handling) to remove poison messages from the queue instead of blocking it.
 
+> **Fixed.** The worker is now `BuildingBlocks.Infrastructure/Outbox/ModuleOutboxProcessor.cs`, one per module outbox (for example `contributions_outbox_messages`). A failing message is retried up to `MaxAttempts` (5) and then moved to `DeadLetterEvent`, and the loop continues (`continue`, not `break`), so there is no head-of-line blocking.
+
 ---
 
 ### 2.2 Multi-Instance Concurrency & Scaling Vulnerabilities
@@ -178,6 +182,8 @@ sequenceDiagram
 ```
 
 Resolved by → [§3.3 Step 2, atomic `FOR UPDATE SKIP LOCKED` claiming query](#33-high-performance-postgresql-native-alternative-option-a-skip-locked), or by removing in-process polling entirely via [§3.1 Debezium CDC](#31-append-only-outbox--debezium-change-data-capture-cdc).
+
+> **Fixed.** `OutboxClaimQuery` claims rows with `FOR UPDATE SKIP LOCKED`.
 
 ---
 
@@ -256,6 +262,8 @@ builder.OwnsOne(x => x.RaisedAmount, money =>
 
 Resolved by → [§3.4 #1 PostgreSQL `xmin` optimistic concurrency token](#34-concurrency-hardening-optimistic-locking-advisory-locks--ledger-pattern).
 
+> **Fixed.** `xmin` concurrency tokens are mapped for `Campaign`, `Contribution`, reward tiers, webhook subscriptions and refresh tokens.
+
 #### Defect B: Double-Pledge Inflation Under At-Least-Once Delivery
 In `crowdfundinghub-main`, `AddContributionToCampaignCommand` is defined as:
 
@@ -268,6 +276,8 @@ public sealed record AddContributionToCampaignCommand(Guid CampaignId, decimal A
 * **Impact:** It executes `campaign.ApplyConfirmedContribution(...)` a second time, inflating `RaisedAmount` with phantom funds.
 
 Resolved by → [§3.4 #2 append-only contribution ledger with a `UNIQUE` constraint on `contribution_id`](#34-concurrency-hardening-optimistic-locking-advisory-locks--ledger-pattern).
+
+> **Fixed.** `ContributionLedgerEntry` and its configuration exist in the Campaigns module.
 
 #### Defect C: Time-of-Check to Time-of-Use (TOCTOU) on Campaign Cancellation
 In [`ConfirmContributionPaymentCommandHandler.cs`](src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/ConfirmContributionPayment/ConfirmContributionPaymentCommandHandler.cs#L46-L58):
@@ -300,6 +310,8 @@ if (!string.Equals(campaignAvailability.Status, "Published", StringComparison.Or
 
 Resolved by → [§3.4 #3 `pg_advisory_xact_lock`](#34-concurrency-hardening-optimistic-locking-advisory-locks--ledger-pattern) to serialize balance mutations per campaign, and [§3.4 #4](#34-concurrency-hardening-optimistic-locking-advisory-locks--ledger-pattern), which tightens `ApplyConfirmedContribution` to require `Status == Published` (rejecting `Cancelled`, not just `Draft`).
 
+> **Fixed.** `pg_advisory_xact_lock` (via `AdvisoryLockKey`) is used in `CampaignTransactionExecutor` and `RewardTier`.
+
 ---
 
 ### 2.5 Complete Observability, Logging & Tracing Deficiencies
@@ -310,6 +322,8 @@ Resolved by → [§3.4 #3 `pg_advisory_xact_lock`](#34-concurrency-hardening-opt
 4. **No OpenTelemetry Instrumentation:** There is no integration with OpenTelemetry. Tracing of incoming HTTP requests, outgoing HTTP calls, and Entity Framework database queries is completely missing.
 
 Resolved by → [§3.5 Serilog Compact JSON + `CorrelationIdMiddleware` + OpenTelemetry tracing/metrics](#35-modern-observability-architecture-serilog-json-w3c-traces-opentelemetry).
+
+> **Proposal, not built.** No OpenTelemetry package is referenced in `src/` or `tests/`. The repo has a hand-rolled `Activity` / W3C `traceparent` implementation instead.
 
 ---
 
@@ -327,6 +341,8 @@ await context.Response.WriteAsync(JsonSerializer.Serialize(response));
 3. **Legacy Middleware Pattern:** Uses legacy manual response writing rather than ASP.NET Core 8's native `IExceptionHandler` abstraction.
 
 Resolved by → [§3.6 RFC 9457 `ProblemDetails` via `IExceptionHandler`](#36-rfc-9457-problem-details--sanitized-error-pipeline).
+
+> **Fixed.** `app.UseExceptionHandler()` is registered in `Program.cs` and `GlobalExceptionHandler` implements `IExceptionHandler`.
 
 ---
 
@@ -350,6 +366,8 @@ if (app.Environment.IsDevelopment())
 *(Verified: `Program.cs` gates `ApplyMigrationsAsync()` strictly behind `app.Environment.IsDevelopment()` — confirmed at the current line location. No health-check registration (`AddHealthChecks`/`MapHealthChecks`) or rate-limiter registration exists anywhere in `Program.cs` — confirmed absent by full-file search.)*
 
 Resolved by → [§3.7 #1–2 CLI `MigrationRunner` + schema-isolated `__EFMigrationsHistory` tables](#37-hardened-container-operations--cli-migration-runner) and [§3.7 #3 split `/health/live` & `/health/ready` probes](#37-hardened-container-operations--cli-migration-runner).
+
+> **Fixed.** `dotnet run -- migrate` runs `MigrationRunner` (Development and Testing also migrate at startup), every module context uses its own `__EFMigrationsHistory` table in its own schema (via `MigrationsHistoryTable`), and `Program.cs` maps `/health/live` and `/health/ready`. The "all four DbContexts" count above is stale: there are six modules.
 
 ---
 
@@ -385,11 +403,15 @@ In [`JwtAccessTokenProvider.cs`](src/Modules/Identity/CrowdFunding.Modules.Ident
 
 Resolved by → [§3.8 #2 asymmetric ES256 JWKS endpoint](#38-security-modernization-asymmetric-jwks-timing-safe-pbkdf2--rate-limiting).
 
+> **Fixed.** Tokens are ES256 and `JwksEndpoint.cs` publishes the public keys at `/.well-known/jwks.json`; the signing keys are stored by `EfSigningKeyStore`.
+
 #### Complete Absence of Rate Limiting
 * No rate limiting is configured in [`Program.cs`](src/API/CrowdFunding.API/Program.cs) — confirmed by full-file search; no `AddRateLimiter` call exists anywhere in the codebase.
 * Endpoints like `/api/identity/users/login`, `/api/identity/users/register`, and `/api/contributions` are exposed to brute-force credential attacks, Sybil account creation, and card testing fraud.
 
 Resolved by → [§3.8 #3 partitioned `System.Threading.RateLimiting` policies](#38-security-modernization-asymmetric-jwks-timing-safe-pbkdf2--rate-limiting).
+
+> **Fixed.** `AddRateLimiter` with partitioned `Auth` and `Payment` policies is in `src/API/CrowdFunding.API/RateLimiting/RateLimitingConfiguration.cs`, wired by `app.UseRateLimiter()` in `Program.cs`.
 
 ---
 
@@ -464,6 +486,8 @@ This section presents concrete, production-ready architectures adapted directly 
 │                   └───────────────────────────┘                                                 │
 └─────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+> **Reference target, not the repo.** The repo's idempotent consumer is `EfInbox<TDbContext>` with a `<module>_inbox_messages` table (`MessageId`, `Consumer`); there is no `ProcessedEvent` type. See [`docs/outbox-architecture.md`](docs/outbox-architecture.md).
 
 ---
 
@@ -719,6 +743,8 @@ public void ApplyConfirmedContribution(Money contribution)
 ---
 
 ### 3.5 Modern Observability Architecture (Serilog JSON, W3C Traces, OpenTelemetry)
+
+> **Proposal, not built (OpenTelemetry part).** `AddCrowdFundingOpenTelemetry` below does not exist in the repo and no OpenTelemetry package is referenced.
 
 #### 1. Serilog Compact JSON Configuration (`LoggingConfiguration.cs`):
 ```csharp
@@ -1168,6 +1194,8 @@ Replace direct `HttpClient` instantiation with typed, resilient clients:
 
 ### 6.1 Full NetArchTest Modular Architecture Enforcement
 
+> **Proposal, not built.** The repo's architecture tests are plain xUnit over `Assembly.GetReferencedAssemblies()` and cover all six modules; NetArchTest is not used.
+
 Upgrade [`CrowdFunding.ArchitectureTests`](tests/ArchitectureTests/CrowdFunding.ArchitectureTests) to include comprehensive cross-module boundary tests:
 
 ```csharp
@@ -1285,7 +1313,7 @@ gantt
     SignalR CampaignHub Real-Time Pledges       :p5_4, after p5_3, 4d
     Redis Distributed Caching                   :p5_5, after p5_4, 3d
     section Phase 6: Testing Hardening
-    Complete NetArchTest Architecture Tests     :p6_1, 2026-11-03, 3d
+    Complete Architecture Tests (NetArchTest, proposal)  :p6_1, 2026-11-03, 3d
     Testcontainers Integration Test Harness     :p6_2, after p6_1, 5d
 ```
 
@@ -1296,7 +1324,7 @@ gantt
 | **Phase 3** | **Outbox Messaging Modernization** | **P0 (Critical)** | 2 Sprints | Append-only outbox table or `SKIP LOCKED` worker; `EventEnvelope` & `EventTypeRegistry`; `DeadLetterHandler` with persistent DLQ table. |
 | **Phase 4** | **OpenMeter Metering Integration** | **P1 (High)** | 1.5 Sprints | CloudEvents v1.0 schemas; OpenMeter meters (gross volume, fees, views, API units); resilient batch ingestion pipeline. |
 | **Phase 5** | **Security Hardening & Advanced Features**| **P1 (High)** | 2 Sprints | Constant-time PBKDF2 `DummyHash`; ES256 asymmetric JWKS; partitioned rate limiting; SignalR `CampaignHub`; Redis caching. |
-| **Phase 6** | **Testing & Architecture Enforcement** | **P1 (High)** | 1.5 Sprints | NetArchTest rules for all 6 modules; `Testcontainers.PostgreSql` integration test suite covering concurrent pledging. |
+| **Phase 6** | **Testing & Architecture Enforcement** | **P1 (High)** | 1.5 Sprints | architecture rules for all 6 modules (NetArchTest proposed; the repo uses plain xUnit); `Testcontainers.PostgreSql` integration test suite covering concurrent pledging. |
 
 ---
 

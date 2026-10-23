@@ -4,7 +4,10 @@
 **Target System:** [CrowdFunding Modular Monolith](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding)  
 **Evaluation Date:** September 8, 2026  
 **Auditor:** Platform & Codebase Shortcomings Architecture Evaluator  
-**Document Status:** Approved & Authoritative Architectural Analysis  
+**Document Status:** Dated snapshot of the September 8, 2026 evaluation, not updated since. Several findings have since been built (see the notes in each section and the checklist in section 8).  
+
+> [!NOTE]
+> **Status banner.** This is a point-in-time evaluation. Since it was written: `.github/workflows/ci.yml` and Dockerfiles (`src/API/CrowdFunding.API/Dockerfile`, `services/CrowdFunding.Moderation.Service/Dockerfile`) exist; refunds and campaign expiry exist (refunds are state-only); the outbox worker is `ModuleOutboxProcessor<TDbContext>` in BuildingBlocks. Current gaps are listed in [`TRADE_OFFS_AND_LIMITATIONS.md`](TRADE_OFFS_AND_LIMITATIONS.md) (Known Gaps) and [`TESTS_THAT_TEACH.md`](TESTS_THAT_TEACH.md).
 
 ---
 
@@ -64,12 +67,12 @@ The table below provides an executive summary of the 14 shortcomings, ranked by 
 | **4** | Security & Audit | Zero audit logging / change history on administrative and moderation actions | 🔴 **P0 Critical** | [`CampaignReview.cs`](../src/Modules/Moderation/CrowdFunding.Modules.Moderation.Domain/Aggregates/CampaignReview.cs) | [`TICKET-039`](../qa-tickets/TICKET-039-PIPELINE-BEHAVIORS-IMMUTABLE-AUDIT-LOGGING.md) | Administrative actions lack non-repudiation; no IP, context, or before/after diff captured; fails SOC 2/PCI-DSS. |
 | **5** | Performance | Multi-DbContext competition for physical PostgreSQL connection pool | 🟠 **P1 High** | [`Program.cs`](../src/API/CrowdFunding.API/Program.cs#L56-L60) | [`TICKET-026`](../qa-tickets/TICKET-026-MULTI-DATABASE-CONNECTION-DECOUPLING.md) | Cross-module requests check out multiple connections simultaneously, causing rapid pool exhaustion under peak load. |
 | **6** | Performance | Polling Outbox MVCC table bloat and write amplification under heavy throughput | 🟠 **P1 High** | [`OutboxClaimQuery.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxClaimQuery.cs) | [`TICKET-038`](../qa-tickets/TICKET-038-POSTGRESQL-OUTBOX-MVCC-PARTITIONING-DELETE-ON-SUCCESS.md) | Mutable row status (`Pending -> Processing -> Processed`) creates 3+ tuple versions per event; autovacuum starvation. |
-| **7** | Performance | In-process single-thread `PeriodicTimer` outbox processor vs distributed broker | 🟠 **P1 High** | [`OutboxProcessorBackgroundService.cs`](../src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs#L32-L52) | [`TICKET-024`](../qa-tickets/TICKET-024-PLUGGABLE-MESSAGE-BUS-RABBITMQ-KAFKA.md) & [`TICKET-025`](../qa-tickets/TICKET-025-MODULAR-OUTBOX-PARTITIONING-AUTONOMOUS-WORKERS.md) | Hard throughput ceiling of ~4 msgs/sec per module (20 msgs / 5s); outbox takes minutes to drain during funding spikes. |
+| **7** | Performance | In-process single-thread `PeriodicTimer` outbox processor vs distributed broker | 🟠 **P1 High** | [`ModuleOutboxProcessor.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Outbox/ModuleOutboxProcessor.cs) | [`TICKET-024`](../qa-tickets/TICKET-024-PLUGGABLE-MESSAGE-BUS-RABBITMQ-KAFKA.md) & [`TICKET-025`](../qa-tickets/TICKET-025-MODULAR-OUTBOX-PARTITIONING-AUTONOMOUS-WORKERS.md) | Hard throughput ceiling of ~4 msgs/sec per module (20 msgs / 5s); outbox takes minutes to drain during funding spikes. |
 | **8** | Performance | In-memory key caching and lack of distributed cache invalidation across replicas | 🟠 **P1 High** | [`EfSigningKeyStore.cs`](../src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Services/EfSigningKeyStore.cs#L19-L57) | [`TICKET-037`](../qa-tickets/TICKET-037-MULTI-REPLICA-DISTRIBUTED-CACHE-INVALIDATION.md) | Multi-replica deployments face split-brain key caches; pre-commit Redis invalidation causes stale cache repopulation. |
 | **9** | Functional Domain | Hard single-currency limitation with no currency conversion services | 🟠 **P1 High** | [`Money.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Domain/ValueObjects/Money.cs#L52-L63) | *Pedagogical Scope (Non-Decomp)* | Platform rejects contributions in any currency differing from the campaign currency; prevents international backing. |
 | **10** | Functional Domain | Lack of pledge reward tiers / perks with limited inventory | 🟠 **P1 High** | [`Campaign.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs) | [`TICKET-034`](../qa-tickets/TICKET-034-REWARD-TIER-ALLOCATION-INVENTORY-RESERVATION.md) | Cannot offer tiered incentives (Early Bird, VIP); cannot track reward quotas, fulfillment, or shipping information. |
-| **11** | DevOps | Missing containerization Dockerfiles for API services | 🟠 **P1 High** | [`docker-compose.yml`](../docker-compose.yml) | [`TICKET-029`](../qa-tickets/TICKET-029-MICROSERVICE-EXTRACTION-POC-STANDALONE-SERVICE.md) | Cannot deploy API to container runtimes (Kubernetes/ECS); inconsistent environments between local and staging. |
-| **12** | DevOps | Complete absence of CI/CD workflow automation (GitHub Actions / GitLab CI) | 🟠 **P1 High** | Repository Root (`.github` missing) | [`TICKET-040`](../qa-tickets/TICKET-040-ARCHITECTURAL-FITNESS-FUNCTIONS-CI-CD-AUTOMATION.md) | No automated build/test validation, architecture rule enforcement, linting, image packaging, or deployment. |
+| **11** | DevOps | Missing containerization Dockerfiles for API services (snapshot; Dockerfiles now exist) | 🟠 **P1 High** | [`docker-compose.yml`](../docker-compose.yml) | [`TICKET-029`](../qa-tickets/TICKET-029-MICROSERVICE-EXTRACTION-POC-STANDALONE-SERVICE.md) | Cannot deploy API to container runtimes (Kubernetes/ECS); inconsistent environments between local and staging. |
+| **12** | DevOps | Complete absence of CI/CD workflow automation (snapshot; `ci.yml` now exists) | 🟠 **P1 High** | Repository Root (`.github/workflows/ci.yml` now exists) | [`TICKET-040`](../qa-tickets/TICKET-040-ARCHITECTURAL-FITNESS-FUNCTIONS-CI-CD-AUTOMATION.md) | No automated build/test validation, architecture rule enforcement, linting, image packaging, or deployment. |
 | **13** | Observability | Missing centralized distributed tracing exporter (OpenTelemetry OTLP) | 🟡 **P2 Medium** | [`Program.cs`](../src/API/CrowdFunding.API/Program.cs) | [`TICKET-030`](../qa-tickets/TICKET-030-DISTRIBUTED-TRACING-OPENTELEMETRY-OUTBOX-PROPAGATION.md) | No OTLP exporter; spans and call graphs across HTTP, EF Core, and Outbox are unobservable in Jaeger/Tempo/Datadog. |
 | **14** | Functional Domain | Missing backer profile management and notification preference controls | 🟡 **P2 Medium** | [`User.cs`](../src/Modules/Identity/CrowdFunding.Modules.Identity.Domain/Aggregates/User.cs) | [`TICKET-031`](../qa-tickets/TICKET-031-EXTERNAL-EMAIL-NOTIFICATION-OUTBOX-DELIVERY.md) | Stub notification handlers (`Task.CompletedTask`); zero preference management; non-compliant with GDPR/CAN-SPAM. |
 
@@ -90,6 +93,8 @@ public enum ContributionStatus
 }
 ```
 In [`Contribution.cs`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Domain/Aggregates/Contribution.cs#L76-L111), once `ConfirmPayment` is executed, the aggregate moves permanently to `Succeeded`. **There is no domain method or state for `Refund`, `Dispute`, or `Chargeback`**.
+
+> *Status update:* a refund saga now exists (`CampaignTerminationRefundHandler`, `Contribution.Refund`, covered by `RefundSagaE2ETests`), but refunds are **state-only**: no payment-gateway money movement and no ledger reversal.
 
 Furthermore, when a campaign is cancelled in [`CancelCampaignCommandHandler.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Application/Features/Campaigns/Commands/CancelCampaign/CancelCampaignCommandHandler.cs#L46), the domain publishes a [`CampaignCancelledApplicationEvent`](../src/Modules/Campaigns/Contracts/Events/CampaignCancelled/CampaignCancelledApplicationEvent.cs). Across the entire codebase, **no handler exists in the Contributions module to process this event**. Pledged funds remain marked as `Succeeded` indefinitely.
 
@@ -149,6 +154,8 @@ if (Status != CampaignStatus.Published)
 }
 ```
 **It does NOT check whether `DateTime.UtcNow > DeadlineUtc`!** Furthermore, there is no background worker or recurring scheduler (such as Quartz.NET, Hangfire, or ASP.NET Core `IHostedService`) that queries expired campaigns.
+
+> *Status update:* `CampaignExpirationBackgroundService` now exists and expires campaigns past their deadline.
 
 #### Impact & Severity: 🔴 P0 Critical
 - **Perpetual "Zombie" Campaigns:** Campaigns whose deadlines elapsed weeks or months ago remain in `Published` status indefinitely until an admin intervenes.
@@ -313,20 +320,20 @@ The current outbox implementation in [`OutboxClaimQuery.cs`](../src/BuildingBloc
 WITH claimable AS (
     SELECT "Id"
     FROM campaigns_outbox_messages
-    WHERE "Status" = 1 AND "ScheduledAtUtc" <= now()
+    WHERE "Status" = 0 AND "ScheduledAtUtc" <= {3}  -- Pending = 0; {3} is the application clock
     ORDER BY "ScheduledAtUtc", "Id"
     FOR UPDATE SKIP LOCKED
     LIMIT 20
 )
 UPDATE campaigns_outbox_messages m
-SET "Status" = 2, "LockedBy" = 'worker-1', "LockedUntilUtc" = now() + interval '30 seconds'
+SET "Status" = 1, "LockedBy" = 'worker-1', "LockedUntilUtc" = now() + interval '30 seconds'
 FROM claimable
 WHERE m."Id" = claimable."Id"
 RETURNING m.*;
 ```
-When processed in [`OutboxProcessorBackgroundService.cs`](../src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs#L94), a third statement updates the row:
+When processed in [`ModuleOutboxProcessor.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Outbox/ModuleOutboxProcessor.cs), a third statement updates the row:
 ```csharp
-message.MarkProcessed(nowUtc); // Sets Status = 3 (Processed), ProcessedOnUtc = now
+message.MarkProcessed(nowUtc); // Sets Status = 2 (Processed), ProcessedOnUtc = now (snapshot; the current processor deletes the row on success)
 await dbContext.SaveChangesAsync();
 ```
 
@@ -396,7 +403,7 @@ await _transactionExecutor.ExecuteAsync(async ct => {
 ```
 During a single HTTP request, **two separate physical connections are checked out and held concurrently**.
 Simultaneously:
-- [`OutboxProcessorBackgroundService.cs`](../src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs#L48-L50) checks out connections for `CampaignsDbContext`, `ContributionsDbContext`, and `ModerationDbContext`.
+- [`ModuleOutboxProcessor.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Outbox/ModuleOutboxProcessor.cs) (one instance per module) checks out connections for `CampaignsDbContext`, `ContributionsDbContext`, and `ModerationDbContext`.
 - Health checks ([`DbContextHealthCheck.cs`](../src/API/CrowdFunding.API/Observability/DbContextHealthCheck.cs)) check out 4 connections concurrently every 10 seconds.
 
 ```mermaid
@@ -428,7 +435,7 @@ graph TD
 ### 4.3 In-Process Single-Thread PeriodicTimer Outbox Dispatcher vs Distributed Brokers
 
 #### Architectural Flaw & Codebase Analysis
-In [`OutboxProcessorBackgroundService.cs`](../src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs#L18-L41):
+In `ModuleOutboxProcessor.cs` ([source](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Outbox/ModuleOutboxProcessor.cs)):
 ```csharp
 private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
 private const int BatchSize = 20;
@@ -530,7 +537,7 @@ services:
     image: redis:7-alpine
     ports: ["6379:6379"]
 ```
-**No Dockerfile exists anywhere in the repository for `CrowdFunding.API` or any background worker.**
+**No Dockerfile exists anywhere in the repository for `CrowdFunding.API` or any background worker.** *(Snapshot finding. Since then `src/API/CrowdFunding.API/Dockerfile` and `services/CrowdFunding.Moderation.Service/Dockerfile` have been added.)*
 
 #### Impact & Severity: 🟠 P1 High
 - **Deployment Impossibility:** The API cannot be deployed to modern container orchestrators (Kubernetes, AWS ECS, Azure Container Apps, Google Cloud Run) without custom, unversioned developer scripts.
@@ -575,7 +582,7 @@ ENTRYPOINT ["dotnet", "CrowdFunding.API.dll"]
 
 #### Architectural Flaw & Codebase Analysis
 File search confirms there are **zero** CI/CD pipeline definitions in the repository:
-- No `.github/workflows/` directory.
+- No `.github/workflows/` directory. *(Snapshot finding. `.github/workflows/ci.yml` now exists.)*
 - No `.gitlab-ci.yml`, `azure-pipelines.yml`, or `Jenkinsfile`.
 
 All validation (compilation, unit tests, NetArchTest architecture boundary tests, code formatting) must be manually invoked by developers via the CLI.
@@ -825,18 +832,18 @@ gantt
 ### Phase 1: Financial Correctness & Security Governance
 - [x] **Fixed ([`TICKET-027`](../qa-tickets/TICKET-027-DISTRIBUTED-CROWDFUNDING-LIFECYCLE-REFUND-SAGA.md)):** Implement `CampaignExpirationBackgroundService` and add `CompleteAsSuccessful` / `ExpireAsFailed` to [`Campaign.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs).
 - [x] **Fixed ([`TICKET-027`](../qa-tickets/TICKET-027-DISTRIBUTED-CROWDFUNDING-LIFECYCLE-REFUND-SAGA.md)):** Implement `ContributionRefundSaga` and refund event choreography for cancelled/failed campaigns.
-- [ ] **Tracked ([`TICKET-036`](../qa-tickets/TICKET-036-DECENTRALIZED-SESSION-REVOCATION-REFRESH-TOKEN-ROTATION.md)):** Implement Refresh Token Rotation (RTR), session revocation store, and shorten access token TTL to 15 minutes.
-- [ ] **Tracked ([`TICKET-039`](../qa-tickets/TICKET-039-PIPELINE-BEHAVIORS-IMMUTABLE-AUDIT-LOGGING.md)):** Create append-only `audit_records` table and `AuditLoggingPipelineBehavior` for administrative operations.
+- [x] **Built (TICKET-036: `RefreshTokenRotationE2ETests`):** Implement Refresh Token Rotation (RTR), session revocation store, and shorten access token TTL to 15 minutes.
+- [x] **Built (TICKET-039: `AuditLoggingE2ETests`, `BuildingBlocks.Infrastructure/Audit`):** Create append-only `audit_records` table and `AuditLoggingPipelineBehavior` for administrative operations.
 
 ### Phase 2: Domain Evolution & High-Concurrency Performance
 - [x] **Fixed ([`TICKET-023`](../qa-tickets/TICKET-023-ASYNCHRONOUS-REPLICATED-READ-MODELS.md) & [`TICKET-026`](../qa-tickets/TICKET-026-MULTI-DATABASE-CONNECTION-DECOUPLING.md)):** Decouple cross-module availability readers to resolve multi-DbContext connection pool starvation; hierarchical connection string fallback.
-- [ ] **Tracked ([`TICKET-034`](../qa-tickets/TICKET-034-REWARD-TIER-ALLOCATION-INVENTORY-RESERVATION.md)):** Add `RewardTier` entities to Campaigns and transactional perk reservation in Contributions.
+- [x] **Built (TICKET-034: `RewardTiersController`, `RewardTierConcurrencyE2ETests`):** Add `RewardTier` entities to Campaigns and transactional perk reservation in Contributions.
 - [ ] **Pedagogical Evaluation:** `ICurrencyConversionService` with spot exchange rate locking on pledges.
 - [x] **Fixed ([`TICKET-024`](../qa-tickets/TICKET-024-PLUGGABLE-MESSAGE-BUS-RABBITMQ-KAFKA.md) & [`TICKET-025`](../qa-tickets/TICKET-025-MODULAR-OUTBOX-PARTITIONING-AUTONOMOUS-WORKERS.md)):** Pluggable `IMessageBus` and autonomous per-module outbox processors (MVCC delete-on-success tracked in [`TICKET-038`](../qa-tickets/TICKET-038-POSTGRESQL-OUTBOX-MVCC-PARTITIONING-DELETE-ON-SUCCESS.md)).
-- [ ] **Tracked ([`TICKET-037`](../qa-tickets/TICKET-037-MULTI-REPLICA-DISTRIBUTED-CACHE-INVALIDATION.md)):** Implement Redis Pub/Sub distributed cache synchronization and post-commit eviction hooks.
+- [x] **Built (TICKET-037: `DistributedCacheInvalidationSubscriber`, `SigningKeyMultiReplicaInvalidationE2ETests`):** Implement Redis Pub/Sub distributed cache synchronization and post-commit eviction hooks.
 
 ### Phase 3: Infrastructure, Observability & Backer Experience
 - [x] **Fixed ([`TICKET-029`](../qa-tickets/TICKET-029-MICROSERVICE-EXTRACTION-POC-STANDALONE-SERVICE.md)):** Author production-grade multi-stage Dockerfile and extracted standalone microservice host (`CrowdFunding.Moderation.Service`).
-- [ ] **Tracked ([`TICKET-040`](../qa-tickets/TICKET-040-ARCHITECTURAL-FITNESS-FUNCTIONS-CI-CD-AUTOMATION.md)):** Author GitHub Actions CI/CD workflows (`.github/workflows/ci.yml`) enforcing NetArchTest boundaries.
-- [x] **Fixed ([`TICKET-030`](../qa-tickets/TICKET-030-DISTRIBUTED-TRACING-OPENTELEMETRY-OUTBOX-PROPAGATION.md)):** Wire OpenTelemetry W3C `traceparent` distributed tracing across outbox handlers and boundaries.
-- [ ] **Tracked ([`TICKET-031`](../qa-tickets/TICKET-031-EXTERNAL-EMAIL-NOTIFICATION-OUTBOX-DELIVERY.md)):** Implement external SendGrid email delivery with transactional outbox dual-write defense.
+- [x] **Built (TICKET-040: `.github/workflows/ci.yml`):** Author GitHub Actions CI/CD workflows (`.github/workflows/ci.yml`) enforcing NetArchTest boundaries.
+- [x] **Fixed ([`TICKET-030`](../qa-tickets/TICKET-030-DISTRIBUTED-TRACING-OPENTELEMETRY-OUTBOX-PROPAGATION.md)):** W3C `traceparent` propagation (no OTel SDK) across outbox handlers and boundaries; the hand-rolled `Activity` code does not replace the OTLP exporter in section 5.3.
+- [x] **Built (TICKET-031: `EmailNotificationOutboxE2ETests`; success and failure emails are not built):** Implement external SendGrid email delivery with transactional outbox dual-write defense.

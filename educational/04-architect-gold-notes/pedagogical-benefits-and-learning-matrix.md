@@ -160,7 +160,7 @@ Architects draw beautiful boundary diagrams on whiteboards. Six months later, un
 
 #### The Pedagogical Benefit
 In [`CrowdFunding.ArchitectureTests`](../../tests/ArchitectureTests/CrowdFunding.ArchitectureTests/README.md) and [`TICKET-040`](../../qa-tickets/TICKET-040-ARCHITECTURAL-FITNESS-FUNCTIONS-CI-CD-AUTOMATION.md), students learn how to codify **Evolutionary Architectural Fitness Functions**:
-- `NetArchTest` runs alongside unit tests in CI/CD.
+- The architecture tests (plain xUnit over referenced assemblies) run alongside the unit tests in CI (`.github/workflows/ci.yml`). The NetArchTest library is not used.
 - Any attempt by a developer to add a reference from `API` to a module's `Domain`, or from one module to another module's `Infrastructure`, **immediately breaks the build**.
 
 **Key Learning Takeaway:**  
@@ -208,7 +208,7 @@ Decouple deployment topologies from application architecture through intelligent
 | **Senior Students & Junior Developers** | • The transition from naive CRUD to clean separation of concerns.<br/>• Why global variables and cross-table joins create maintenance nightmares.<br/>• How unit, architecture, and integration tests work collaboratively. |
 | **Mid-Level Engineers & Tech Leads** | • The Poly-Pattern Spectrum: knowing when to write a Minimal API vs. CQRS vs. Rich DDD.<br/>• How to eliminate dual writes using Transactional Outbox and Idempotency keys.<br/>• The mechanics of Testcontainers for true-to-production integration testing. |
 | **Staff & Principal Engineers** | • Storage engine mechanics: PostgreSQL MVCC dead tuples, B-tree index bloat, and `autovacuum` defense.<br/>• Asymmetric JWKS token verification vs. decentralized session revocation tradeoffs.<br/>• Multi-replica cache coherence, pre-commit eviction races, and Redis Pub/Sub invalidation. |
-| **Enterprise & Solutions Architects** | • Designing Modular Monoliths that completely eliminate Big-Bang microservice rewrites.<br/>• Evolutionary architectural governance via automated `NetArchTest` fitness functions.<br/>• The business financial economics: saving millions in cloud compute and operational complexity. |
+| **Enterprise & Solutions Architects** | • Designing Modular Monoliths that completely eliminate Big-Bang microservice rewrites.<br/>• Evolutionary architectural governance via automated architecture-test fitness functions.<br/>• The business financial economics: saving millions in cloud compute and operational complexity. |
 
 ---
 

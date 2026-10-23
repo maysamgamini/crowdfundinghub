@@ -57,7 +57,7 @@ quadrantChart
 ```
 
 ### Key Strengths as an Educational Resource
-1. **Architectural Guardrails via Unit Testing:** Using [`NetArchTest`](../tests/ArchitectureTests/CrowdFunding.ArchitectureTests) to programmatically enforce that `Domain` has no dependencies and `API` never touches internal module domains is one of the best pedagogical lessons in modern .NET.
+1. **Architectural Guardrails via Unit Testing:** Using plain xUnit [architecture tests over referenced assemblies](../tests/ArchitectureTests/CrowdFunding.ArchitectureTests) (not the NetArchTest library) to programmatically enforce that `Domain` has no dependencies and `API` never touches internal module domains is one of the best pedagogical lessons in modern .NET.
 2. **Real Database Integration Testing:** Using [`Testcontainers.PostgreSql`](../tests/IntegrationTests/CrowdFunding.IntegrationTests) rather than the deceptive EF Core In-Memory provider teaches students that real database semantics (indexes, concurrency tokens, transactions) cannot be mocked.
 3. **Transactional Outbox Demystification:** Provides a working, transparent implementation of the Transactional Outbox pattern with `FOR UPDATE SKIP LOCKED`, solving the classic dual-write distributed transaction fallacy.
 
@@ -222,7 +222,7 @@ The repository has an API, Swagger, and tests, but **no interactive frontend**.
 
 ### 4.4 Missing Developer Ergonomics (Dockerfile & CI/CD Pipeline)
 - **No API Dockerfile:** To run the project, a learner must have .NET 10 SDK installed locally. Running `docker compose up` only starts PostgreSQL and Redis, leaving the student wondering how to containerize the .NET host.
-- **No `.github/workflows` CI:** For an educational repo, having a clean GitHub Actions workflow running `dotnet test` and `NetArchTest` provides students with a production template for their own CI/CD pipelines.
+- **CI exists:** `.github/workflows/ci.yml` builds and runs the architecture, unit and integration test projects, which gives students a template for their own CI/CD pipelines.
 
 ### 4.5 Lack of "Before vs. After" Architectural Contrast (The Pedagogical Rosetta Stone)
 The single most effective educational technique in software engineering is **Contrast**:
@@ -330,7 +330,7 @@ Evaluation of `CrowdFundingHub` across key pedagogical dimensions (1 to 10 scale
 
 | Dimension | Score | Evaluation Analysis |
 |---|:---:|---|
-| **Architecture Discipline & Rule Enforcement** | **10 / 10** | Unmatched. NetArchTest guarantees zero illegal boundary leaks. |
+| **Architecture Discipline & Rule Enforcement** | **10 / 10** | Unmatched. The assembly-reference architecture tests guard against illegal boundary leaks. |
 | **Enterprise Production Realism** | **9.5 / 10** | Realistic concurrency control, outbox patterns, and database testing. |
 | **Test Engineering Best Practices** | **9.5 / 10** | Testcontainers Postgres fixture, 156 passing tests across unit, arch, and integration. |
 | **Documentation & Code Explanations** | **9.5 / 10** | 100% inline XML documentation, README in every folder, exhaustive architecture docs. |
@@ -656,7 +656,7 @@ $$\mathbf{Total\ Lines\ of\ Domain\ or\ Business\ Logic\ Rewritten:\ 0}$$
 
 Use this checklist when designing an in-process monolith that must retain the option to split into microservices:
 
-- [x] **1. Zero Cross-Module Domain References**: Verified via automated architecture tests (`NetArchTest`).
+- [x] **1. Zero Cross-Module Domain References**: Verified via automated architecture tests (plain xUnit over referenced assemblies).
 - [x] **2. Dedicated Contracts Assemblies**: Inter-module communication uses only lightweight DTOs and interfaces (`*.Contracts.csproj`).
 - [x] **3. Schema-per-Module Isolation**: Tables grouped into database schemas (`identity`, `campaigns`, `contributions`, etc.).
 - [x] **4. Zero Cross-Schema Foreign Keys**: Relationships use scalar primitive identifiers (`Guid CampaignId`), never SQL foreign keys.

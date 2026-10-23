@@ -115,7 +115,7 @@ stateDiagram-v2
 
 | Phase | What | Done when |
 |---|---|---|
-| P0 | Fix the outbox due-time clock defect that made end-to-end tests flaky (done, commit `e84a8dc` on `fix/outbox-due-clock`) | Full suite green three runs in a row |
+| P0 | Fix the outbox due-time clock defect that made end-to-end tests flaky (done) | Full suite green three runs in a row |
 | P1 | Six PostgreSQL containers, one per module, each module on its own connection string; migrations run per database; Audit gets its own; health checks per database | `docker compose up` then the API starts and the full suite passes with each module on its own database |
 | P2 | One command to start everything and one to run the tests; a README for someone who has never seen the project; sample requests; a seed so a first run shows data | A clean machine with Docker and the .NET SDK reaches a working system in the steps written in the README (verified on a fresh clone) |
 | P3 | HA compose profile: a standby per primary, replication, the etcd witness, Npgsql multi-host connection strings with `Target Session Attributes=primary`; a replication-lag and role health check | Writes appear on the standby; stopping the primary promotes the standby |

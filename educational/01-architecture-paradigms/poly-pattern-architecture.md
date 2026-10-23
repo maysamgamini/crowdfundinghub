@@ -24,34 +24,47 @@ Treating the 20% with the naive simplicity of the 80% is **negligence**.
 
 ---
 
-## 2. The 4-Tier Architectural Pattern Matrix
+## 2. The 3-Tier Architectural Pattern Matrix
 
-In a mature, decomposition-ready Modular Monolith, multiple established patterns live harmoniously side-by-side:
+In this decomposition-ready Modular Monolith, three patterns live side-by-side. The matrix matches the code and [`docs/POLY_PATTERN_TIER_ASSIGNMENT.md`](../../docs/POLY_PATTERN_TIER_ASSIGNMENT.md):
 
 ```mermaid
 quadrantChart
     title The Pattern Selection Matrix
     x-axis Low Transactional Risk --> High Financial / Concurrency Risk
     y-axis Low System Blast Radius --> Multi-System Orchestration
-    quadrant-1 "Tier 3: Rich DDD + Locks + Outbox"
-    quadrant-2 "Tier 4: Event Choreography & Debezium CDC"
-    quadrant-3 "Tier 1: Pragmatic Vertical Slice / CRUD"
-    quadrant-4 "Tier 2: Fast-Path CQRS Read Slice"
-    "Draft Campaign Creation": [0.15, 0.20]
+    quadrant-1 "Tier 3: Aggregate + Locks + Outbox"
+    quadrant-2 "Tier 3 when another module must react"
+    quadrant-3 "Tier 1 or Tier 2: Direct DbContext"
+    quadrant-4 "Tier 3 when concurrent writes can corrupt"
     "Category Lookups": [0.05, 0.05]
-    "Public Feed Queries": [0.20, 0.85]
+    "Draft Campaign Creation": [0.15, 0.20]
+    "Notification Preferences": [0.25, 0.30]
+    "Campaign Published Fan-out": [0.30, 0.85]
     "Confirm Pledge & Balance": [0.95, 0.95]
-    "Campaign Deadline & Refund Saga": [0.85, 0.90]
+    "Campaign Deadline & Refund": [0.85, 0.90]
 ```
 
-### Detailed Breakdown of the 4 Tiers
+### Detailed Breakdown of the 3 Tiers
 
-| Pattern Tier | Architectural Style | Core Technologies | When to Use (Business Scenarios) | Implementation Cost |
+| Pattern Tier | Architectural Style | Core Pieces | When to Use (Business Scenarios) | Implementation Cost |
 |---|---|---|---|:---:|
-| **Tier 1: Pragmatic Vertical Slice** | Minimal API / Single-File Slice | Endpoint + FluentValidation + Direct `DbContext` | Creating a draft campaign, updating user profile, managing FAQs, administrative lookups. | 🟢 **Minimal (1 file)** |
-| **Tier 2: Fast-Path CQRS Read Slice** | Direct Projection (Bypass Domain) | Dapper / EF Core `AsNoTracking()` + Redis Cache | Public campaign discovery feed, category listings, backer leaderboards, search filters. | 🟢 **Low (1-2 files)** |
-| **Tier 3: Rich DDD Transactional Core** | Onion Clean Architecture + Aggregate Root | Domain Aggregates, Value Objects, `pg_advisory_xact_lock`, `xmin` tokens | Processing backer contributions, incrementing campaign funding balance, double-spend prevention. | 🟠 **High (10-12 files)** |
-| **Tier 4: Event Choreography & CDC** | Transactional Outbox + Debezium / Kafka | Append-Only Outbox Table + PostgreSQL WAL CDC streaming | Payment confirmed $\rightarrow$ notify Campaigns, notify Notifications, notify Moderation, stream to analytics. | 🔴 **Advanced (Multi-Service)** |
+| **Tier 1: Pragmatic Vertical Slice** | One endpoint | Endpoint + the module's `DbContext` | Simple lookups and single-row edits that no other module cares about. | Minimal (1 file) |
+| **Tier 2: Command + Handler on the DbContext** | Command and handler, no aggregate, no repository | Command + handler in the module's Infrastructure, using its own `DbContext` directly. Real example: Notifications preferences (`Notifications.Infrastructure/Features/Preferences`) | Writes with no invariants worth a domain model, no events, and no concurrent-write risk. | Low (2-3 files) |
+| **Tier 3: Rich DDD Transactional Core** | Aggregate Root + repository | Aggregate, repository, command dispatcher, transactional outbox, `pg_advisory_xact_lock`, `xmin` tokens | Contributions, campaign funding balance, double-spend prevention, anything another module must react to reliably. | High (10-12 files) |
+
+The outbox belongs to Tier 3: only aggregates that raise events write to it. Cross-module reactions run from the outbox through the message bus (`InProcess` or `RabbitMQ`; log-based CDC such as Debezium is a possible evolution, not something this repository implements).
+
+> **Note on read slices.** Reads are not a tier. Query handlers already project straight from EF Core with `AsNoTracking()` and bypass the write repositories; no Dapper or cache layer is involved (Dapper is not a package in this repo).
+
+### Lessons from applying the tiers
+
+Two questions decide the tier, instead of dogma:
+
+1. **Does another module need to react reliably?** If yes, the write must raise an event through the outbox, which is Tier 3.
+2. **Can concurrent writes corrupt this data?** Answer it by looking at **every writer of the table**, not only the feature's own handlers.
+
+Webhook subscriptions show why. They look like plain CRUD, so they were tried as Tier 2 and stayed Tier 3: `WebhookSubscriptionConcurrencyTests` reproduced a lost update. The dispatcher reads a subscription, makes an HTTP call of up to 5 seconds, then saves its stale copy, which re-activated a subscription the owner had just deleted. An `xmin` concurrency token fixed it.
 
 ---
 
@@ -147,6 +160,8 @@ await _transactionExecutor.ExecuteAsync(async ct =>
 
 ## 4. Debezium CDC vs. Polling Outbox: The Strategic Evolution
 
+> **Not built.** This repository ships the polling outbox only (`ModuleOutboxProcessor`). The Debezium and Kafka path below is a design for a later extraction, shown to explain why the outbox table exists.
+
 In an educational repository, the relationship between the **Transactional Outbox Table** and **Debezium Change Data Capture** must be clearly communicated:
 
 ```mermaid
@@ -192,7 +207,7 @@ By writing to the outbox table in the **same database transaction**:
 ## 5. The Golden Rules of Poly-Pattern Monoliths
 
 1. **Do not use a DDD Aggregate if there are no business invariants to protect.** An entity that only has getters and setters is an anemic data model—and that is completely fine for CRUD!
-2. **Do not route queries through write repositories.** Queries should project directly from EF Core `AsNoTracking()` or Dapper to the response DTO.
+2. **Do not route queries through write repositories.** Queries should project directly from EF Core `AsNoTracking()` to the response DTO.
 3. **Only write events to the Outbox table if another bounded context or external microservice genuinely needs to react to them.**
 4. **Enforce boundaries through namespaces and project references, not through layers of empty classes.**
 

@@ -2,7 +2,7 @@
 
 > **Purpose:** show a learner, step by step, where each Round 1 system-design decision lives in the `CrowdFundingHub` code, which test guards it, and where the code differs from the design.
 > **Design source:** `hispeedsystem/system-design-mastery/interview-loops/04-financial-and-transactional/06-crowdfunding-platform.md` (Round 1, steps 1.0 to 1.6, plus "See It Built").
-> **Method:** read from code and tests on 2026-10-21, re-checked against `main` on 2026-10-23 (see section 6). Line numbers were measured on the first date and have drifted in places, so trust the file and symbol names over the numbers. Test names come from the test sources.
+> **Method:** read from the code and tests, then re-checked after the inbox, schema and outbox changes (section 6). Line numbers drift as the code changes, so trust file and symbol names over numbers. Test names come from the test sources.
 > **Status tags:** **MATCHES** (code implements the design), **SIMPLER VARIANT** (a smaller version of the design), **NOT BUILT** (no code).
 
 Paths are relative to the repo root. `CAMP` = `src/Modules/Campaigns/CrowdFunding.Modules.Campaigns`, `CONT` = `src/Modules/Contributions/CrowdFunding.Modules.Contributions`, `NOTIF` = `src/Modules/Notifications/CrowdFunding.Modules.Notifications`, `BB` = `src/BuildingBlocks/CrowdFunding.BuildingBlocks`.
@@ -18,7 +18,7 @@ Paths are relative to the repo root. `CAMP` = `src/Modules/Campaigns/CrowdFundin
 | 1.5 Pledge after the deadline | Contributions, Campaigns | NOT BUILT (no closing fence) | partial |
 | 1.6 Settlement at the deadline | Campaigns, Contributions | SIMPLER VARIANT (decision and state-only refunds); charge-once settlement NOT BUILT; webhook inbox MATCHES | `CampaignExpirationE2ETests`, `RefundSagaE2ETests`, webhook tests |
 | Outbox, event registry, dead letter | BuildingBlocks | MATCHES | `OutboxTests`, `OutboxLeanTableE2ETests` |
-| Consumer inbox | all consumers | MATCHES in part (per-module inbox since 2026-10-22; written after the handler, so a crash window remains) | `InboxRetryTests` |
+| Consumer inbox | all consumers | MATCHES in part (per-module inbox; written after the handler, so a crash window remains) | `InboxRetryTests` |
 | "Tell people" | Notifications | SIMPLER VARIANT | `EmailNotificationOutboxE2ETests` |
 
 ## 2. The two flows, drawn
@@ -127,7 +127,7 @@ flowchart TD
 - **Gap:** the claim query takes only `Pending` rows, and nothing resets rows stuck in `Processing`, so a worker crash mid-batch can strand them. `docs/TRADE_OFFS_AND_LIMITATIONS.md` says they are reclaimed; the code does not.
 - **Tests:** `OutboxTests`, `OutboxLeanTableE2ETests`, `ContributionAndOutboxE2ETests`, `RabbitMqMessageBusTests`.
 
-### Cross-cutting: consumer inbox: MATCHES IN PART (updated 2026-10-23)
+### Cross-cutting: consumer inbox: MATCHES IN PART
 
 > A per-module inbox now exists: table `<module>_inbox_messages`, keyed by message ID and handler, written after the handler succeeds (`InboxRegistration.cs`, `EfInbox.cs`, `ServiceProviderEventPublisher.cs`; test `InboxRetryTests`). It is used by the in-process outbox dispatch only; the RabbitMQ path does not set a message ID. The record is written after the handler, so a crash between the two re-runs the handler once. The text below describes the code before that change and still explains why handlers must stay idempotent.
 
@@ -139,9 +139,9 @@ Receipts and refund or cancellation alerts are built (`NOTIF.Application/Events/
 
 ## 4. Where the "See It Built" section overstates the code
 
-The loop's "See It Built" section describes the reference code ahead of the code itself. These claims are not supported by the code as of 2026-10-21 and should be corrected there (or the code brought up to them):
+The loop's "See It Built" section describes the reference code ahead of the code itself. These claims were not supported by the code when this page was first written, and should be corrected there (or the code brought up to them):
 
-1. "Inboxes that make every consumer idempotent": a per-module inbox exists since 2026-10-22, but it is written after the handler, covers only the in-process path, and is not pruned.
+1. "Inboxes that make every consumer idempotent": a per-module inbox now exists, but it is written after the handler, covers only the in-process path, and is not pruned.
 2. "A unique key on contribution and entry kind": the unique index is on `ContributionId` alone.
 3. "A check constraint ties each entry's sign to its kind": not found.
 4. "A trigger rejects updates and deletes": not found.
@@ -150,7 +150,7 @@ The loop's "See It Built" section describes the reference code ahead of the code
 
 ## 5. Gaps this mapping exposes
 
-> Added 2026-10-22: the schema-per-module row below was found while checking a lesson. It was checked statically (migrations and entity configurations) and has not been confirmed against a live database.
+> Note: the schema-per-module row below was found while checking a lesson. It was checked statically (migrations and entity configurations) and has not been confirmed against a live database.
 
 | Gap | Design step | Suggested ticket |
 |---|---|---|
@@ -158,16 +158,16 @@ The loop's "See It Built" section describes the reference code ahead of the code
 | No closing fence; late confirmations dead-letter without refund | 1.5 | Add an ENDED state and refund late confirmations |
 | Outbox rows stuck in `Processing` are never reclaimed | outbox | Reclaim on lock expiry, or correct the docs |
 | Ledger lacks entry kind, sign check, trigger, refund entries | 1.3 | Decide whether to build it or change the design text |
-| ~~Module tables are not in per-module schemas~~ **Closed 2026-10-22:** every module has `HasDefaultSchema`, a `MoveTablesTo<Module>Schema` migration and its own history table, checked by `ModuleSchemaRulesTests` against a real database. Since 2026-10-23 each module also gets its own database in the local stack | Cross-cutting (schema per module) | Done |
+| ~~Module tables are not in per-module schemas~~ **Closed:** every module has `HasDefaultSchema`, a `MoveTablesTo<Module>Schema` migration and its own history table, checked by `ModuleSchemaRulesTests` against a real database. Each module also now gets its own database in the local stack | Cross-cutting (schema per module) | Done |
 | No settlement charge-once mechanism | 1.6 | Out of scope while charge-now stands; document the choice |
 | No success/failure outcome email | "Tell people" | Add handlers or remove the stubs |
 | Scavenger and outbox crash recovery untested | 1.4, outbox | Add tests |
 
-## 6. Re-check on 2026-10-23
+## 6. What changed since the first reading
 
 ```mermaid
 flowchart LR
-    A["Mapping of 2026-10-21"] --> B{"Re-checked against main"}
+    A["First reading"] --> B{"Re-checked against main"}
     B -->|changed| C["Inbox built<br/>Schemas built<br/>Outbox due-clock bug fixed<br/>Database per module locally"]
     B -->|still true| D["No pledge idempotency<br/>No closing fence<br/>Ledger has no kind, sign check, trigger<br/>Outbox rows stuck in Processing<br/>Success/failure email stubs"]
     B -->|drifted| E["Line numbers only"]
@@ -177,5 +177,5 @@ flowchart LR
 - **Outbox due-clock (new, fixed).** The claim query compared an application-set `ScheduledAtUtc` with the database's `now()`; a database clock slightly behind made just-queued rows unclaimable. It now compares against the application clock. One leftover inconsistency: `LockedUntilUtc` is still set from the database clock, harmless today because nothing reads it, but it matters the moment the reclaim above is built.
 - **Pledge idempotency, closing fence, ledger shape, success/failure email (still true).** Searches for an idempotency key on `MakeContribution`, check constraints, triggers and ledger entry kinds found nothing. The notification handlers for published, cancelled and review events are still `Task.CompletedTask`.
 - **Webhook subscriptions (new).** A stale background save could re-activate a deleted subscription; fixed with an `xmin` token and covered by `WebhookSubscriptionConcurrencyTests`. It also fixed the tier assignment for that feature (stays Tier 3).
-- **Tests that did not exist on 2026-10-21 and now do:** `InboxRetryTests`, `ModuleSchemaRulesTests`, `NotificationPreferencesTier2Tests`, `WebhookSubscriptionConcurrencyTests`. See `docs/TESTS_THAT_TEACH.md`.
+- **Tests added since the first reading:** `InboxRetryTests`, `ModuleSchemaRulesTests`, `NotificationPreferencesTier2Tests`, `WebhookSubscriptionConcurrencyTests`. See `docs/TESTS_THAT_TEACH.md`.
 - **Still untested:** the reservation scavenger and outbox crash recovery.

@@ -7,7 +7,7 @@
 
 ## 1. The 4 Hidden Microservice Decomposition Roadblocks
 
-While `CrowdFundingHub` enforces excellent static boundary checks via `NetArchTest`, several **runtime patterns** currently lurking in the codebase would create severe friction during microservices extraction:
+While `CrowdFundingHub` enforces excellent static boundary checks via plain xUnit architecture tests over referenced assemblies (the NetArchTest library is not used), several **runtime patterns** currently lurking in the codebase would create severe friction during microservices extraction:
 
 ```mermaid
 graph TD
@@ -58,11 +58,11 @@ Replace synchronous RPC with **Asynchronous Replicated Read Models (Event-Carrie
 
 ### Roadblock 2: Outbox Poller Coupled to In-Process Memory Dispatching
 
-In [`OutboxProcessorBackgroundService.cs`](../../src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs#L70):
+In [`ModuleOutboxProcessor.cs`](../../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Outbox/ModuleOutboxProcessor.cs):
 ```csharp
-await _eventPublisher.PublishAsync(appEvent, stoppingToken);
+await messageBus.PublishAsync(applicationEvent!, cancellationToken);
 ```
-The poller reads from PostgreSQL (`FOR UPDATE SKIP LOCKED`) and dispatches directly to `ServiceProviderEventPublisher`—which looks up handlers in the local DI container.
+The poller reads from PostgreSQL (`FOR UPDATE SKIP LOCKED`) and publishes through `IMessageBus`; with the default `InProcess` provider that reaches `ServiceProviderEventPublisher`, which looks up handlers in the local DI container (`RabbitMQ` is the other provider).
 
 #### The Architectural Trap:
 The outbox processor has no concept of an external message broker. Extracting a service requires rewriting the background service.
@@ -96,8 +96,8 @@ Demonstrate independent connection string configurations per module, proving tha
 ```
 
 > [!NOTE]
-> **Resolved in Reference Codebase ([`TICKET-026`](../../qa-tickets/TICKET-026-MULTI-DATABASE-CONNECTION-DECOUPLING.md)):**  
-> Hierarchical connection string resolution was introduced via `GetRequiredModuleConnectionString(...)`, allowing individual modules to connect to independent database servers while falling back to `DefaultConnection`.
+> **Resolved in Reference Codebase (TICKET-026):**  
+> Hierarchical connection string resolution was introduced via `GetRequiredModuleConnectionString(...)`, allowing individual modules to connect to independent database servers while falling back to `DefaultConnection`. Per-module databases are now also the local default (`docker-compose.yml` creates one `<module>_db` per module) and are tested by `MultiDatabaseConnectionDecouplingTests`.
 
 ---
 

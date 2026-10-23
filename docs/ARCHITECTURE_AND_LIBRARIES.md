@@ -20,6 +20,7 @@
    - [2.6 Poly-Pattern Architecture & The Pedagogical Rosetta Stone](#26-poly-pattern-architecture--the-pedagogical-rosetta-stone)
    - [2.7 Autonomous Microservice Extraction & The Strangler Fig Pattern](#27-autonomous-microservice-extraction--the-strangler-fig-pattern)
    - [2.8 Asynchronous Replicated Read Models & Pluggable Message Bus](#28-asynchronous-replicated-read-models--pluggable-message-bus)
+   - [2.9 Schema Versus Database Topology](#29-schema-versus-database-topology)
 3. [Component & Library Catalog](#3-component--library-catalog)
    - [3.1 .NET 10 & ASP.NET Core](#31-net-10--aspnet-core)
    - [3.2 Entity Framework Core 10 + Npgsql](#32-entity-framework-core-10--npgsql)
@@ -33,6 +34,7 @@
    - [3.10 Coverlet](#310-coverlet)
    - [3.11 ASP.NET Core SignalR](#311-aspnet-core-signalr)
    - [3.12 Distributed Tracing & W3C Traceparent Propagation (System.Diagnostics.Activity)](#312-distributed-tracing--w3c-traceparent-propagation-systemdiagnosticsactivity)
+   - [3.13 Other Libraries and Infrastructure](#313-other-libraries-and-infrastructure)
 4. [End-to-End Architectural Workflows & Data Flows](#4-end-to-end-architectural-workflows--data-flows)
    - [4.1 Concurrent Pledge Ingestion & Financial Settlement Flow](#41-concurrent-pledge-ingestion--financial-settlement-flow)
    - [4.2 Asymmetric ES256 Token Issuance & Edge Verification Flow](#42-asymmetric-es256-token-issuance--edge-verification-flow)
@@ -64,7 +66,7 @@ graph TB
         Controllers["ASP.NET Core Controllers<br/>(Thin Transport / Content Negotiation)"]
         JWKSEndpoint["JWKS Endpoint<br/>(/.well-known/jwks.json)"]
         SignalRHub["CampaignHub (SignalR)<br/>(Real-Time Backer & Funding Stream)"]
-        OutboxWorker["OutboxProcessorBackgroundService<br/>(PeriodicTimer Polling)"]
+        OutboxWorker["ModuleOutboxProcessor<br/>(PeriodicTimer Polling)"]
         RateLimiter["Partitioned Rate Limiter"]
     end
 
@@ -294,14 +296,14 @@ flowchart TD
         SaveOutbox -.->|Same Transaction Commit| DB
     end
 
-    subgraph BackgroundWorker["OutboxProcessorBackgroundService (PeriodicTimer)"]
-        DB -->|Atomic Claim via FOR UPDATE SKIP LOCKED| ClaimBatch["Claim Batch<br/>(Status = Processing, LockedUntilUtc)"]
+    subgraph BackgroundWorker["ModuleOutboxProcessor&lt;TDbContext&gt; (one per module, PeriodicTimer)"]
+        DB -->|Atomic Claim via FOR UPDATE SKIP LOCKED| ClaimBatch["Claim Batch<br/>(Status = Processing, LockedUntilUtc written, never read)"]
         ClaimBatch --> CheckType{EventType in Registry?}
         
         CheckType -->|No / Corrupted Payload| DeadLetter["Mark DeadLetter &<br/>INSERT dead_letter_events"]
         CheckType -->|Yes| PublishEvt["IEventPublisher.PublishAsync()"]
         
-        PublishEvt -->|Success| Processed["Mark Processed<br/>(ProcessedAtUtc = now)"]
+        PublishEvt -->|Success| Processed["Success: row deleted<br/>from the active table"]
         PublishEvt -->|Failure & Attempts < 5| RetryPending["Increment Attempts<br/>Exponential Backoff Delay<br/>Status = Pending"]
         PublishEvt -->|Failure & Attempts >= 5| DeadLetter
     end
@@ -313,20 +315,21 @@ flowchart TD
 
 #### Outbox Schema & Status Transitions
 
+```mermaid
+stateDiagram-v2
+    [*] --> Pending
+    Pending --> Processing: claim via SKIP LOCKED
+    Processing --> Deleted: publish success, row removed
+    Processing --> Pending: failure and attempts below max, exponential backoff
+    Processing --> DeadLetter: failure at max attempts or unknown type
+    DeadLetter --> [*]: recorded in dead_letter_events for operator review
+    note right of Processing
+        A crash here strands the row.
+        Nothing reclaims Processing outbox rows.
+    end note
 ```
-[Pending] ──────(Claim via SKIP LOCKED)─────► [Processing]
-   ▲                                              │
-   │                                              │
-(Failure & Attempts < Max)              (Publish Success)
-   │                                              │
-   └───────(Exponential Backoff)                  ▼
-                                            [Processed]
-                                                  
-(Failure & Attempts >= Max OR Unknown Type)
-   │
-   ▼
-[DeadLetter] ───► Recorded in `dead_letter_events` table for operator review
-```
+
+Processing outbox rows are never reclaimed: the claim query selects only `Status = Pending`, and `LockedUntilUtc` is written but not read. A worker that dies after claiming leaves its rows in `Processing`.
 
 ---
 
@@ -401,6 +404,8 @@ graph TD
 2. **Tier 2 (Pragmatic CQRS):** 3 files, 91 lines. Uses the identical `ICommandDispatcher` / `ICommandHandler` abstractions as production modules, with FluentValidation, but writes directly to `DbContext` without aggregate roots or outboxes.
 3. **Tier 3 (Rich DDD + Transactional Outbox):** 14 files, 960 lines. The production pipeline (`POST /api/campaigns`) employing full aggregates, domain events, outbox dispatching, and auditing.
 
+The assignment of every feature to a tier is recorded in [`POLY_PATTERN_TIER_ASSIGNMENT.md`](POLY_PATTERN_TIER_ASSIGNMENT.md). The real Tier 2 example is the Notifications preferences feature (`UpdateNotificationPreferences`, `Unsubscribe`, `GetNotificationPreferences`), whose handlers use `NotificationsDbContext` directly. The rule that follows from it: anything with concurrent-write risk stays Tier 3, so webhook subscriptions (CampaignUpdates) stay Tier 3.
+
 Both Tier 1 and Tier 2 return identical RFC 9457 `application/problem+json` validation error shapes, verified by unit and integration tests.
 
 ---
@@ -432,8 +437,28 @@ In [`TICKET-023`](../qa-tickets/TICKET-023-ASYNCHRONOUS-REPLICATED-READ-MODELS.m
 
 #### Pluggable `IMessageBus` Abstraction
 In [`TICKET-024`](../qa-tickets/TICKET-024-PLUGGABLE-MESSAGE-BUS-RABBITMQ-KAFKA.md), the monolith decoupled event delivery from in-process memory via `IMessageBus`:
-- `InMemoryMessageBus`: Uses `System.Threading.Channels` for ultra-fast, zero-infrastructure local execution.
-- `RabbitMQMessageBus`: Pluggable distributed broker implementation for cluster deployments.
+- `InProcessMessageBus`: Calls `IEventPublisher` directly in the same process, for zero-infrastructure local execution (no `System.Threading.Channels`).
+- `RabbitMqMessageBus`: Pluggable distributed broker implementation for cluster deployments.
+
+#### Consumer-Side Inbox
+
+Each module has a `<module>_inbox_messages` table keyed `(MessageId, Consumer)`, where `Consumer` is the handler's full type name (`EfInbox<TDbContext>`, called from `ServiceProviderEventPublisher`). The handler runs first; only after it succeeds is the pair recorded, with `INSERT ... ON CONFLICT DO NOTHING`. A crash between the handler and the record re-runs the handler once, so handlers must tolerate a repeat. The inbox applies only to in-process outbox dispatch, which sets `InboxMessageContext.MessageId`; the RabbitMQ path does not set a message id and bypasses it. Inbox rows are not pruned.
+
+### 2.9 Schema Versus Database Topology
+
+Isolation is by **schema**: each module owns a schema and its own `__EFMigrationsHistory` table. Which database holds those schemas is configuration. A single database is only the `DefaultConnection` fallback. The local stack (`docker-compose.yml`, `appsettings.Development.json`) runs **one database per module** (`identity_db`, `campaigns_db`, and so on). The HA profile (`docker-compose.ha.yml`) gives each of those a two-node Patroni cluster with a three-member etcd witness.
+
+```mermaid
+flowchart LR
+    API["CrowdFunding Host"] --> M1["campaigns schema"]
+    API --> M2["contributions schema"]
+    M1 --> D1[("campaigns_db")]
+    M2 --> D2[("contributions_db")]
+    D1 --> P1["HA profile: Patroni primary + standby"]
+    D2 --> P2["HA profile: Patroni primary + standby"]
+    P1 --> E["etcd witness (3 members)"]
+    P2 --> E
+```
 
 ---
 
@@ -663,7 +688,21 @@ When operations span transactional outbox boundaries or extracted microservices,
 
 #### Why Chosen Over Alternatives
 - **vs. Proprietary APM Tracing (Datadog/NewRelic Agents):** Vendor agents create runtime lock-in and require proprietary binaries. The W3C standard that this code follows by hand is the **W3C Distributed Tracing Recommendation (`traceparent` header)**.
-- **Outbox Trace Context Preservation:** When an event is captured, the active `Activity.Current?.Id` is recorded in `OutboxMessage.TraceParent`. When the outbox processor claims the row, it initializes an `ActivityContext.Parse(traceParent)`, ensuring that asynchronous background jobs and distributed consumers appear under the **exact same trace span tree** in Jaeger, Tempo, or Datadog.
+- **Outbox Trace Context Preservation:** When an event is captured, the active `Activity.Current?.Id` is recorded in the `traceparent` entry of `OutboxMessage.Headers` (a JSON column). When the outbox processor claims the row, it initializes an `ActivityContext` from that header, ensuring that asynchronous background jobs and distributed consumers appear under the **exact same trace span tree** in Jaeger, Tempo, or Datadog.
+
+---
+
+### 3.13 Other Libraries and Infrastructure
+
+| Package / component | Where | Purpose |
+| :--- | :--- | :--- |
+| `RabbitMQ.Client` 7.1.2 | BuildingBlocks.Infrastructure (`RabbitMqMessageBus`), integration tests | Broker client for the pluggable message bus |
+| `StackExchange.Redis` 3.1.31 | BuildingBlocks.Infrastructure | Redis connection |
+| `Microsoft.Extensions.Caching.StackExchangeRedis` 10.0.5 | Identity and Campaigns Infrastructure | Distributed cache |
+| `Swashbuckle.AspNetCore` 10.1.7 | API, Moderation service | Swagger UI and generated OpenAPI document |
+| `Microsoft.AspNetCore.OpenApi` 10.0.5 | API, Moderation service | Built-in OpenAPI metadata |
+| `MessagePack` 3.1.8 | API (direct reference, pinned; not used in source) | Pinned version; NuGet audit flags it as vulnerable (NU1902), so upgrade or remove it |
+| Patroni (Spilo) and etcd | `docker-compose.ha.yml` only | Infrastructure, not a library: replicated PostgreSQL per module with an etcd witness |
 
 ---
 
@@ -681,7 +720,7 @@ sequenceDiagram
     participant Handler as ConfirmContributionPaymentCommandHandler
     participant ContTx as ContributionTransactionExecutor
     participant ContDB as ContributionsDbContext (Postgres)
-    participant OutboxService as OutboxProcessorBackgroundService
+    participant OutboxService as ModuleOutboxProcessor
     participant CampHandler as AddContributionToCampaignCommandHandler
     participant CampTx as CampaignTransactionExecutor
     participant CampDB as CampaignsDbContext (Postgres)
@@ -773,7 +812,7 @@ As implemented in [`Program.cs`](../src/API/CrowdFunding.API/Program.cs#L161-L16
 ```bash
 dotnet run --project src/API/CrowdFunding.API -- migrate
 ```
-In production deployments, this command is executed inside an isolated CI/CD deployment pipeline step or a single-run Kubernetes `Job` *before* the application container replicas are rolled out.
+Development and Testing migrate at startup; every other environment, including the HA profile, must run `dotnet run -- migrate` first. In production deployments, this command is executed inside an isolated CI/CD deployment pipeline step or a single-run Kubernetes `Job` *before* the application container replicas are rolled out.
 
 ---
 

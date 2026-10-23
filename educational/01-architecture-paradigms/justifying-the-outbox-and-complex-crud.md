@@ -114,6 +114,7 @@ sequenceDiagram
   - User completes 3DS challenge on Stripe.
   - Stripe sends `payment_intent.succeeded` webhook to `POST /api/contributions/stripe-webhook`.
   - **The Race Hazard:** The webhook may arrive *before* the user's browser redirects back to the API!
+  - *(Not everything here is built; see the "What is not built" box under the matrix in section 4.)*
   - **The Solution:** The `Contribution` aggregate enforces state machine invariants (`PendingPayment` $\to$ `Succeeded`). The webhook handler writes a `ProcessPaymentConfirmationCommand` to the outbox, ensuring idempotent ledger updates even if Stripe retries the webhook 5 times.
 
 ### Feature 4: Reward Perk Tier Allocation & Inventory Reservation (Rich DDD State Machine)
@@ -141,13 +142,19 @@ To guide students and engineering teams, use this concrete rubric:
 
 | Integration Type | Target Destination | Dual-Write Hazard? | Recommended Architectural Pattern | Justification |
 | :--- | :--- | :---: | :--- | :--- |
-| **Same Module Read/Write** | Same PostgreSQL Schema | ❌ No | **Direct EF Core / Dapper write** | Same ACID transaction. Zero indirection needed. |
+| **Same Module Read/Write** | Same PostgreSQL Schema | ❌ No | **Direct EF Core write** | Same ACID transaction. Zero indirection needed. |
 | **Simple Cross-Module CRUD** | Same Database Instance | ❌ Minimal | **In-Transaction Call or Pragmatic CQRS** | Over-engineering to use an outbox if neither audit nor eventual consistency is required. |
 | **External Email / SMS** | SendGrid / AWS SES / Twilio | 🔴 **CRITICAL** | **Mandatory Transactional Outbox** | Network failures cause lost receipts or ghost emails. |
 | **Serverless Compute / AI** | AWS Lambda / GCP Cloud Function | 🔴 **CRITICAL** | **Mandatory Transactional Outbox** | Asynchronous long-running compute (5–30s) violates HTTP request SLAs. |
 | **Payment Gateway Webhooks** | Stripe / Adyen / PayPal | 🔴 **CRITICAL** | **Transactional Outbox + Idempotency** | At-least-once webhook retries cause double-charging or balance corruption. |
 | **External Webhooks / ERP** | Customer HTTP Endpoints | 🔴 **CRITICAL** | **Mandatory Transactional Outbox + DLQ** | External URLs may be slow, down, or malicious; must not block caller. |
 | **Microservice Event Streaming** | Kafka / RabbitMQ | 🔴 **CRITICAL** | **Transactional Outbox or Debezium CDC** | Network partitions between DB and Message Broker cause state divergence. |
+
+> **What is not built.** The code does not yet deliver everything these rows promise:
+> - The inbox has a crash window: the handler runs first and the inbox row is recorded after it, so a crash between the two re-runs the handler on redelivery. Consumers must be idempotent.
+> - `MakeContribution` has no pledge idempotency key, so a client retry creates a second pledge.
+> - There is no closing fence: nothing stops a pledge being confirmed against a campaign that closes at the same moment.
+> - Success and failure emails are not built.
 
 ---
 

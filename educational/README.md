@@ -56,7 +56,7 @@ This directory is organized into four thematic areas serving both as **teaching 
 
 ### [01. Architecture Paradigms](./01-architecture-paradigms/)
 - **[`poly-pattern-architecture.md`](./01-architecture-paradigms/poly-pattern-architecture.md)**:  
-  *Architectural Pragmatism vs. Dogmatism.* Why homogeneous architecture is an anti-pattern. Demonstrates how to balance 4 distinct architectural patterns in the same application (Simple CRUD Minimal APIs, Fast-Path CQRS Read Slices, Rich DDD Financial Aggregates, and Debezium CDC Event Choreography).
+  *Architectural Pragmatism vs. Dogmatism.* Why homogeneous architecture is an anti-pattern. Demonstrates how to balance 3 tiers in the same application (Tier 1 single endpoint on the module's `DbContext`, Tier 2 command and handler on the `DbContext`, Tier 3 rich DDD aggregates with repository, outbox, locks and tokens).
 - **[`monolith-to-microservices-blueprint.md`](./01-architecture-paradigms/monolith-to-microservices-blueprint.md)**:  
   The 6 non-negotiable architectural prerequisites for zero-rewrite microservice extraction: Contract Assemblies, Schema Isolation, Zero Cross-Schema Foreign Keys, Transactional Outbox, Asymmetric JWKS Edge Verification, and assembly-reference architecture tests (the NetArchTest library is not used).
 - **[`justifying-the-outbox-and-complex-crud.md`](./01-architecture-paradigms/justifying-the-outbox-and-complex-crud.md)**:  

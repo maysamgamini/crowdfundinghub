@@ -24,7 +24,7 @@ Rule that does not change by tier: a module's endpoint may only use its own `DbC
 schema, and other modules' Contracts. Tiers change how much code sits inside the module, never where
 the module boundary is.
 
-## What the code says today (reference commit `d044af7` on `feat/inbox`)
+## What the code says today
 
 Only three aggregates raise events: `Campaign`, `Contribution` and `CampaignReview`. Three
 aggregates or tables carry an `xmin` token: `Campaign`, `Contribution` and `RefreshToken`.
@@ -52,5 +52,3 @@ aggregates or tables carry an `xmin` token: `Campaign`, `Contribution` and `Refr
 
 - Only Notifications preferences have been converted. Every other write feature still uses the Tier 3 shape.
 - The Notifications boundary test checks constructor dependencies and assembly references for that module only; there is no general rule yet for every Tier 1 or Tier 2 feature.
-- The educational document describes four tiers (including a read slice and event choreography); the
-  sample describes three. They should be reconciled before the course teaches either.

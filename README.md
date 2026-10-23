@@ -234,4 +234,4 @@ dotnet test CrowdFunding.slnx
 | **`CrowdFunding.ArchitectureTests`** | Assembly-reference rules that keep module boundaries intact. | 22 | no |
 | **`CrowdFunding.IntegrationTests`** | HTTP flows, concurrency races, outbox, inbox and schema rules against real PostgreSQL (Testcontainers). | 92 | yes |
 
-Counts are from the run on 2026-10-23, all passing. The tests worth reading first, and the ones that are not, are listed in [`docs/TESTS_THAT_TEACH.md`](./docs/TESTS_THAT_TEACH.md).
+All of them pass. The tests worth reading first, and the ones that are not, are listed in [`docs/TESTS_THAT_TEACH.md`](./docs/TESTS_THAT_TEACH.md).

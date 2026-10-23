@@ -11,7 +11,7 @@
 ```mermaid
 graph TD
     Epic1["Epic 1: The Pedagogical Rosetta Stone<br/>(1 Feature, 3 Architectural Slices)"]
-    Epic2["Epic 2: Pluggable Messaging & Debezium CDC<br/>(In-Process vs RabbitMQ / Kafka)"]
+    Epic2["Epic 2: Pluggable Messaging & Debezium CDC<br/>(In-Process vs RabbitMQ; Debezium not built)"]
     Epic3["Epic 3: Asynchronous Replicated Read Models<br/>(Eliminate Synchronous Inter-Module RPC)"]
     Epic4["Epic 4: Complete Crowdfunding Lifecycle<br/>(Deadline Worker + Refund Saga)"]
     Epic5["Epic 5: Containerization & DevOps Automation<br/>(Dockerfile + Full Docker Compose + CI)"]
@@ -46,7 +46,7 @@ src/Samples/RosettaStone/
 
 ---
 
-## 3. Epic 2: Pluggable Message Bus & Debezium CDC Specification (Status: ✅ Completed via [`TICKET-024`](../../qa-tickets/TICKET-024-PLUGGABLE-MESSAGE-BUS-RABBITMQ-KAFKA.md) & [`TICKET-025`](../../qa-tickets/TICKET-025-MODULAR-OUTBOX-PARTITIONING-AUTONOMOUS-WORKERS.md))
+## 3. Epic 2: Pluggable Message Bus & Debezium CDC Specification (Status: ✅ Message bus completed, Debezium CDC not built; TICKET-024 & TICKET-025)
 
 ### Problem Statement:
 The transactional outbox poller is hardcoded to in-memory dispatching (`ServiceProviderEventPublisher`), preventing students from seeing how events stream to external microservices.
@@ -62,15 +62,15 @@ The transactional outbox poller is hardcoded to in-memory dispatching (`ServiceP
    ```
 2. Provide two interchangeable implementations:
    - `InProcessMessageBus`: Dispatches via `IServiceProvider` (default for local development).
-   - `RabbitMqMessageBus` or `KafkaMessageBus`: Uses MassTransit to serialize CloudEvents v1.0 to an external broker.
+   - `RabbitMqMessageBus`: serializes CloudEvents v1.0 to RabbitMQ using `RabbitMQ.Client` (no MassTransit, and no Kafka implementation exists).
 3. Configure `appsettings.json` toggle:
    ```json
    "Messaging": {
-     "Provider": "InProcess", // Options: "InProcess", "RabbitMQ", "DebeziumCDC"
+     "Provider": "InProcess", // Options implemented: "InProcess", "RabbitMQ" ("DebeziumCDC" was specified but not built)
      "RabbitMqHost": "rabbitmq://localhost"
    }
    ```
-4. **Debezium CDC Mode:** Add an `unlogged` or append-only mode where the outbox background service is disabled entirely, and a Debezium connector configuration JSON is provided in `docker/debezium/`.
+4. **Debezium CDC Mode:** Add an `unlogged` or append-only mode where the outbox background service is disabled entirely, and a Debezium connector configuration JSON is provided in `docker/debezium/`. **Not built:** `docker/debezium/` does not exist and `Messaging:Provider` accepts only `InProcess` and `RabbitMQ`.
 
 ---
 
@@ -109,7 +109,7 @@ Campaigns never complete or fail, and backer pledges cannot be refunded, leaving
 ### Technical Specification:
 
 #### 1. Background Worker: `CampaignExpirationBackgroundService`
-- Runs in `src/API/CrowdFunding.API/Background/`.
+- Runs in `src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/BackgroundServices/CampaignExpirationBackgroundService.cs`.
 - Executes every 60 seconds (configurable).
 - Queries:
   ```csharp
@@ -132,6 +132,8 @@ Campaigns never complete or fail, and backer pledges cannot be refunded, leaving
 
 > [!NOTE]
 > Fully implemented with `CampaignExpirationBackgroundService`, `CampaignCompletedSuccessfulDomainEvent`, `CampaignExpiredFailedDomainEvent`, and `RefundContributionCommandHandler`.
+>
+> Limits: refunds are state-only (the contribution moves to `Refunded`; no money is moved) and the ledger has no kind, sign or trigger to tell a refund from a pledge.
 
 ---
 

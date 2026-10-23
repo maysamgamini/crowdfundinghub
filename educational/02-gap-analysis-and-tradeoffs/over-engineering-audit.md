@@ -17,7 +17,7 @@ In `CrowdFundingHub`, saving a basic campaign draft (`POST /api/Campaigns`) invo
 4.  BuildingBlocks.Application/Dispatchers/ICommandDispatcher.cs (Dispatcher Interface)
 5.  Campaigns.Application/Commands/CreateCampaignCommand.cs      (CQRS Command DTO)
 6.  Campaigns.Application/Commands/CreateCampaignValidator.cs    (FluentValidation)
-7.  Campaigns.Application/Commands/CreateCampaignHandler.cs      (MediatR Handler)
+7.  Campaigns.Application/Commands/CreateCampaignHandler.cs      (Command handler via the custom dispatcher)
 8.  Campaigns.Application/Abstractions/ICampaignRepository.cs    (Repository Interface)
 9.  Campaigns.Domain/Aggregates/Campaign.cs                     (Domain Aggregate Root)
 10. Campaigns.Domain/Events/CampaignCreatedDomainEvent.cs       (Domain Event)
@@ -66,7 +66,7 @@ Creating 4 projects per module across 6 modules results in **29 `.csproj` projec
 ### The Operational Penalty:
 1. **Slow Compilation:** MSBuild must resolve dependencies, copy DLLs, and compile 29 separate assemblies for every single change.
 2. **Mental Fatigue:** When adding a new property, developers must touch 4 projects.
-3. **Better Educational Alternative:** In modern .NET 10, module boundaries can be enforced cleanly using **1 project per module** with C# `internal` visibility, or using namespace conventions verified by `NetArchTest`.
+3. **Better Educational Alternative:** In modern .NET 10, module boundaries can be enforced cleanly using **1 project per module** with C# `internal` visibility, or using namespace conventions verified by architecture tests.
 
 ---
 

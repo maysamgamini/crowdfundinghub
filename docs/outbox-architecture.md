@@ -41,7 +41,7 @@ process claims and publishes those rows.
 
 ### Option A — PostgreSQL-native, `FOR UPDATE SKIP LOCKED` (chosen)
 
-The outbox table is polled directly by one or more instances of `OutboxProcessorBackgroundService`.
+The outbox table is polled directly by one or more instances of `ModuleOutboxProcessor<TDbContext>` (one subclass per module, for example `CampaignsOutboxBackgroundService`).
 Naively, `SELECT ... WHERE status = 'Pending'` run by two replicas at once returns the *same* rows
 to both, and both then publish and both then try to mark the rows processed — duplicate delivery.
 PostgreSQL's `FOR UPDATE SKIP LOCKED` clause fixes this natively: a `SELECT ... FOR UPDATE SKIP
@@ -54,18 +54,24 @@ coordination needed.
 **How it works here:**
 1. Write: business transaction inserts an `OutboxMessage` row with `Status = Pending` (see
    `TransactionExecutor.ExecuteInternalAsync`).
-2. Claim: `OutboxProcessorBackgroundService` runs a `WITH claimable AS (SELECT ... WHERE status =
-   'Pending' AND scheduled_at_utc <= now() ORDER BY scheduled_at_utc, id FOR UPDATE SKIP LOCKED
-   LIMIT @batchSize) UPDATE ... SET status = 'Processing' ... RETURNING *` — the claim and the
+2. Claim: `ModuleOutboxProcessor` runs a `WITH claimable AS (SELECT "Id" FROM "<schema>".<table>
+   WHERE "Status" = 0 AND "ScheduledAtUtc" <= @appNow ORDER BY "ScheduledAtUtc", "Id" FOR UPDATE
+   SKIP LOCKED LIMIT @batchSize) UPDATE ... SET "Status" = 1 ... RETURNING m.*` — the claim and the
    status flip happen as one atomic statement, so there's no window where two workers could both
-   see a row as claimable.
+   see a row as claimable. Status is the integer enum (Pending = 0, Processing = 1), the table is
+   schema-qualified from the EF model, and "due" is tested against a parameter taken from the
+   application clock, because a database `now()` slightly behind the application's made just-queued
+   rows look scheduled in the future and left them unclaimed.
 3. Process: each claimed message is deserialized (via `EventTypeRegistry`, not
    `Type.GetType(AssemblyQualifiedName)`) and published independently — one message throwing
    never stops the rest of the batch from being attempted (no `break`).
-4. Resolve: on success the row becomes `Processed`; on failure it either goes back to `Pending`
+4. Resolve: on success the row is deleted (it has no reason to stay in the active table); on failure it either goes back to `Pending`
    with a backed-off `ScheduledAtUtc` (if under the attempt limit) or to the terminal `DeadLetter`
    status (if not, or if the event type/payload couldn't be resolved at all) — see
-   `DeadLetterEvent`.
+   `DeadLetterEvent`. A crash between claim and resolve strands the row in `Processing`: nothing
+   reclaims `Processing` outbox rows (`LockedUntilUtc` is written but never read). The inbox
+   (`<module>_inbox_messages`, keyed by message id and handler) is the consumer-side counterpart:
+   it makes a redelivered message run each handler at most once, but it does not rescue stranded rows.
 
 **Advantages:**
 - **Zero extra infrastructure.** No Kafka/Redpanda cluster, no Kafka Connect, no schema registry

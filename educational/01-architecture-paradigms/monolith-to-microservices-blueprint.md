@@ -51,7 +51,7 @@ To extract a microservice from a monolith without rewriting business logic, the 
 - **Why It Matters for Microservices:** When extracting Module B into a microservice, `Campaigns.Contracts` is simply packed as a NuGet package (`dotnet pack`) and published to a private registry. Downstream consumers change their `<ProjectReference>` to a `<PackageReference>` with zero code edits!
 
 ### 2. Physical Database Schema Isolation (Schema-per-Module)
-- **The Rule:** Each module must own a dedicated PostgreSQL schema (`identity`, `campaigns`, `contributions`, `moderation`).
+- **The Rule:** Each module must own a dedicated PostgreSQL schema (`identity`, `campaigns`, `contributions`, `moderation`, `notifications`, `campaignupdates`).
 - **The Implementation:** Each module has its own independent EF Core `DbContext` registered in its own infrastructure layer:
   ```csharp
   // In CampaignsDbContext
@@ -60,6 +60,7 @@ To extract a microservice from a monolith without rewriting business logic, the 
 - **Why It Matters for Microservices:** In legacy monoliths, tables from different domains are lumped into `public`, and developers write cross-domain SQL joins. By isolating schemas:
   - Database migrations for Module A never collide with Module B.
   - Migrating to **Database-per-Service** is a physical operational task (`pg_dump` the `campaigns` schema and restore to a dedicated server), requiring **zero modifications to EF Core entity configurations**.
+  - The schemas already live in per-module databases locally (`docker-compose.yml` creates `identity_db`, `campaigns_db` and so on via `deploy/postgres/init-module-databases.sh`), and `MultiDatabaseConnectionDecouplingTests` checks that each module only needs its own connection string.
 
 ### 3. Absolute Elimination of Cross-Schema Database Foreign Keys
 - **The Rule:** Foreign key constraints across module boundaries are strictly forbidden.
@@ -74,7 +75,7 @@ To extract a microservice from a monolith without rewriting business logic, the 
 ### 4. Asynchronous Event-Driven Decoupling via the Transactional Outbox
 - **The Rule:** Cross-module state changes must be propagated asynchronously via domain events, never through distributed transactions.
 - **The Implementation:** When a payment confirms in `Contributions`, the event is saved to `contributions.contributions_outbox_messages` in the **same database transaction** as the entity mutation.
-- **Why It Matters for Microservices:** Two-Phase Commit (2PC) does not scale and is unsupported across cloud databases. The outbox pattern guarantees **At-Least-Once Delivery** without dual-write race conditions. When extracted to microservices, the outbox table is tailed by Debezium to stream directly into Apache Kafka.
+- **Why It Matters for Microservices:** Two-Phase Commit (2PC) does not scale and is unsupported across cloud databases. The outbox pattern guarantees **At-Least-Once Delivery** without dual-write race conditions. When extracted to microservices, the outbox table could be tailed by Debezium to stream into Apache Kafka (not built here; the repository ships the polling outbox with `InProcess` and `RabbitMQ` transports).
 
 ### 5. Asymmetric Cryptography (ES256 ECDSA + RFC 7517 JWKS Discovery)
 - **The Rule:** Never use symmetric HMAC secrets (`HS256`) in an architecture intended for microservices.
@@ -83,19 +84,18 @@ To extract a microservice from a monolith without rewriting business logic, the 
   - Public keys are published at standard `/.well-known/jwks.json`.
 - **Why It Matters for Microservices:** If symmetric HMAC is used, extracting a service forces you to share the private secret string with every microservice. With ES256 and JWKS, extracted microservices download the public keys once, cache them, and **verify incoming user JWT tokens locally with zero network calls to the Identity service and zero knowledge of private keys**.
 
-### 6. Automated Compile-Time Architecture Tests (`NetArchTest`)
+### 6. Automated Architecture Tests (plain xUnit over referenced assemblies)
 - **The Rule:** Human code review cannot prevent architectural rot; boundary integrity must be automated in CI.
-- **The Implementation:** In [`ModuleDependencyTests.cs`](../../tests/ArchitectureTests/CrowdFunding.ArchitectureTests):
+- **The Implementation:** Plain xUnit tests in [`CampaignsModuleDependencyTests.cs`](../../tests/ArchitectureTests/CrowdFunding.ArchitectureTests/CampaignsModuleDependencyTests.cs) (one such file per module) read `Assembly.GetReferencedAssemblies()`; the NetArchTest library is not used:
   ```csharp
-  var result = Types.InAssembly(typeof(Campaign).Assembly)
-      .ShouldNot()
-      .HaveDependencyOnAny(
-          "CrowdFunding.Modules.Contributions.Domain",
-          "CrowdFunding.Modules.Identity.Domain",
-          "CrowdFunding.Modules.Moderation.Domain")
-      .GetResult();
+  [Fact]
+  public void Domain_ShouldNotReference_ApplicationOrInfrastructure()
+  {
+      var referencedAssemblyNames = GetReferencedAssemblyNames(typeof(Campaign).Assembly);
 
-  Assert.True(result.IsSuccessful);
+      Assert.DoesNotContain(typeof(CreateCampaignCommand).Assembly.GetName().Name, referencedAssemblyNames);
+      Assert.DoesNotContain(typeof(CampaignRepository).Assembly.GetName().Name, referencedAssemblyNames);
+  }
   ```
 - **Why It Matters for Microservices:** Guarantees that no developer accidentally introduces an illegal module dependency that would block service extraction later.
 
