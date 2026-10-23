@@ -78,7 +78,7 @@ sequenceDiagram
 
 - **Design:** an idempotency key or client-supplied pledge ID makes a retry return the first pledge.
 - **Code:** `POST /api/campaigns/{id}/contributions` accepts an optional `Idempotency-Key` header (1 to 100 printable ASCII characters). The key is stored on the `Contribution` and a unique index on `(ContributorId, IdempotencyKey)` where the key is not null decides races (`ContributionConfiguration.cs`, `ContributionIndexes.IdempotencyKey`). `MakeContributionCommandHandler` looks the key up first, before any campaign check, so a retry after the deadline still gets the first pledge. A retry returns `200` with `Idempotent-Replayed: true`; the same key with a different amount, currency, campaign or reward reservation is a `409`; simultaneous requests are settled by the index and the losers read the winner. `ContributionTransactionExecutor` turns that specific unique violation into `IdempotencyKeyAlreadyUsedException`.
-- **Differences from the design:** the key is optional, so a client that sends none still gets a new pledge each time; keys are scoped to the backer, not global; there is no expiry on stored keys.
+- **Differences from the design:** the key is optional, so a client that sends none still gets a new pledge each time; keys are scoped to the backer, not global; a retention task clears a key after `Retention:IdempotencyKeyDays` (7 by default), so a retry later than that creates a new pledge.
 - **Tests:** `PledgeIdempotencyTests` (unit: replay, mismatch, retry after the campaign closed, lost race) and `PledgeIdempotencyE2ETests` (twelve simultaneous requests create one pledge; mismatch is a conflict; two backers may share a key; a malformed key is rejected).
 
 ### Step 1.3: the total vs the pledges: SIMPLER VARIANT
@@ -142,7 +142,7 @@ Receipts and refund or cancellation alerts are built (`NOTIF.Application/Events/
 
 The loop's "See It Built" section describes the reference code ahead of the code itself. These claims were not supported by the code when this page was first written, and should be corrected there (or the code brought up to them):
 
-1. "Inboxes that make every consumer idempotent": a per-module inbox now exists, but it is written after the handler, covers only the in-process path, and is not pruned.
+1. "Inboxes that make every consumer idempotent": a per-module inbox now exists, but it is written after the handler, covers both transports (the outbox row id is the message id), and a retention task prunes it.
 2. "A unique key on contribution and entry kind": the unique index is on `ContributionId` alone.
 3. "A check constraint ties each entry's sign to its kind": not found.
 4. "A trigger rejects updates and deletes": not found.

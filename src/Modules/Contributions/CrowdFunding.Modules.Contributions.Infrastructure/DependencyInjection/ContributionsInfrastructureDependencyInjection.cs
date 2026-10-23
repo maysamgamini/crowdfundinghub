@@ -1,3 +1,7 @@
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using CrowdFunding.Modules.Contributions.Infrastructure.Retention;
+using CrowdFunding.BuildingBlocks.Infrastructure.Retention;
+using CrowdFunding.BuildingBlocks.Application.Retention;
 using CrowdFunding.BuildingBlocks.Infrastructure.Outbox;
 ﻿using CrowdFunding.BuildingBlocks.Infrastructure.Events;
 using CrowdFunding.BuildingBlocks.Infrastructure.Configuration;
@@ -38,6 +42,8 @@ public static class ContributionsInfrastructureDependencyInjection
         services.AddScoped<IContributionReadService, ContributionReadService>();
         services.AddScoped<IContributionTransactionExecutor, ContributionTransactionExecutor>();
         services.AddSingleton<IContributionDateTimeProvider, SystemDateTimeProvider>();
+        services.AddRetention();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IRetentionTask, IdempotencyKeyExpiryTask>());
         services.AddOutboxSignal<ContributionsDbContext>();
         services.AddHostedService<ContributionsOutboxBackgroundService>();
 
