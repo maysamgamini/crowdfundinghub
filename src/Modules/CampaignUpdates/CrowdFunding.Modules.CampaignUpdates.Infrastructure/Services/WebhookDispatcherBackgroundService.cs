@@ -1,3 +1,4 @@
+using CrowdFunding.BuildingBlocks.Infrastructure.Hosting;
 using System.Text;
 using CrowdFunding.Modules.CampaignUpdates.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.CampaignUpdates.Infrastructure.Security;
@@ -35,12 +36,15 @@ public sealed class WebhookDispatcherBackgroundService : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var timer = new PeriodicTimer(PollInterval);
+        var logger = _serviceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(GetType());
 
-        while (!stoppingToken.IsCancellationRequested)
+        // A failed pass (for example the database being briefly unreachable) is logged and retried on the
+        // next tick; an exception that escaped here would stop the whole host.
+        await GuardedLoop.RunAsync(async ct =>
         {
-            await ProcessBatchAsync(stoppingToken);
-            await timer.WaitForNextTickAsync(stoppingToken);
-        }
+            await ProcessBatchAsync(ct);
+            await timer.WaitForNextTickAsync(ct);
+        }, PollInterval, logger, GetType().Name, stoppingToken);
     }
 
     /// <summary>Exposed so integration tests can drive one dispatch pass deterministically

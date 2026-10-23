@@ -57,6 +57,8 @@ sequenceDiagram
     P->>Db: delete the row on success, or schedule a retry 10 s later, or dead-letter after 5 attempts
 ```
 
+Every background loop (the outbox workers, the webhook dispatcher, campaign expiration and the reservation scavenger) runs inside `GuardedLoop`: a failed pass is logged and retried after a pause, because an exception that escaped `ExecuteAsync` would stop the whole host.
+
 How the worker is woken, and the alternatives (LISTEN/NOTIFY, change data capture), are compared in [`docs/EVENT_DELIVERY_APPROACHES.md`](../../docs/EVENT_DELIVERY_APPROACHES.md).
 
 Known limits: the inbox record is written after the handler, so a crash in between runs the handler once more; the RabbitMQ path does not set a message id, so it skips the inbox; inbox rows are never pruned; an outbox row left in `Processing` by a crashed worker is reclaimed after its 30-second lease and dead-lettered after five unfinished claims.

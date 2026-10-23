@@ -3,6 +3,7 @@ using System.Text.Json;
 using CrowdFunding.BuildingBlocks.Application.Events;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Application.Outbox;
+using CrowdFunding.BuildingBlocks.Infrastructure.Hosting;
 using CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -58,25 +59,29 @@ public abstract class ModuleOutboxProcessor<TDbContext> : BackgroundService, IOu
         // Sleep until a commit wakes us, with the poll interval as a safety net for rows nobody
         // signalled for (another instance wrote them, a signal was lost across a restart, or a
         // failed message came due for its retry). When a batch comes back full there is probably more
-        // waiting, so go round again at once instead of sleeping.
-        while (!stoppingToken.IsCancellationRequested)
+        // waiting, so go round again at once instead of sleeping. A failed pass (for example the
+        // database being briefly unreachable) is logged and retried; it must not end the loop, because an
+        // exception that escapes here would stop the whole host.
+        var logger = _serviceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(GetType());
+
+        await GuardedLoop.RunAsync(async ct =>
         {
-            var claimed = await ProcessBatchCoreAsync(stoppingToken);
+            var claimed = await ProcessBatchCoreAsync(ct);
 
             if (claimed >= BatchSize)
             {
-                continue;
+                return;
             }
 
             if (_signal is null)
             {
-                await Task.Delay(_pollInterval, stoppingToken);
+                await Task.Delay(_pollInterval, ct);
             }
             else
             {
-                await _signal.WaitAsync(_pollInterval, stoppingToken);
+                await _signal.WaitAsync(_pollInterval, ct);
             }
-        }
+        }, _pollInterval, logger, GetType().Name, stoppingToken);
     }
 
     /// <inheritdoc/>
