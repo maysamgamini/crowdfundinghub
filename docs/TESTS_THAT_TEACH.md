@@ -7,11 +7,11 @@ Most of the 450 tests in this repository protect the code. A handful do somethin
 ```mermaid
 flowchart TB
     subgraph Fast["Seconds, no Docker"]
-        U["Unit tests: 315<br/>domain rules, handlers, value objects"]
+        U["Unit tests: 325<br/>domain rules, handlers, value objects"]
         A["Architecture tests: 28<br/>who may reference whom, and that documents link to real things"]
     end
     subgraph Slow["Minutes, real PostgreSQL via Testcontainers"]
-        I["Integration tests: 109<br/>races, outbox, inbox, schemas, webhooks"]
+        I["Integration tests: 114<br/>races, outbox, inbox, schemas, webhooks"]
     end
     subgraph Drills["By hand, replicated stack"]
         D["Failure drills<br/>kill a primary, stop a standby"]
@@ -61,6 +61,10 @@ quadrantChart
 | `RefundSagaE2ETests`, `PaymentGatewayWebhookReconciliationE2ETests` | A multi-module flow completes by events, and duplicate webhooks are harmless. | Eventual consistency between modules without a distributed transaction. |
 | `PledgeIdempotencyE2ETests`, `PledgeIdempotencyTests` | A retried pledge returns the first one; twelve simultaneous requests with one key create exactly one pledge; the same key with a different request is a conflict. | The guarantee is a unique index, not application code. Delete the index or the lookup and the tests fail, which is the lesson. |
 | `OutboxWakeUpLatencyE2ETests`, `OutboxSignalTests` | An event reaches its consumer in under a second with no manual drain; without the wake-up the slowest delivery is the five-second timer. | Measures a design choice instead of asserting it. Remove the `Notify()` call and the test fails with the number. |
+| `GuardedLoopTests` | A background pass that fails is logged and retried, and a real outbox worker whose database keeps failing stays alive. | An exception that escapes `ExecuteAsync` stops the whole host; the test makes that failure concrete. |
+| `OutboxReclaimE2ETests` | A row whose lease ran out is reclaimed and delivered, a live lease is left alone, a message that keeps killing its worker is dead-lettered. | The crash-recovery half of the outbox, seeded with the exact state a dead worker leaves behind. |
+| `RabbitMqConsumerHostTests` | Events reach their handlers over a real broker with the outbox row id as the message id; unknown events are ignored; a failing handler is retried then dead-lettered. | Shows the consuming half of a broker transport and what a dead-letter queue is for. |
+| `ModerationReadAccessTests` | Reading a review needs the moderation permission in whichever host serves the module. | Why a rule that matters belongs in the handler, not only on the endpoint. |
 | `NotificationPreferencesTier2Tests` | A Tier 2 feature works with no aggregate or repository. | The poly-pattern in practice: small features stay small. |
 | `ReplicatedReadModelResilienceTests` | A module keeps serving from its replicated read model when the source module is down. | Why replicated read models exist. |
 

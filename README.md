@@ -230,9 +230,9 @@ dotnet test CrowdFunding.slnx
 
 | Test Project | Purpose & Scope | Count | Needs Docker |
 | :--- | :--- | :---: | :---: |
-| **`CrowdFunding.UnitTests`** | Domain aggregate invariants, command handlers, value objects. | 315 | no |
+| **`CrowdFunding.UnitTests`** | Domain aggregate invariants, command handlers, value objects. | 325 | no |
 | **`CrowdFunding.ArchitectureTests`** | Assembly-reference rules that keep module boundaries intact, plus checks that the documents link to things that exist. | 28 | no |
-| **`CrowdFunding.IntegrationTests`** | HTTP flows, concurrency races, outbox, inbox and schema rules against real PostgreSQL (Testcontainers). | 109 | yes |
+| **`CrowdFunding.IntegrationTests`** | HTTP flows, concurrency races, outbox, inbox and schema rules against real PostgreSQL (Testcontainers). | 114 | yes |
 
 The counts are the test cases that `dotnet test --list-tests` reports for each project, and they are the single source for the other pages. A fourth project, `CrowdFunding.ModerationService.IntegrationTests` (2 tests), covers the extracted Moderation service. It is not part of `CrowdFunding.slnx`; run it on its own with `dotnet test tests/IntegrationTests/CrowdFunding.ModerationService.IntegrationTests`.
 
