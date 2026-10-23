@@ -49,7 +49,7 @@ Maintaining three separate classes and Mapster mapping profiles for identical pr
 
 ## 2. Hand-Rolled Enterprise Cryptography (ES256 / JWKS)
 
-In [`EfSigningKeyStore.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Services/EfSigningKeyStore.cs) and [`JwksEndpoint.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Security/JwksEndpoint.cs):
+In [`EfSigningKeyStore.cs`](../../src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Services/EfSigningKeyStore.cs) and [`JwksEndpoint.cs`](../../src/API/CrowdFunding.API/Security/JwksEndpoint.cs):
 - 400+ lines of low-level cryptographic key generation (`ECDsa.Create(ECCurve.NamedCurves.nistP256)`).
 - Custom database persistence of private key DER bytes and public key discovery endpoints (`/.well-known/jwks.json`).
 

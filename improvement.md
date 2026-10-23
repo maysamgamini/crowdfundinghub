@@ -108,7 +108,7 @@ The table below outlines the core architectural dimensions and highlights the cr
 
 ### 2.1 Outbox Processing, Poison Messages & Head-of-Line Blocking
 
-In [`OutboxProcessorBackgroundService.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/swe-prep/apps/crowdfundinghub-main/src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs#L50-L75), outbox message dispatch is implemented as follows:
+In [`OutboxProcessorBackgroundService.cs`](src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs#L50-L75), outbox message dispatch is implemented as follows:
 
 ```csharp
 var messages = await dbContext.Set<OutboxMessage>()
@@ -184,7 +184,7 @@ Resolved by → [§3.3 Step 2, atomic `FOR UPDATE SKIP LOCKED` claiming query](#
 ### 2.3 Serialization Fragility & Silent Event Dropping
 
 #### Fragile Reflection Deserialization (`OutboxMessage.cs`):
-[`OutboxMessage.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/swe-prep/apps/crowdfundinghub-main/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxMessage.cs#L37-L51) stores the event type using .NET's CLR `AssemblyQualifiedName`:
+[`OutboxMessage.cs`](src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxMessage.cs#L37-L51) stores the event type using .NET's CLR `AssemblyQualifiedName`:
 
 ```csharp
 var eventType = applicationEvent.GetType().AssemblyQualifiedName;
@@ -197,7 +197,7 @@ var runtimeType = Type.GetType(EventType, throwOnError: true);
 * **Impact:** Any historical or in-flight outbox message instantly turns into a permanent poison message, freezing outbox delivery as detailed in §2.1.
 
 #### Silent Dropping of Domain Events (`CampaignTransactionExecutor.cs`):
-In [`CampaignTransactionExecutor.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/swe-prep/apps/crowdfundinghub-main/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Transactions/CampaignTransactionExecutor.cs#L74-L89):
+In [`CampaignTransactionExecutor.cs`](src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Transactions/CampaignTransactionExecutor.cs#L74-L89):
 
 ```csharp
 private static OutboxMessage? MapApplicationEvent(BaseEvent domainEvent)
@@ -225,7 +225,7 @@ Both defects above are resolved by → [§3.2 `EventEnvelope` + `EventTypeRegist
 Crowdfunding platforms frequently experience severe traffic spikes (e.g., viral campaigns, celebrity backing drives, and final-countdown hours). `crowdfundinghub-main` contains three high-impact financial concurrency flaws:
 
 #### Defect A: Lost Updates on Campaign Raised Amount
-When payment is confirmed for a contribution, [`AddContributionToCampaignCommandHandler`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/swe-prep/apps/crowdfundinghub-main/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Application/Features/Campaigns/Commands/AddContributionToCampaign/AddContributionToCampaignCommandHandler.cs#L29-L42) is executed:
+When payment is confirmed for a contribution, [`AddContributionToCampaignCommandHandler`](src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Application/Features/Campaigns/Commands/AddContributionToCampaign/AddContributionToCampaignCommandHandler.cs#L29-L42) is executed:
 
 ```csharp
 var campaign = await _campaignRepository.GetByIdAsync(command.CampaignId, cancellationToken);
@@ -237,7 +237,7 @@ await _transactionExecutor.ExecuteAsync(async ct =>
 }, cancellationToken);
 ```
 
-In [`CampaignConfiguration.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/swe-prep/apps/crowdfundinghub-main/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Persistence/Configurations/CampaignConfiguration.cs#L60-L70), `RaisedAmount` has **no concurrency token**:
+In [`CampaignConfiguration.cs`](src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Persistence/Configurations/CampaignConfiguration.cs#L60-L70), `RaisedAmount` has **no concurrency token**:
 
 ```csharp
 builder.OwnsOne(x => x.RaisedAmount, money =>
@@ -270,7 +270,7 @@ public sealed record AddContributionToCampaignCommand(Guid CampaignId, decimal A
 Resolved by → [§3.4 #2 append-only contribution ledger with a `UNIQUE` constraint on `contribution_id`](#34-concurrency-hardening-optimistic-locking-advisory-locks--ledger-pattern).
 
 #### Defect C: Time-of-Check to Time-of-Use (TOCTOU) on Campaign Cancellation
-In [`ConfirmContributionPaymentCommandHandler.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/swe-prep/apps/crowdfundinghub-main/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/ConfirmContributionPayment/ConfirmContributionPaymentCommandHandler.cs#L46-L58):
+In [`ConfirmContributionPaymentCommandHandler.cs`](src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/ConfirmContributionPayment/ConfirmContributionPaymentCommandHandler.cs#L46-L58):
 
 ```csharp
 var campaignAvailability = await _campaignContributionAvailabilityReader.GetCampaignContributionAvailabilityAsync(
@@ -287,7 +287,7 @@ if (!string.Equals(campaignAvailability.Status, "Published", StringComparison.Or
   1. Thread 1 checks status: `"Published"`.
   2. Thread 2 cancels campaign: status becomes `"Cancelled"` and commits.
   3. Thread 1 confirms contribution payment and publishes the event.
-  4. In [`Campaign.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/swe-prep/apps/crowdfundinghub-main/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs#L110-L113), `ApplyConfirmedContribution` checks:
+  4. In [`Campaign.cs`](src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs#L110-L113), `ApplyConfirmedContribution` checks:
      ```csharp
      if (Status == CampaignStatus.Draft)
      {
@@ -304,8 +304,8 @@ Resolved by → [§3.4 #3 `pg_advisory_xact_lock`](#34-concurrency-hardening-opt
 
 ### 2.5 Complete Observability, Logging & Tracing Deficiencies
 
-1. **Near-Zero Logging Across All Modules:** In the entire repository, `ILogger` is injected into only one class: [`GlobalExceptionMiddleware.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/swe-prep/apps/crowdfundinghub-main/src/API/CrowdFunding.API/Middleware/GlobalExceptionMiddleware.cs). Financial transactions, contribution lifecycle changes, authentication attempts, and campaign status transitions emit zero logs.
-2. **Silent Background Failures:** In [`OutboxProcessorBackgroundService.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/swe-prep/apps/crowdfundinghub-main/src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs), message deserialization and dispatch exceptions are caught and written to the database column `Error`, but **no error log is emitted and no metric is incremented**.
+1. **Near-Zero Logging Across All Modules:** In the entire repository, `ILogger` is injected into only one class: [`GlobalExceptionMiddleware.cs`](src/API/CrowdFunding.API/Middleware/GlobalExceptionMiddleware.cs). Financial transactions, contribution lifecycle changes, authentication attempts, and campaign status transitions emit zero logs.
+2. **Silent Background Failures:** In [`OutboxProcessorBackgroundService.cs`](src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs), message deserialization and dispatch exceptions are caught and written to the database column `Error`, but **no error log is emitted and no metric is incremented**.
 3. **No Correlation IDs or Distributed Tracing:** Requests execute without a Correlation ID or W3C `traceparent` header. When an error occurs downstream during outbox processing, operators cannot trace it back to the original user request that triggered it.
 4. **No OpenTelemetry Instrumentation:** There is no integration with OpenTelemetry. Tracing of incoming HTTP requests, outgoing HTTP calls, and Entity Framework database queries is completely missing.
 
@@ -315,7 +315,7 @@ Resolved by → [§3.5 Serilog Compact JSON + `CorrelationIdMiddleware` + OpenTe
 
 ### 2.6 Error Handling Security Hazards & RFC Non-Compliance
 
-In [`GlobalExceptionMiddleware.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/swe-prep/apps/crowdfundinghub-main/src/API/CrowdFunding.API/Middleware/GlobalExceptionMiddleware.cs#L30-L50):
+In [`GlobalExceptionMiddleware.cs`](src/API/CrowdFunding.API/Middleware/GlobalExceptionMiddleware.cs#L30-L50):
 
 ```csharp
 var response = new ErrorResponse(context.Response.StatusCode, exception.Message);
@@ -332,7 +332,7 @@ Resolved by → [§3.6 RFC 9457 `ProblemDetails` via `IExceptionHandler`](#36-rf
 
 ### 2.7 Database Migration Hazards in Production Clusters
 
-In [`Program.cs` lines 117-122](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/swe-prep/apps/crowdfundinghub-main/src/API/CrowdFunding.API/Program.cs#L117-L122):
+In [`Program.cs` lines 117-122](src/API/CrowdFunding.API/Program.cs#L117-L122):
 
 ```csharp
 if (app.Environment.IsDevelopment())
@@ -356,7 +356,7 @@ Resolved by → [§3.7 #1–2 CLI `MigrationRunner` + schema-isolated `__EFMigra
 ### 2.8 Security Vulnerabilities: Timing Attacks & Key Distribution
 
 #### Timing Attack & Email Enumeration in Login
-In [`LoginUserCommandHandler.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/swe-prep/apps/crowdfundinghub-main/src/Modules/Identity/CrowdFunding.Modules.Identity.Application/Features/Users/Commands/LoginUser/LoginUserCommandHandler.cs#L31-L42):
+In [`LoginUserCommandHandler.cs`](src/Modules/Identity/CrowdFunding.Modules.Identity.Application/Features/Users/Commands/LoginUser/LoginUserCommandHandler.cs#L31-L42):
 
 ```csharp
 var user = await _userRepository.GetByNormalizedEmailAsync(normalizedEmail, cancellationToken);
@@ -378,7 +378,7 @@ if (!user.IsActive)
 Resolved by → [§3.8 #1 constant-time login using `DummyHash`](#38-security-modernization-asymmetric-jwks-timing-safe-pbkdf2--rate-limiting).
 
 #### Symmetric JWT Secret Key Exposure
-In [`JwtAccessTokenProvider.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/swe-prep/apps/crowdfundinghub-main/src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Services/JwtAccessTokenProvider.cs#L47-L48):
+In [`JwtAccessTokenProvider.cs`](src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Services/JwtAccessTokenProvider.cs#L47-L48):
 * Relies on a single symmetric HMAC-SHA256 secret (`Jwt:SigningKey`).
 * Any external verifier (such as an API Gateway, Envoy proxy, or secondary microservice) must be given the private signing secret to validate tokens. If any verifier is compromised, an attacker can forge arbitrary admin tokens.
 * *(Verified: `JwtAccessTokenProvider.cs` reads `Jwt:SigningKey` and constructs a `SymmetricSecurityKey` from it — confirmed in source, no asymmetric key material present.)*
@@ -386,7 +386,7 @@ In [`JwtAccessTokenProvider.cs`](file:///Users/maysamgamini/maysam-brain/Maysam'
 Resolved by → [§3.8 #2 asymmetric ES256 JWKS endpoint](#38-security-modernization-asymmetric-jwks-timing-safe-pbkdf2--rate-limiting).
 
 #### Complete Absence of Rate Limiting
-* No rate limiting is configured in [`Program.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/swe-prep/apps/crowdfundinghub-main/src/API/CrowdFunding.API/Program.cs) — confirmed by full-file search; no `AddRateLimiter` call exists anywhere in the codebase.
+* No rate limiting is configured in [`Program.cs`](src/API/CrowdFunding.API/Program.cs) — confirmed by full-file search; no `AddRateLimiter` call exists anywhere in the codebase.
 * Endpoints like `/api/identity/users/login`, `/api/identity/users/register`, and `/api/contributions` are exposed to brute-force credential attacks, Sybil account creation, and card testing fraud.
 
 Resolved by → [§3.8 #3 partitioned `System.Threading.RateLimiting` policies](#38-security-modernization-asymmetric-jwks-timing-safe-pbkdf2--rate-limiting).
@@ -396,8 +396,8 @@ Resolved by → [§3.8 #3 partitioned `System.Threading.RateLimiting` policies](
 ### 2.9 Architecture Boundary Gaps & Test Suite Deficiencies
 
 1. **"Ghost" Modules — Wired But Behaviorally No-Op:** *(corrected 2026-09-08: the original claim that these projects are "empty" is not quite accurate — verified against source.)* `CrowdFunding.Modules.Notifications` and `CrowdFunding.Modules.CampaignUpdates` are not empty project shells; each has an `Application` layer with real `IEventHandler<T>` classes (`NotificationEventHandlers.cs`, `CampaignActivityEventHandlers.cs`) subscribed to `CampaignPublished`, `CampaignCancelled`, `ContributionPaymentConfirmed`, `CampaignReviewApproved`, and `CampaignReviewRejected` application events. However, every handler body is a no-op — literally `=> Task.CompletedTask` — so the audit's underlying conclusion still holds in substance: **neither module contains a domain aggregate, entity, repository, or any actual business rule.** They exist to demonstrate the event-subscription wiring pattern, not to deliver notification or campaign-update functionality yet.
-2. **Missing Architecture Tests:** In [`CrowdFunding.ArchitectureTests`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/swe-prep/apps/crowdfundinghub-main/tests/ArchitectureTests/CrowdFunding.ArchitectureTests), tests exist only for `Campaigns` (`CampaignsModuleDependencyTests.cs`), `Contributions` (`ContributionsModuleDependencyTests.cs`), `Identity` (`IdentityModuleDependencyTests.cs`), and `Moderation` (`ModerationModuleDependencyTests.cs`) — confirmed present on disk. `Notifications` and `CampaignUpdates` are untested, and cross-module boundary isolation is not validated for those two. Resolved by → [§6.1](#61-full-netarchtest-modular-architecture-enforcement).
-3. **Empty Integration Test Suite:** In [`CrowdFunding.IntegrationTests`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/swe-prep/apps/crowdfundinghub-main/tests/IntegrationTests/CrowdFunding.IntegrationTests), the test file [`UnitTest1.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/swe-prep/apps/crowdfundinghub-main/tests/IntegrationTests/CrowdFunding.IntegrationTests/UnitTest1.cs) is a 10-line placeholder stub:
+2. **Missing Architecture Tests:** In [`CrowdFunding.ArchitectureTests`](tests/ArchitectureTests/CrowdFunding.ArchitectureTests), tests exist only for `Campaigns` (`CampaignsModuleDependencyTests.cs`), `Contributions` (`ContributionsModuleDependencyTests.cs`), `Identity` (`IdentityModuleDependencyTests.cs`), and `Moderation` (`ModerationModuleDependencyTests.cs`) — confirmed present on disk. `Notifications` and `CampaignUpdates` are untested, and cross-module boundary isolation is not validated for those two. Resolved by → [§6.1](#61-full-netarchtest-modular-architecture-enforcement).
+3. **Empty Integration Test Suite:** In [`CrowdFunding.IntegrationTests`](tests/IntegrationTests/CrowdFunding.IntegrationTests), the test file [`UnitTest1.cs`](tests/IntegrationTests/CrowdFunding.IntegrationTests/UnitTest1.cs) is a 10-line placeholder stub:
    ```csharp
    public class UnitTest1
    {
@@ -469,7 +469,7 @@ This section presents concrete, production-ready architectures adapted directly 
 
 ### 3.1 Append-Only Outbox & Debezium Change Data Capture (CDC)
 
-To eliminate table bloat, write amplification, and in-process polling locks, refactor [`OutboxMessage.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/swe-prep/apps/crowdfundinghub-main/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxMessage.cs) to match [`apps/backend`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/swe-prep/apps/backend/src/BuildingBlocks/HiTechies.BuildingBlocks.Infrastructure/Persistence/OutboxMessage.cs):
+To eliminate table bloat, write amplification, and in-process polling locks, refactor [`OutboxMessage.cs`](src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxMessage.cs) to match [`apps/backend`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/swe-prep/apps/backend/src/BuildingBlocks/HiTechies.BuildingBlocks.Infrastructure/Persistence/OutboxMessage.cs):
 
 ```csharp
 namespace CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
@@ -656,7 +656,7 @@ public async Task<IReadOnlyList<OutboxMessage>> ClaimBatchAsync(
 To permanently prevent lost updates and double-pledge inflation:
 
 #### 1. PostgreSQL `xmin` Optimistic Concurrency on `Campaign`:
-In [`CampaignConfiguration.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/swe-prep/apps/crowdfundinghub-main/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Persistence/Configurations/CampaignConfiguration.cs):
+In [`CampaignConfiguration.cs`](src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Persistence/Configurations/CampaignConfiguration.cs):
 
 ```csharp
 // Configure PostgreSQL xmin system column as concurrency token
@@ -702,7 +702,7 @@ await tx.CommitAsync(ct);
 ```
 
 #### 4. Tighten Aggregate Status Invariants:
-In [`Campaign.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/swe-prep/apps/crowdfundinghub-main/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs#L110):
+In [`Campaign.cs`](src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs#L110):
 
 ```csharp
 public void ApplyConfirmedContribution(Money contribution)
@@ -1168,7 +1168,7 @@ Replace direct `HttpClient` instantiation with typed, resilient clients:
 
 ### 6.1 Full NetArchTest Modular Architecture Enforcement
 
-Upgrade [`CrowdFunding.ArchitectureTests`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/swe-prep/apps/crowdfundinghub-main/tests/ArchitectureTests/CrowdFunding.ArchitectureTests) to include comprehensive cross-module boundary tests:
+Upgrade [`CrowdFunding.ArchitectureTests`](tests/ArchitectureTests/CrowdFunding.ArchitectureTests) to include comprehensive cross-module boundary tests:
 
 ```csharp
 [Fact]
@@ -1195,7 +1195,7 @@ Add architecture test classes for all 6 modules: `CampaignsArchitectureTests`, `
 
 ### 6.2 Testcontainers-Backed Integration Testing Suite
 
-Replace the placeholder [`UnitTest1.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/swe-prep/apps/crowdfundinghub-main/tests/IntegrationTests/CrowdFunding.IntegrationTests/UnitTest1.cs) with a complete integration test framework using `Testcontainers.PostgreSql`:
+Replace the placeholder [`UnitTest1.cs`](tests/IntegrationTests/CrowdFunding.IntegrationTests/UnitTest1.cs) with a complete integration test framework using `Testcontainers.PostgreSql`:
 
 #### 1. Custom Web Application Factory (`CrowdFundingWebAppFactory.cs`):
 ```csharp

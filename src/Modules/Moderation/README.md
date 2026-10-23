@@ -1,17 +1,49 @@
 # Moderation Module
 
 ## Purpose
-The Moderation module governs content compliance and administrative review workflows, ensuring all campaigns meet platform policies and terms before public launch.
+The Moderation module reviews newly created campaigns so that only approved ones are published, and records automated media-safety results.
 
-## Capabilities & Workflows
-- **Automatic Review Provisioning**: Subscribes to `CampaignCreatedApplicationEvent` emitted by the Campaigns module to automatically initialize a `CampaignReview` in `Pending` status.
-- **Review Decision Workflows**:
-  - `ApproveCampaignReviewCommand`: Approves campaign submission, emits `CampaignReviewApprovedApplicationEvent`, allowing campaign creator to publish.
-  - `RejectCampaignReviewCommand`: Rejects campaign with rejection notes and feedback, emitting `CampaignReviewRejectedApplicationEvent`.
-- **Status Queries**: Exposes campaign review status checks consumed by creator dashboards and moderation queues.
+## Review lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> Pending: CampaignCreated event creates the review
+    Pending --> Approved: ApproveCampaignReview
+    Pending --> Rejected: RejectCampaignReview
+    Approved --> [*]
+    Rejected --> [*]
+```
+
+```mermaid
+sequenceDiagram
+    participant Ca as Campaigns
+    participant Mo as Moderation
+    participant Mod as Moderator
+    participant No as Notifications
+    Ca->>Mo: CampaignCreated (via outbox)
+    Mo->>Mo: CreateCampaignReview (Pending)
+    Mod->>Mo: Approve or Reject
+    Mo->>No: CampaignReviewApproved / Rejected (via outbox)
+```
+
+## Capabilities
+- **Commands:** `CreateCampaignReview`, `ApproveCampaignReview`, `RejectCampaignReview`, `RecordMediaAnalysis` (result of the cloud-function media check, received by webhook).
+- **Queries:** `GetCampaignReviewByCampaignId`, `ListCampaignReviews`.
+- **Event handler:** `CampaignCreatedApplicationEventHandler`.
+- **Extraction:** this module is the one demonstrated as a standalone service in `services/CrowdFunding.Moderation.Service`.
+
+## Data and messaging
+
+| | |
+|---|---|
+| Database (local stack) | `moderation_db` |
+| PostgreSQL schema | `moderation`, with its own `__EFMigrationsHistory` |
+| Poly-pattern tier | 3 (`CampaignReview` raises events); `RecordMediaAnalysis` is a Tier 2 candidate, not yet confirmed (see `docs/POLY_PATTERN_TIER_ASSIGNMENT.md`) |
+| Outbox | `moderation` outbox, drained by `ModerationOutboxBackgroundService` |
+| Inbox | `moderation_inbox_messages` |
 
 ## Projects & Layers
-- `CrowdFunding.Modules.Moderation.Domain`: Contains `CampaignReview` aggregate root, `CampaignReviewStatus` enum, and review domain events.
-- `CrowdFunding.Modules.Moderation.Application`: Implements review commands, query handlers, and event listeners.
-- `CrowdFunding.Modules.Moderation.Infrastructure`: EF Core `ModerationDbContext`, configurations, repositories, and outbox tables.
-- `CrowdFunding.Modules.Moderation.Contracts`: Cross-module review events and query contracts.
+- `Domain`: `CampaignReview` aggregate root, `CampaignReviewStatus`, domain events.
+- `Application`: command, query and event handlers.
+- `Infrastructure`: `ModerationDbContext`, repositories, transaction executor, outbox worker.
+- `Contracts`: review events and query contracts.

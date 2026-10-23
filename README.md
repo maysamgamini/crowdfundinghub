@@ -35,43 +35,72 @@ Every module database is a primary plus a synchronous standby (`synchronous_comm
 
 Most microservices migrations fail not because distributed systems are inherently flawed, but because **the monolith was never architected for decomposition**. When organizations attempt to break apart a typical legacy monolith, they encounter shared database tables, cross-schema SQL joins, synchronous in-process query coupling, dual-write state corruption, and symmetric secret sprawl.
 
-`CrowdFundingHub` serves as a production-grade educational benchmark and living laboratory demonstrating how to build a **Modular Monolith** that avoids these traps from Day 1.
+`CrowdFundingHub` is a production-grade educational benchmark showing how to build a **Modular Monolith** that avoids these traps from day one.
+
+### The system today
 
 ```mermaid
-graph TD
-    subgraph "Phase 1: In-Process Modular Monolith (Today's Deliverable)"
-        Host["API Host (CrowdFunding.API)"]
-        subgraph Modules["Isolated In-Process Modules"]
-            Identity["Identity Module"]
-            Campaigns["Campaigns Module"]
-            Contributions["Contributions Module"]
-            Moderation["Moderation Module"]
-        end
-        SharedPG[("PostgreSQL 16<br/>(Strict Schema-per-Module Isolation)")]
-        Host --> Identity & Campaigns & Contributions & Moderation
-        Identity -.->|identity schema| SharedPG
-        Campaigns -.->|campaigns schema| SharedPG
-        Contributions -.->|contributions schema| SharedPG
-        Moderation -.->|moderation schema| SharedPG
+flowchart TB
+    Client["HTTP client / Swagger"] --> Host["CrowdFunding.API<br/>one deployable process"]
+    subgraph Modules["Six modules, each with Domain / Application / Infrastructure / Contracts"]
+        direction LR
+        Identity["Identity"]
+        Campaigns["Campaigns"]
+        Contributions["Contributions"]
+        Moderation["Moderation"]
+        Notifications["Notifications"]
+        Updates["CampaignUpdates"]
     end
-
-    subgraph "Phase 2: Frictionless Microservice Extraction (When Scale Demands It)"
-        Micro1["CrowdFunding.Identity.Service"]
-        Micro2["CrowdFunding.Campaigns.Service"]
-        Micro3["CrowdFunding.Contributions.Service"]
-        Micro4["CrowdFunding.Moderation.Service"]
-        Broker["Distributed Message Bus (RabbitMQ / Kafka)"]
-        DB1[("Identity DB")]
-        DB2[("Campaigns DB")]
-        DB3[("Contributions DB")]
-        DB4[("Moderation DB")]
-    end
-
-    Identity -. "Zero Code Rewrites" .-> Micro1
-    Campaigns -. "Zero Code Rewrites" .-> Micro2
-    Contributions -. "Zero Code Rewrites" .-> Micro3
-    Moderation -. "Zero Code Rewrites" .-> Micro4
+    Host --> Modules
+    Identity --- IdDb[("identity_db<br/>schema identity")]
+    Campaigns --- CaDb[("campaigns_db<br/>schema campaigns")]
+    Contributions --- CoDb[("contributions_db<br/>schema contributions")]
+    Moderation --- MoDb[("moderation_db<br/>schema moderation")]
+    Notifications --- NoDb[("notifications_db<br/>schema notifications")]
+    Updates --- UpDb[("campaignupdates_db<br/>schema campaignupdates")]
+    Host -.-> Audit[("audit_db")]
+    Host -.-> Redis[("Redis: cache invalidation, SignalR backplane")]
 ```
+
+### How modules talk without sharing tables
+
+```mermaid
+sequenceDiagram
+    participant Co as Contributions
+    participant CoDb as contributions outbox
+    participant W as Outbox worker
+    participant Ca as Campaigns handler
+    participant CaDb as campaigns inbox + ledger
+    Co->>CoDb: change state + event row, one transaction
+    W->>CoDb: claim batch (FOR UPDATE SKIP LOCKED)
+    W->>Ca: publish ContributionPaymentConfirmed (contract type)
+    Ca->>CaDb: credit ledger (ON CONFLICT DO NOTHING)
+    Ca->>CaDb: record in inbox
+    Note over Ca,CaDb: Crash between credit and inbox record = handler runs once more, and the ledger's unique key makes that harmless
+```
+
+### From module to microservice
+
+```mermaid
+flowchart LR
+    subgraph Now["Today: one process"]
+        M1["Moderation module"]
+        Bus1["In-process bus"]
+        Db1[("moderation_db")]
+        M1 --- Bus1
+        M1 --- Db1
+    end
+    subgraph Later["Extracted: same code, own process"]
+        M2["Moderation service"]
+        Bus2["RabbitMQ"]
+        Db2[("moderation_db<br/>unchanged")]
+        M2 --- Bus2
+        M2 --- Db2
+    end
+    Now -- "change the bus and the host, not the module" --> Later
+```
+
+The extraction is demonstrated in [`services/CrowdFunding.Moderation.Service`](./services/CrowdFunding.Moderation.Service/README.md).
 
 ---
 
@@ -80,9 +109,9 @@ graph TD
 Every line of code in this repository adheres to 6 core architectural guardrails:
 
 1. **Contract Assembly Isolation:** Modules communicate *exclusively* through lightweight `*.Contracts` assemblies containing DTOs, query definitions, and integration events. Modules never reference another module's `Application`, `Domain`, or `Infrastructure` layers.
-2. **PostgreSQL Schema Isolation:** Strict schema boundaries (`identity.*`, `campaigns.*`, `contributions.*`, `moderation.*`). Each module maintains its own independent EF Core migrations history table (`__EFMigrationsHistory`, "schema_name").
+2. **PostgreSQL Schema Isolation:** Every one of the six modules owns a PostgreSQL schema (`identity`, `campaigns`, `contributions`, `moderation`, `notifications`, `campaignupdates`) and its own EF Core migrations history table inside it. `ModuleSchemaRulesTests` checks this against a real database. The local stack goes one step further: one database per module.
 3. **Zero Cross-Schema Foreign Keys:** Cross-module references are primitive identifiers (`Guid CampaignId`), never database-level foreign key constraints. Data integrity is enforced via application invariants and eventual consistency sagas.
-4. **Transactional Outbox for Boundary Traversal:** Local database transactions write business events atomically into an `outbox_messages` table within the same module schema, completely eliminating distributed dual-write hazards.
+4. **Transactional Outbox for Boundary Traversal:** Local database transactions write business events atomically into the module's own outbox table, eliminating distributed dual-write hazards. Consumers record what they have handled in a per-module inbox table, so a redelivered event is not handled twice (the record is written after the handler, so one crash window remains; see `docs/TESTS_THAT_TEACH.md`).
 5. **Decentralized Authentication (Asymmetric ES256 / JWKS):** Identity generates private ECDSA keys and exposes public keys at `/.well-known/jwks.json`. Consuming modules and future microservices validate JWTs offline without calling back to Identity.
 6. **Automated Architecture Tests (assembly-reference checks):** Build-time unit tests enforce that the API host and external modules never violate clean architecture boundaries or directly reference internal domains.
 
@@ -93,7 +122,7 @@ Every line of code in this repository adheres to 6 core architectural guardrails
 A master curriculum suite is published under [`educational/`](./educational/README.md) for software architects:
 
 ### [01. Architecture Paradigms](./educational/01-architecture-paradigms/)
-- **[`poly-pattern-architecture.md`](./educational/01-architecture-paradigms/poly-pattern-architecture.md)**: Architectural Pragmatism vs. Dogmatism. Why homogeneous architecture is an anti-pattern. Demonstrates the 4-Tier Complexity Matrix (Minimal APIs, Pragmatic CQRS, Rich DDD Aggregates, and CDC Event Choreography).
+- **[`poly-pattern-architecture.md`](./educational/01-architecture-paradigms/poly-pattern-architecture.md)**: Architectural Pragmatism vs. Dogmatism. Why homogeneous architecture is an anti-pattern. Applied to the real modules in [`docs/POLY_PATTERN_TIER_ASSIGNMENT.md`](./docs/POLY_PATTERN_TIER_ASSIGNMENT.md): three tiers, chosen by two questions (does another module need to react reliably? can concurrent writes corrupt the data?).
 - **[`monolith-to-microservices-blueprint.md`](./educational/01-architecture-paradigms/monolith-to-microservices-blueprint.md)**: The definitive architectural blueprint for zero-rewrite microservice extraction and the Strangler Fig pattern.
 - **[`justifying-the-outbox-and-complex-crud.md`](./educational/01-architecture-paradigms/justifying-the-outbox-and-complex-crud.md)**: Real-world external integrations (SendGrid email, AWS Lambda / Cloud Function AI moderation, Stripe payment intents, limited perk inventory reservation) proving why the Outbox pattern and rich DDD are mathematically mandatory.
 
@@ -110,14 +139,29 @@ A master curriculum suite is published under [`educational/`](./educational/READ
 
 ---
 
-## 4. QA Tickets & Architectural Roadmap
+## 4. What Is Built, What Is Not
 
-All identified improvements, architectural defects, and concrete feature tasks are registered in the [`qa-tickets/`](./qa-tickets/README.md) registry. Every ticket includes a dedicated **Educational Rationale** section explaining what the task teaches architects and why it belongs in a Modular Monolith:
+The design says more than the code does in a few places. [`design-to-code-mapping-round1.md`](./educational/03-engineering-spec-and-roadmap/design-to-code-mapping-round1.md) lists every step as MATCHES, SIMPLER VARIANT or NOT BUILT, with the test that guards it.
 
-- **[TICKET-031 to TICKET-035](./qa-tickets/README.md#1-concrete-features-justifying-outbox--complex-crud-external-apis--cloud-functions)**: Concrete external integration features (SendGrid Email Receipts, Serverless Cloud Function AI Media Safety, Stripe Webhook Reconciliation Saga, Reward Perk Reservation State Machine, and Outbound HMAC Webhook Engine).
-- **[TICKET-023 to TICKET-030](./qa-tickets/README.md#2-monolith-to-microservices-decomposition--educational-benchmark-tickets)**: Architectural decomposition tickets (Asynchronous Replicated Read Models, Pluggable `IMessageBus`, Modular Outbox Partitioning, Multi-Database Connection Decoupling, Expiration & Refund Saga, Pedagogical Rosetta Stone, and W3C Distributed Tracing).
-- **[TICKET-036 to TICKET-040](./qa-tickets/README.md#3-platform-hardening--architectural-governance-tickets-multi-replica-scale-mvcc--security)**: Platform hardening & distributed systems governance (Decentralized Session Revocation under Asymmetric JWKS, Multi-Replica Distributed Cache Invalidation via Redis Pub/Sub, PostgreSQL Outbox MVCC Table Partitioning, Pipeline Audit Behaviors, and Automated CI/CD Fitness Functions).
-- **[TICKET-001 to TICKET-022](./qa-tickets/README.md#4-core-defect-concurrency--quality-tickets)**: Core quality, concurrency, security, and contract compliance tickets.
+```mermaid
+flowchart LR
+    subgraph Built["Built and tested"]
+        B1["Outbox with SKIP LOCKED claims"]
+        B2["Per-module schema, inbox, database"]
+        B3["xmin and advisory-lock concurrency"]
+        B4["Reward tier reservations, expiry, state-only refunds"]
+        B5["Replicated profile with quorum witness"]
+    end
+    subgraph Open["Open gaps"]
+        O1["Pledge idempotency key"]
+        O2["Closing fence at the deadline"]
+        O3["Outbox rows stuck in Processing are not reclaimed"]
+        O4["Ledger has no entry kind, sign check or trigger"]
+        O5["Success and failure emails; charge-once settlement"]
+    end
+```
+
+The open gaps are also listed in [`docs/TESTS_THAT_TEACH.md`](./docs/TESTS_THAT_TEACH.md). Historical ticket text lived in a `qa-tickets/` folder that is not part of this repository.
 
 ---
 
@@ -127,56 +171,67 @@ All identified improvements, architectural defects, and concrete feature tasks a
 | :--- | :--- | :--- |
 | **Framework** | .NET 10 / ASP.NET Core | High-throughput async runtime with C# 14 records and pattern matching. |
 | **Database** | PostgreSQL 16 + `Npgsql` | Schema-per-module isolation, `FOR UPDATE SKIP LOCKED` outbox claims, and `xmin` optimistic concurrency tokens. |
+| **Replication** | Patroni (Spilo image) + etcd witness | Optional profile: a primary and a synchronous standby per module database, failover decided by a three-member etcd group. Infrastructure only; the application stays .NET. |
 | **ORM** | Entity Framework Core 10 | Independent `DbContext` per module with isolated migration history tables. |
 | **Mapping** | Mapster | High-performance compiled IL object mapping avoiding AutoMapper runtime reflection tax. |
 | **Validation** | FluentValidation | Expressive, strongly typed command validation separated from HTTP controllers. |
 | **Security** | Asymmetric ES256 ECDSA | Elliptic-curve JWT signing with RFC 7517 JWKS endpoint for offline signature verification. |
-| **Testing** | xUnit, Testcontainers, assembly-reference architecture tests | Ephemeral PostgreSQL containers for real database integration testing, plus build-time architectural dependency enforcement. |
+| **Testing** | xUnit, Testcontainers, assembly-reference architecture tests | Ephemeral PostgreSQL containers for real database integration testing, plus build-time architectural dependency enforcement. See [`docs/TESTS_THAT_TEACH.md`](./docs/TESTS_THAT_TEACH.md). |
 
 ---
 
-## 6. Getting Started
+---
 
-### Prerequisites
-- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (for local PostgreSQL and Redis, or Testcontainers execution)
+## 6. Run It, Test It, Break It
 
-### 1. Start Infrastructure Containers
-Start local PostgreSQL and Redis via Docker Compose:
-```bash
-docker compose up -d
-```
-Default connection string connects to `localhost:5432` with database `crowdfundingdb` (`postgres/postgres`).
+The run instructions are at the top of this file. This section shows what you get and how the pieces connect.
 
-### 2. Run the Application
-```bash
-dotnet run --project src/API/CrowdFunding.API/CrowdFunding.API.csproj
+```mermaid
+flowchart TB
+    subgraph Lite["Light profile: docker compose up -d"]
+        L1[("one PostgreSQL container<br/>8 databases: one per module, audit, sample")]
+        L2[("Redis")]
+    end
+    subgraph HA["Replicated profile: docker compose -f docker-compose.ha.yml up -d"]
+        direction TB
+        E["etcd x3: the witness (quorum)"]
+        subgraph Pair["For each of the 8 databases"]
+            P["Primary"] -- "synchronous, remote_apply" --> S["Standby"]
+        end
+        E --- Pair
+        R[("Redis")]
+    end
+    API["dotnet run: CrowdFunding.API"] --> Lite
+    API -- "ASPNETCORE_ENVIRONMENT=HA<br/>multi-host connection strings" --> HA
 ```
-On startup in `Development` or `Testing` environments, the API automatically executes schema migrations across all four modules and warms up the asymmetric cryptographic keystore.
 
-### 3. Explore the API
-Navigate to Swagger UI:
+```mermaid
+stateDiagram-v2
+    [*] --> Healthy
+    Healthy --> StandbyDown: standby stops
+    StandbyDown --> Healthy: standby returns
+    StandbyDown: writes to that module wait, then time out. Reads and other modules keep working
+    Healthy --> Failover: primary stops
+    Failover --> Healthy: standby promoted, old primary rejoins as standby
+    Failover: about 30 s before the next request succeeds
 ```
-http://localhost:5000/swagger
-```
-Explore endpoints, authorize via the JWT Bearer button, and inspect the RFC 7517 JWKS keys:
-```
-http://localhost:5000/.well-known/jwks.json
-```
+
+The consistency-first rule (a write is acknowledged only after the standby has applied it) and the drills behind these diagrams are written up in [`docs/LOCAL_DISTRIBUTION_AND_HA_PLAN.md`](./docs/LOCAL_DISTRIBUTION_AND_HA_PLAN.md) and [`docs/TESTS_THAT_TEACH.md`](./docs/TESTS_THAT_TEACH.md).
+
+Useful URLs while the API runs on `http://localhost:5076`: `/swagger` (Development) and `/.well-known/jwks.json`.
 
 ---
 
 ## 7. Automated Test Suite
 
-The solution contains a complete, layered test suite with **171 automated tests passing with 0 errors and 0 warnings**:
-
 ```bash
 dotnet test CrowdFunding.slnx
 ```
 
-| Test Project | Purpose & Scope | Count | Status |
+| Test Project | Purpose & Scope | Count | Needs Docker |
 | :--- | :--- | :---: | :---: |
-| **`CrowdFunding.UnitTests`** | Domain aggregate invariants, command handlers, value objects, and concurrency rules. | 134 | ✅ Passed |
-| **`CrowdFunding.ArchitectureTests`** | xUnit tests that inspect referenced assemblies to enforce boundaries and zero API-to-domain references. | 16 | ✅ Passed |
-| **`CrowdFunding.IntegrationTests`** | WebApplicationFactory E2E HTTP flows running against real PostgreSQL Testcontainers. | 21 | ✅ Passed |
-| **Total** | | **171** | **100% Green** |
+| **`CrowdFunding.UnitTests`** | Domain aggregate invariants, command handlers, value objects. | 284 | no |
+| **`CrowdFunding.ArchitectureTests`** | Assembly-reference rules that keep module boundaries intact. | 22 | no |
+| **`CrowdFunding.IntegrationTests`** | HTTP flows, concurrency races, outbox, inbox and schema rules against real PostgreSQL (Testcontainers). | 92 | yes |
+
+Counts are from the run on 2026-10-23, all passing. The tests worth reading first, and the ones that are not, are listed in [`docs/TESTS_THAT_TEACH.md`](./docs/TESTS_THAT_TEACH.md).

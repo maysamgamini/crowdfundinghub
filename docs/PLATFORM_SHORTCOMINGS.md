@@ -58,20 +58,20 @@ The table below provides an executive summary of the 14 shortcomings, ranked by 
 
 | # | Domain | Finding / Shortcoming | Severity | Root Location | Remediation Ticket | Blast Radius / Business Impact |
 | :---: | :--- | :--- | :---: | :--- | :---: | :--- |
-| **1** | Financial Domain | Missing pledge refund & chargeback workflows when campaigns fail or are cancelled | 🔴 **P0 Critical** | [`Contribution.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Domain/Aggregates/Contribution.cs) | [`TICKET-027`](../qa-tickets/TICKET-027-DISTRIBUTED-CROWDFUNDING-LIFECYCLE-REFUND-SAGA.md) & [`TICKET-033`](../qa-tickets/TICKET-033-PAYMENT-GATEWAY-WEBHOOK-RECONCILIATION-SAGA.md) | Pledged funds become unrefundable; creators can abscond with funds; massive card network chargeback fines. |
-| **2** | Domain Lifecycle | Automated campaign deadline expiration background workers completely absent | 🔴 **P0 Critical** | [`Campaign.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs) | [`TICKET-027`](../qa-tickets/TICKET-027-DISTRIBUTED-CROWDFUNDING-LIFECYCLE-REFUND-SAGA.md) | Campaigns remain `Published` forever; `Successful`/`Failed` states never triggered; expired campaigns accept contributions. |
-| **3** | Security & Auth | Missing refresh token rotation (RTR) and session revocation mechanisms | 🔴 **P0 Critical** | [`JwtAccessTokenProvider.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Services/JwtAccessTokenProvider.cs) | [`TICKET-036`](../qa-tickets/TICKET-036-DECENTRALIZED-SESSION-REVOCATION-REFRESH-TOKEN-ROTATION.md) | Stateless 60-minute JWTs cannot be revoked upon account compromise, password reset, or admin deactivation. |
-| **4** | Security & Audit | Zero audit logging / change history on administrative and moderation actions | 🔴 **P0 Critical** | [`CampaignReview.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Moderation/CrowdFunding.Modules.Moderation.Domain/Aggregates/CampaignReview.cs) | [`TICKET-039`](../qa-tickets/TICKET-039-PIPELINE-BEHAVIORS-IMMUTABLE-AUDIT-LOGGING.md) | Administrative actions lack non-repudiation; no IP, context, or before/after diff captured; fails SOC 2/PCI-DSS. |
-| **5** | Performance | Multi-DbContext competition for physical PostgreSQL connection pool | 🟠 **P1 High** | [`Program.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Program.cs#L56-L60) | [`TICKET-026`](../qa-tickets/TICKET-026-MULTI-DATABASE-CONNECTION-DECOUPLING.md) | Cross-module requests check out multiple connections simultaneously, causing rapid pool exhaustion under peak load. |
-| **6** | Performance | Polling Outbox MVCC table bloat and write amplification under heavy throughput | 🟠 **P1 High** | [`OutboxClaimQuery.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxClaimQuery.cs) | [`TICKET-038`](../qa-tickets/TICKET-038-POSTGRESQL-OUTBOX-MVCC-PARTITIONING-DELETE-ON-SUCCESS.md) | Mutable row status (`Pending -> Processing -> Processed`) creates 3+ tuple versions per event; autovacuum starvation. |
-| **7** | Performance | In-process single-thread `PeriodicTimer` outbox processor vs distributed broker | 🟠 **P1 High** | [`OutboxProcessorBackgroundService.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs#L32-L52) | [`TICKET-024`](../qa-tickets/TICKET-024-PLUGGABLE-MESSAGE-BUS-RABBITMQ-KAFKA.md) & [`TICKET-025`](../qa-tickets/TICKET-025-MODULAR-OUTBOX-PARTITIONING-AUTONOMOUS-WORKERS.md) | Hard throughput ceiling of ~4 msgs/sec per module (20 msgs / 5s); outbox takes minutes to drain during funding spikes. |
-| **8** | Performance | In-memory key caching and lack of distributed cache invalidation across replicas | 🟠 **P1 High** | [`EfSigningKeyStore.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Services/EfSigningKeyStore.cs#L19-L57) | [`TICKET-037`](../qa-tickets/TICKET-037-MULTI-REPLICA-DISTRIBUTED-CACHE-INVALIDATION.md) | Multi-replica deployments face split-brain key caches; pre-commit Redis invalidation causes stale cache repopulation. |
-| **9** | Functional Domain | Hard single-currency limitation with no currency conversion services | 🟠 **P1 High** | [`Money.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Domain/ValueObjects/Money.cs#L52-L63) | *Pedagogical Scope (Non-Decomp)* | Platform rejects contributions in any currency differing from the campaign currency; prevents international backing. |
-| **10** | Functional Domain | Lack of pledge reward tiers / perks with limited inventory | 🟠 **P1 High** | [`Campaign.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs) | [`TICKET-034`](../qa-tickets/TICKET-034-REWARD-TIER-ALLOCATION-INVENTORY-RESERVATION.md) | Cannot offer tiered incentives (Early Bird, VIP); cannot track reward quotas, fulfillment, or shipping information. |
-| **11** | DevOps | Missing containerization Dockerfiles for API services | 🟠 **P1 High** | [`docker-compose.yml`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/docker-compose.yml) | [`TICKET-029`](../qa-tickets/TICKET-029-MICROSERVICE-EXTRACTION-POC-STANDALONE-SERVICE.md) | Cannot deploy API to container runtimes (Kubernetes/ECS); inconsistent environments between local and staging. |
+| **1** | Financial Domain | Missing pledge refund & chargeback workflows when campaigns fail or are cancelled | 🔴 **P0 Critical** | [`Contribution.cs`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Domain/Aggregates/Contribution.cs) | [`TICKET-027`](../qa-tickets/TICKET-027-DISTRIBUTED-CROWDFUNDING-LIFECYCLE-REFUND-SAGA.md) & [`TICKET-033`](../qa-tickets/TICKET-033-PAYMENT-GATEWAY-WEBHOOK-RECONCILIATION-SAGA.md) | Pledged funds become unrefundable; creators can abscond with funds; massive card network chargeback fines. |
+| **2** | Domain Lifecycle | Automated campaign deadline expiration background workers completely absent | 🔴 **P0 Critical** | [`Campaign.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs) | [`TICKET-027`](../qa-tickets/TICKET-027-DISTRIBUTED-CROWDFUNDING-LIFECYCLE-REFUND-SAGA.md) | Campaigns remain `Published` forever; `Successful`/`Failed` states never triggered; expired campaigns accept contributions. |
+| **3** | Security & Auth | Missing refresh token rotation (RTR) and session revocation mechanisms | 🔴 **P0 Critical** | [`JwtAccessTokenProvider.cs`](../src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Services/JwtAccessTokenProvider.cs) | [`TICKET-036`](../qa-tickets/TICKET-036-DECENTRALIZED-SESSION-REVOCATION-REFRESH-TOKEN-ROTATION.md) | Stateless 60-minute JWTs cannot be revoked upon account compromise, password reset, or admin deactivation. |
+| **4** | Security & Audit | Zero audit logging / change history on administrative and moderation actions | 🔴 **P0 Critical** | [`CampaignReview.cs`](../src/Modules/Moderation/CrowdFunding.Modules.Moderation.Domain/Aggregates/CampaignReview.cs) | [`TICKET-039`](../qa-tickets/TICKET-039-PIPELINE-BEHAVIORS-IMMUTABLE-AUDIT-LOGGING.md) | Administrative actions lack non-repudiation; no IP, context, or before/after diff captured; fails SOC 2/PCI-DSS. |
+| **5** | Performance | Multi-DbContext competition for physical PostgreSQL connection pool | 🟠 **P1 High** | [`Program.cs`](../src/API/CrowdFunding.API/Program.cs#L56-L60) | [`TICKET-026`](../qa-tickets/TICKET-026-MULTI-DATABASE-CONNECTION-DECOUPLING.md) | Cross-module requests check out multiple connections simultaneously, causing rapid pool exhaustion under peak load. |
+| **6** | Performance | Polling Outbox MVCC table bloat and write amplification under heavy throughput | 🟠 **P1 High** | [`OutboxClaimQuery.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxClaimQuery.cs) | [`TICKET-038`](../qa-tickets/TICKET-038-POSTGRESQL-OUTBOX-MVCC-PARTITIONING-DELETE-ON-SUCCESS.md) | Mutable row status (`Pending -> Processing -> Processed`) creates 3+ tuple versions per event; autovacuum starvation. |
+| **7** | Performance | In-process single-thread `PeriodicTimer` outbox processor vs distributed broker | 🟠 **P1 High** | [`OutboxProcessorBackgroundService.cs`](../src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs#L32-L52) | [`TICKET-024`](../qa-tickets/TICKET-024-PLUGGABLE-MESSAGE-BUS-RABBITMQ-KAFKA.md) & [`TICKET-025`](../qa-tickets/TICKET-025-MODULAR-OUTBOX-PARTITIONING-AUTONOMOUS-WORKERS.md) | Hard throughput ceiling of ~4 msgs/sec per module (20 msgs / 5s); outbox takes minutes to drain during funding spikes. |
+| **8** | Performance | In-memory key caching and lack of distributed cache invalidation across replicas | 🟠 **P1 High** | [`EfSigningKeyStore.cs`](../src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Services/EfSigningKeyStore.cs#L19-L57) | [`TICKET-037`](../qa-tickets/TICKET-037-MULTI-REPLICA-DISTRIBUTED-CACHE-INVALIDATION.md) | Multi-replica deployments face split-brain key caches; pre-commit Redis invalidation causes stale cache repopulation. |
+| **9** | Functional Domain | Hard single-currency limitation with no currency conversion services | 🟠 **P1 High** | [`Money.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Domain/ValueObjects/Money.cs#L52-L63) | *Pedagogical Scope (Non-Decomp)* | Platform rejects contributions in any currency differing from the campaign currency; prevents international backing. |
+| **10** | Functional Domain | Lack of pledge reward tiers / perks with limited inventory | 🟠 **P1 High** | [`Campaign.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs) | [`TICKET-034`](../qa-tickets/TICKET-034-REWARD-TIER-ALLOCATION-INVENTORY-RESERVATION.md) | Cannot offer tiered incentives (Early Bird, VIP); cannot track reward quotas, fulfillment, or shipping information. |
+| **11** | DevOps | Missing containerization Dockerfiles for API services | 🟠 **P1 High** | [`docker-compose.yml`](../docker-compose.yml) | [`TICKET-029`](../qa-tickets/TICKET-029-MICROSERVICE-EXTRACTION-POC-STANDALONE-SERVICE.md) | Cannot deploy API to container runtimes (Kubernetes/ECS); inconsistent environments between local and staging. |
 | **12** | DevOps | Complete absence of CI/CD workflow automation (GitHub Actions / GitLab CI) | 🟠 **P1 High** | Repository Root (`.github` missing) | [`TICKET-040`](../qa-tickets/TICKET-040-ARCHITECTURAL-FITNESS-FUNCTIONS-CI-CD-AUTOMATION.md) | No automated build/test validation, architecture rule enforcement, linting, image packaging, or deployment. |
-| **13** | Observability | Missing centralized distributed tracing exporter (OpenTelemetry OTLP) | 🟡 **P2 Medium** | [`Program.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Program.cs) | [`TICKET-030`](../qa-tickets/TICKET-030-DISTRIBUTED-TRACING-OPENTELEMETRY-OUTBOX-PROPAGATION.md) | No OTLP exporter; spans and call graphs across HTTP, EF Core, and Outbox are unobservable in Jaeger/Tempo/Datadog. |
-| **14** | Functional Domain | Missing backer profile management and notification preference controls | 🟡 **P2 Medium** | [`User.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Identity/CrowdFunding.Modules.Identity.Domain/Aggregates/User.cs) | [`TICKET-031`](../qa-tickets/TICKET-031-EXTERNAL-EMAIL-NOTIFICATION-OUTBOX-DELIVERY.md) | Stub notification handlers (`Task.CompletedTask`); zero preference management; non-compliant with GDPR/CAN-SPAM. |
+| **13** | Observability | Missing centralized distributed tracing exporter (OpenTelemetry OTLP) | 🟡 **P2 Medium** | [`Program.cs`](../src/API/CrowdFunding.API/Program.cs) | [`TICKET-030`](../qa-tickets/TICKET-030-DISTRIBUTED-TRACING-OPENTELEMETRY-OUTBOX-PROPAGATION.md) | No OTLP exporter; spans and call graphs across HTTP, EF Core, and Outbox are unobservable in Jaeger/Tempo/Datadog. |
+| **14** | Functional Domain | Missing backer profile management and notification preference controls | 🟡 **P2 Medium** | [`User.cs`](../src/Modules/Identity/CrowdFunding.Modules.Identity.Domain/Aggregates/User.cs) | [`TICKET-031`](../qa-tickets/TICKET-031-EXTERNAL-EMAIL-NOTIFICATION-OUTBOX-DELIVERY.md) | Stub notification handlers (`Task.CompletedTask`); zero preference management; non-compliant with GDPR/CAN-SPAM. |
 
 ---
 
@@ -80,7 +80,7 @@ The table below provides an executive summary of the 14 shortcomings, ranked by 
 ### 3.1 Missing Pledge Refunds & Chargeback Workflows on Cancelled/Failed Campaigns
 
 #### Architectural Flaw & Codebase Analysis
-In [`ContributionStatus.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Domain/Enums/ContributionStatus.cs#L6-L11), the contribution lifecycle is constrained to three states:
+In [`ContributionStatus.cs`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Domain/Enums/ContributionStatus.cs#L6-L11), the contribution lifecycle is constrained to three states:
 ```csharp
 public enum ContributionStatus
 {
@@ -89,9 +89,9 @@ public enum ContributionStatus
     Failed = 3
 }
 ```
-In [`Contribution.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Domain/Aggregates/Contribution.cs#L76-L111), once `ConfirmPayment` is executed, the aggregate moves permanently to `Succeeded`. **There is no domain method or state for `Refund`, `Dispute`, or `Chargeback`**.
+In [`Contribution.cs`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Domain/Aggregates/Contribution.cs#L76-L111), once `ConfirmPayment` is executed, the aggregate moves permanently to `Succeeded`. **There is no domain method or state for `Refund`, `Dispute`, or `Chargeback`**.
 
-Furthermore, when a campaign is cancelled in [`CancelCampaignCommandHandler.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Application/Features/Campaigns/Commands/CancelCampaign/CancelCampaignCommandHandler.cs#L46), the domain publishes a [`CampaignCancelledApplicationEvent`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/Contracts/Events/CampaignCancelled/CampaignCancelledApplicationEvent.cs). Across the entire codebase, **no handler exists in the Contributions module to process this event**. Pledged funds remain marked as `Succeeded` indefinitely.
+Furthermore, when a campaign is cancelled in [`CancelCampaignCommandHandler.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Application/Features/Campaigns/Commands/CancelCampaign/CancelCampaignCommandHandler.cs#L46), the domain publishes a [`CampaignCancelledApplicationEvent`](../src/Modules/Campaigns/Contracts/Events/CampaignCancelled/CampaignCancelledApplicationEvent.cs). Across the entire codebase, **no handler exists in the Contributions module to process this event**. Pledged funds remain marked as `Succeeded` indefinitely.
 
 ```mermaid
 sequenceDiagram
@@ -107,7 +107,7 @@ sequenceDiagram
     CampAPI->>CampAPI: Status = Cancelled
     CampAPI->>Outbox: Write CampaignCancelledApplicationEvent
     Note over ContribAPI: No Event Handler exists!
-    Note over ContribAPI,Gateway: Event is dropped; no refunds issued!
+    Note over ContribAPI,Gateway: Event is dropped, no refunds issued!
     Backer-->>Gateway: Backer initiates Bank Chargeback
     Gateway-->>CampAPI: Chargeback Webhook Received (Unhandled!)
     Note over CampAPI,ContribAPI: Platform loses funds + incurs $25+ dispute fee
@@ -118,9 +118,9 @@ sequenceDiagram
 - **Card Scheme Penalties:** Disgruntled backers will file chargebacks directly with issuing banks. If a platform's dispute ratio exceeds **0.9%** (Visa/Mastercard thresholds), the platform faces fines of $25–$100 per chargeback and eventual revocation of payment processing facilities.
 
 #### Remediation Guidance
-1. **Extend Contribution State Machine:** Add `Refunding`, `Refunded`, `Disputed`, and `ChargedBack` to [`ContributionStatus`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Domain/Enums/ContributionStatus.cs).
-2. **Implement Contribution Refund Domain Methods:** Add `InitiateRefund()`, `ConfirmRefund()`, and `RecordChargeback()` to [`Contribution.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Domain/Aggregates/Contribution.cs).
-3. **Refund Process Manager (Saga):** Implement `CampaignCancellationRefundSaga` subscribing to [`CampaignCancelledApplicationEvent`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/Contracts/Events/CampaignCancelled/CampaignCancelledApplicationEvent.cs) and `CampaignFailedApplicationEvent`. The saga queries all `Succeeded` contributions for the campaign, dispatches idempotent refund commands to the payment gateway adapter, records ledger reversals in `IContributionLedger`, and marks contributions as `Refunded`.
+1. **Extend Contribution State Machine:** Add `Refunding`, `Refunded`, `Disputed`, and `ChargedBack` to [`ContributionStatus`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Domain/Enums/ContributionStatus.cs).
+2. **Implement Contribution Refund Domain Methods:** Add `InitiateRefund()`, `ConfirmRefund()`, and `RecordChargeback()` to [`Contribution.cs`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Domain/Aggregates/Contribution.cs).
+3. **Refund Process Manager (Saga):** Implement `CampaignCancellationRefundSaga` subscribing to [`CampaignCancelledApplicationEvent`](../src/Modules/Campaigns/Contracts/Events/CampaignCancelled/CampaignCancelledApplicationEvent.cs) and `CampaignFailedApplicationEvent`. The saga queries all `Succeeded` contributions for the campaign, dispatches idempotent refund commands to the payment gateway adapter, records ledger reversals in `IContributionLedger`, and marks contributions as `Refunded`.
 4. **Webhook Ingestion Pipeline:** Create an authenticated payment webhook endpoint (`/api/contributions/webhooks`) to receive Stripe/Adyen `charge.dispute.created` and `charge.refunded` events.
 
 ---
@@ -128,7 +128,7 @@ sequenceDiagram
 ### 3.2 Missing Automated Campaign Expiration Background Workers
 
 #### Architectural Flaw & Codebase Analysis
-In [`CampaignStatus.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Enums/CampaignStatus.cs#L6-L13), the states `Successful = 3` and `Failed = 4` are defined:
+In [`CampaignStatus.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Enums/CampaignStatus.cs#L6-L13), the states `Successful = 3` and `Failed = 4` are defined:
 ```csharp
 public enum CampaignStatus
 {
@@ -141,7 +141,7 @@ public enum CampaignStatus
 ```
 However, grep inspection across the entire solution reveals that **`CampaignStatus.Successful` and `CampaignStatus.Failed` are NEVER set anywhere in the codebase**.
 
-In [`Campaign.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs#L113-L129), `ApplyConfirmedContribution` checks:
+In [`Campaign.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs#L113-L129), `ApplyConfirmedContribution` checks:
 ```csharp
 if (Status != CampaignStatus.Published)
 {
@@ -156,8 +156,8 @@ if (Status != CampaignStatus.Published)
 - **Payout & Settlement Paralysis:** Creators of funded campaigns can never receive payouts because the campaign never reaches the `Successful` terminal state; underfunded campaigns never transition to `Failed` to release backer pledges.
 
 #### Remediation Guidance
-1. **Domain State Transitions:** Add domain methods `CompleteAsSuccessful(DateTime currentUtc)` and `ExpireAsFailed(DateTime currentUtc)` to [`Campaign.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs), asserting `currentUtc >= DeadlineUtc` and raising `CampaignSuccessfulDomainEvent` and `CampaignFailedDomainEvent` respectively.
-2. **Deadline Invariant Enforcement:** In `ApplyConfirmedContribution` and [`MakeContributionCommandHandler.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs), strictly reject any contribution where `_dateTimeProvider.UtcNow > campaign.DeadlineUtc`.
+1. **Domain State Transitions:** Add domain methods `CompleteAsSuccessful(DateTime currentUtc)` and `ExpireAsFailed(DateTime currentUtc)` to [`Campaign.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs), asserting `currentUtc >= DeadlineUtc` and raising `CampaignSuccessfulDomainEvent` and `CampaignFailedDomainEvent` respectively.
+2. **Deadline Invariant Enforcement:** In `ApplyConfirmedContribution` and [`MakeContributionCommandHandler.cs`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs), strictly reject any contribution where `_dateTimeProvider.UtcNow > campaign.DeadlineUtc`.
 3. **Automated Expiration Worker:** Implement `CampaignExpirationBackgroundService` (or a Quartz.NET cron job running every 60 seconds):
 ```csharp
 var expiredCampaigns = await dbContext.Campaigns
@@ -179,9 +179,9 @@ foreach (var campaign in expiredCampaigns)
 ### 3.3 Missing Multi-Tier Pledge Rewards & Perks
 
 #### Architectural Flaw & Codebase Analysis
-The current domain models in [`CrowdFunding.Modules.Campaigns.Domain`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain) and [`CrowdFunding.Modules.Contributions.Domain`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Domain) treat all contributions as generic, untargeted amounts:
-- [`Campaign.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs) has only `GoalAmount` and `RaisedAmount`. There is no collection of reward tiers or perk items.
-- [`Contribution.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Domain/Aggregates/Contribution.cs) records only `Money`, `CampaignId`, and `ContributorId`. There is no reference to a `RewardTierId`, quantity claimed, shipping address, or reward fulfillment status.
+The current domain models in [`CrowdFunding.Modules.Campaigns.Domain`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain) and [`CrowdFunding.Modules.Contributions.Domain`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Domain) treat all contributions as generic, untargeted amounts:
+- [`Campaign.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs) has only `GoalAmount` and `RaisedAmount`. There is no collection of reward tiers or perk items.
+- [`Contribution.cs`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Domain/Aggregates/Contribution.cs) records only `Money`, `CampaignId`, and `ContributorId`. There is no reference to a `RewardTierId`, quantity claimed, shipping address, or reward fulfillment status.
 
 #### Impact & Severity: 🟠 P1 High
 - **Product Viability Block:** Crowdfunding platforms (Kickstarter, Indiegogo) thrive on reward tiers (e.g., "$25 Early Bird", "$100 VIP Bundle"). Without reward tiers, campaign creators cannot offer incentives, reducing pledge conversion rates by up to 80%.
@@ -210,7 +210,7 @@ public sealed class RewardTier : BaseEntity
 ### 3.4 Single-Currency Limitation & Lack of Currency Conversion Services
 
 #### Architectural Flaw & Codebase Analysis
-In [`Money.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Domain/ValueObjects/Money.cs#L52-L63):
+In [`Money.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Domain/ValueObjects/Money.cs#L52-L63):
 ```csharp
 private void EnsureSameCurrency(Money other)
 {
@@ -221,7 +221,7 @@ private void EnsureSameCurrency(Money other)
     }
 }
 ```
-In [`MakeContributionCommandHandler.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs#L61-L65):
+In [`MakeContributionCommandHandler.cs`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs#L61-L65):
 ```csharp
 if (!string.Equals(campaignAvailability.Currency, command.Currency, StringComparison.OrdinalIgnoreCase))
 {
@@ -233,7 +233,7 @@ The platform explicitly enforces a strict, single-currency policy. A backer resi
 
 #### Impact & Severity: 🟠 P1 High
 - **Geographic Fragmentation:** Campaign creators are cut off from global backers. International backers are turned away at checkout with a 400 Bad Request error.
-- **Fatal Poison Message Risk:** If a payment gateway accepts an alternate currency and fires a webhook, `Money.Add` throws inside [`AddContributionToCampaignCommandHandler.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Application/Features/Campaigns/Commands/AddContributionToCampaign/AddContributionToCampaignCommandHandler.cs#L89), dead-lettering the outbox message and leaving the backer's card charged without updating the campaign total.
+- **Fatal Poison Message Risk:** If a payment gateway accepts an alternate currency and fires a webhook, `Money.Add` throws inside [`AddContributionToCampaignCommandHandler.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Application/Features/Campaigns/Commands/AddContributionToCampaign/AddContributionToCampaignCommandHandler.cs#L89), dead-lettering the outbox message and leaving the backer's card charged without updating the campaign total.
 
 #### Remediation Guidance
 1. **Multi-Currency Value Representation:** Separate the contributed currency from the campaign base currency:
@@ -254,7 +254,7 @@ public sealed class Contribution : BaseEntity
 ### 3.5 Missing Backer Profile Management & Notification Preference Controls
 
 #### Architectural Flaw & Codebase Analysis
-In [`User.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Identity/CrowdFunding.Modules.Identity.Domain/Aggregates/User.cs#L10-L19), the user aggregate is strictly an authentication identity:
+In [`User.cs`](../src/Modules/Identity/CrowdFunding.Modules.Identity.Domain/Aggregates/User.cs#L10-L19), the user aggregate is strictly an authentication identity:
 ```csharp
 public Guid Id { get; private set; }
 public string Email { get; private set; }
@@ -268,7 +268,7 @@ public List<UserPermissionGrant> Permissions { get; private set; }
 ```
 There is no profile information (biography, profile picture/avatar URL, website, location, backed campaign history, anonymous backer display toggle).
 
-Furthermore, in [`NotificationEventHandlers.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Notifications/CrowdFunding.Modules.Notifications.Application/Events/NotificationEventHandlers.cs#L13-L48), **all five event handlers are empty stub implementations**:
+Furthermore, in [`NotificationEventHandlers.cs`](../src/Modules/Notifications/CrowdFunding.Modules.Notifications.Application/Events/NotificationEventHandlers.cs#L13-L48), **all five event handlers are empty stub implementations**:
 ```csharp
 public sealed class CampaignPublishedNotificationHandler : IEventHandler<CampaignPublishedApplicationEvent>
 {
@@ -283,7 +283,7 @@ There is zero notification dispatch, zero email/SMS templating, and no notificat
 
 #### Remediation Guidance
 1. **Backer Profile Aggregate:** Create `BackerProfile` in the Identity or a dedicated Backers module with `AvatarUrl`, `Biography`, `WebsiteUrl`, `IsPubliclyVisible`, and `DefaultShippingAddress`.
-2. **Notification Preferences Entity:** Create `NotificationPreferences` in [`CrowdFunding.Modules.Notifications.Domain`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Notifications/CrowdFunding.Modules.Notifications.Domain):
+2. **Notification Preferences Entity:** Create `NotificationPreferences` in [`CrowdFunding.Modules.Notifications.Domain`](../src/Modules/Notifications/CrowdFunding.Modules.Notifications.Domain):
 ```csharp
 public sealed class NotificationPreferences
 {
@@ -299,7 +299,7 @@ public sealed class NotificationPreferences
 
 > [!NOTE]
 > **Resolution Status (TICKET-031 & TICKET-056):**
-> Notification preferences and RFC 8058 one-click unsubscribe compliance were implemented in [`NotificationPreference.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Notifications/CrowdFunding.Modules.Notifications.Domain/Aggregates/NotificationPreference.cs), [`NotificationsController.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Controllers/NotificationsController.cs), and [`HttpEmailNotificationService.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Notifications/CrowdFunding.Modules.Notifications.Infrastructure/Services/HttpEmailNotificationService.cs). Transactional emails (pledge receipts, refund notices) bypass preferences, while commercial campaign updates strictly respect opt-out preferences and include RFC 8058 headers.
+> Notification preferences and RFC 8058 one-click unsubscribe compliance were implemented in [`NotificationPreference.cs`](../src/Modules/Notifications/CrowdFunding.Modules.Notifications.Domain/Aggregates/NotificationPreference.cs), [`NotificationsController.cs`](../src/API/CrowdFunding.API/Controllers/NotificationsController.cs), and [`HttpEmailNotificationService.cs`](../src/Modules/Notifications/CrowdFunding.Modules.Notifications.Infrastructure/Services/HttpEmailNotificationService.cs). Transactional emails (pledge receipts, refund notices) bypass preferences, while commercial campaign updates strictly respect opt-out preferences and include RFC 8058 headers.
 
 ---
 
@@ -308,7 +308,7 @@ public sealed class NotificationPreferences
 ### 4.1 Polling Transactional Outbox Table Bloat & Write Amplification
 
 #### Architectural Flaw & Codebase Analysis
-The current outbox implementation in [`OutboxClaimQuery.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxClaimQuery.cs#L28-L45) uses PostgreSQL `FOR UPDATE SKIP LOCKED` with a mutable status model:
+The current outbox implementation in [`OutboxClaimQuery.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxClaimQuery.cs#L28-L45) uses PostgreSQL `FOR UPDATE SKIP LOCKED` with a mutable status model:
 ```sql
 WITH claimable AS (
     SELECT "Id"
@@ -324,7 +324,7 @@ FROM claimable
 WHERE m."Id" = claimable."Id"
 RETURNING m.*;
 ```
-When processed in [`OutboxProcessorBackgroundService.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs#L94), a third statement updates the row:
+When processed in [`OutboxProcessorBackgroundService.cs`](../src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs#L94), a third statement updates the row:
 ```csharp
 message.MarkProcessed(nowUtc); // Sets Status = 3 (Processed), ProcessedOnUtc = now
 await dbContext.SaveChangesAsync();
@@ -370,7 +370,7 @@ Processed messages are **never deleted**. The table grows indefinitely.
 ### 4.2 PostgreSQL Connection Pool Competition Across Multiple DbContexts
 
 #### Architectural Flaw & Codebase Analysis
-In [`Program.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Program.cs#L56-L60) and the module infrastructure registrations:
+In [`Program.cs`](../src/API/CrowdFunding.API/Program.cs#L56-L60) and the module infrastructure registrations:
 ```csharp
 services.AddDbContext<CampaignsDbContext>(...);
 services.AddDbContext<ContributionsDbContext>(...);
@@ -383,7 +383,7 @@ Each module uses a separate `DbContext` instance pointing to the same PostgreSQL
 In Npgsql, connection pooling is managed per unique connection string, with a default `MaxPoolSize = 100`.
 
 #### The Multi-Context Contention Mechanism
-In [`MakeContributionCommandHandler.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs#L41-L75):
+In [`MakeContributionCommandHandler.cs`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs#L41-L75):
 ```csharp
 // 1. Checks availability by querying CampaignsDbContext (Connection #1 checked out)
 var campaignAvailability = await _campaignContributionAvailabilityReader.GetCampaignContributionAvailabilityAsync(...);
@@ -396,12 +396,12 @@ await _transactionExecutor.ExecuteAsync(async ct => {
 ```
 During a single HTTP request, **two separate physical connections are checked out and held concurrently**.
 Simultaneously:
-- [`OutboxProcessorBackgroundService.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs#L48-L50) checks out connections for `CampaignsDbContext`, `ContributionsDbContext`, and `ModerationDbContext`.
-- Health checks ([`DbContextHealthCheck.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Observability/DbContextHealthCheck.cs)) check out 4 connections concurrently every 10 seconds.
+- [`OutboxProcessorBackgroundService.cs`](../src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs#L48-L50) checks out connections for `CampaignsDbContext`, `ContributionsDbContext`, and `ModerationDbContext`.
+- Health checks ([`DbContextHealthCheck.cs`](../src/API/CrowdFunding.API/Observability/DbContextHealthCheck.cs)) check out 4 connections concurrently every 10 seconds.
 
 ```mermaid
 graph TD
-    Client[Concurrent HTTP Clients (50 Requests)] --> API[CrowdFunding API]
+    Client["Concurrent HTTP Clients (50 Requests)"] --> API[CrowdFunding API]
     API -->|Req 1..50| ConnCamp[CampaignsDbContext: 50 Connections]
     API -->|Req 1..50| ConnContrib[ContributionsDbContext: 50 Connections]
     API -->|Background Worker| ConnWorker[Outbox Worker: 3 Connections]
@@ -428,7 +428,7 @@ graph TD
 ### 4.3 In-Process Single-Thread PeriodicTimer Outbox Dispatcher vs Distributed Brokers
 
 #### Architectural Flaw & Codebase Analysis
-In [`OutboxProcessorBackgroundService.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs#L18-L41):
+In [`OutboxProcessorBackgroundService.cs`](../src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs#L18-L41):
 ```csharp
 private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
 private const int BatchSize = 20;
@@ -480,7 +480,7 @@ while (hasMoreMessages && !cancellationToken.IsCancellationRequested)
 ### 4.4 In-Memory Key Caching & Lack of Distributed Cache Invalidation
 
 #### Architectural Flaw & Codebase Analysis
-In [`EfSigningKeyStore.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Services/EfSigningKeyStore.cs#L19-L21):
+In [`EfSigningKeyStore.cs`](../src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Services/EfSigningKeyStore.cs#L19-L21):
 ```csharp
 public sealed class EfSigningKeyStore : ISigningKeyStore
 {
@@ -493,7 +493,7 @@ If an administrator rotates signing keys, or if a background job generates a new
 - Instance A updates its in-memory key.
 - **Instance B and Instance C have no mechanism to detect the change.** They continue signing tokens with the retired key or verifying tokens with obsolete keys.
 
-Furthermore, in [`CampaignRepository.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Persistence/Repositories/CampaignRepository.cs#L42-L57):
+Furthermore, in [`CampaignRepository.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Persistence/Repositories/CampaignRepository.cs#L42-L57):
 ```csharp
 _dbContext.Campaigns.Update(campaign);
 // Redis cache key is removed BEFORE the transaction commits!
@@ -507,7 +507,7 @@ Invalidating the Redis cache *before* `SaveChangesAsync` commits creates a class
 
 #### Remediation Guidance
 1. **Distributed Cache Synchronization (Redis Pub/Sub):** Implement a Redis Pub/Sub invalidation channel (`cache:invalidate:signing_keys`). When an instance updates keys, it publishes a notification; all replicas subscribe and immediately re-warm their local key stores.
-2. **Post-Commit Invalidation Hook:** In [`CampaignTransactionExecutor.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Transactions/CampaignTransactionExecutor.cs), defer cache eviction until *after* `transaction.CommitAsync()` succeeds:
+2. **Post-Commit Invalidation Hook:** In [`CampaignTransactionExecutor.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Transactions/CampaignTransactionExecutor.cs), defer cache eviction until *after* `transaction.CommitAsync()` succeeds:
 ```csharp
 await transaction.CommitAsync(cancellationToken);
 await _cache.RemoveAsync(cacheKey, cancellationToken);
@@ -520,7 +520,7 @@ await _cache.RemoveAsync(cacheKey, cancellationToken);
 ### 5.1 Missing Containerization Dockerfiles for API Services
 
 #### Architectural Flaw & Codebase Analysis
-The repository root provides a [`docker-compose.yml`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/docker-compose.yml) file that provisions only backing data stores:
+The repository root provides a [`docker-compose.yml`](../docker-compose.yml) file that provisions only backing data stores:
 ```yaml
 services:
   crowdfunding-db:
@@ -538,7 +538,7 @@ services:
 - **Security Exposure:** Deploying non-containerized binaries risks running the process with root/superuser privileges, exposing host system resources.
 
 #### Remediation Guidance
-Author an optimized, secure, multi-stage production Dockerfile at the repository root ([`Dockerfile`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/Dockerfile)):
+Author an optimized, secure, multi-stage production Dockerfile at the repository root ([`Dockerfile`](../Dockerfile)):
 
 ```dockerfile
 # Stage 1: Build & Restore
@@ -630,19 +630,19 @@ jobs:
 ### 5.3 Missing Centralized Distributed Tracing Exporter (OpenTelemetry OTLP)
 
 #### Architectural Flaw & Codebase Analysis
-In [`CrowdFunding.API.csproj`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/CrowdFunding.API.csproj#L14-L25), Serilog packages are referenced:
+In [`CrowdFunding.API.csproj`](../src/API/CrowdFunding.API/CrowdFunding.API.csproj#L14-L25), Serilog packages are referenced:
 ```xml
 <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
 <PackageReference Include="Serilog.Enrichers.Environment" Version="3.0.1" />
 <PackageReference Include="Serilog.Formatting.Compact" Version="3.0.0" />
 ```
-In [`CorrelationIdMiddleware.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Observability/CorrelationIdMiddleware.cs), an `X-Correlation-Id` HTTP header is attached to HTTP responses.
+In [`CorrelationIdMiddleware.cs`](../src/API/CrowdFunding.API/Observability/CorrelationIdMiddleware.cs), an `X-Correlation-Id` HTTP header is attached to HTTP responses.
 
 However, **there is NO OpenTelemetry SDK configured anywhere in the solution**.
 - No `OpenTelemetry.Extensions.Hosting` package.
 - No `OpenTelemetry.Instrumentation.AspNetCore` or `OpenTelemetry.Instrumentation.EntityFrameworkCore`.
 - No `OpenTelemetry.Exporter.OpenTelemetryProtocol` (OTLP).
-- No OTLP endpoint configured in [`appsettings.json`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/appsettings.json).
+- No OTLP endpoint configured in [`appsettings.json`](../src/API/CrowdFunding.API/appsettings.json).
 
 #### Impact & Severity: 🟡 P2 Medium
 - **Distributed Blindness:** While logs are formatted in JSON, there are no distributed trace spans exported to APM platforms (Jaeger, Grafana Tempo, Datadog, AWS X-Ray).
@@ -679,7 +679,7 @@ builder.Services.AddOpenTelemetry()
 ### 6.1 Missing Refresh Token Rotation (RTR) & Immediate Session Revocation
 
 #### Architectural Flaw & Codebase Analysis
-In [`JwtAccessTokenProvider.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Services/JwtAccessTokenProvider.cs#L43-L72):
+In [`JwtAccessTokenProvider.cs`](../src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Services/JwtAccessTokenProvider.cs#L43-L72):
 ```csharp
 public AccessToken Create(User user, IReadOnlyCollection<string> permissions)
 {
@@ -720,12 +720,12 @@ sequenceDiagram
 ```
 
 #### Impact & Severity: 🔴 P0 Critical
-- **Unrevocable Stolen Credentials:** If an access token is intercepted, an attacker retains full access for up to 60 minutes. Even if an administrator immediately deactivates the user (`user.Deactivate()`) or the user resets their password, the JWT remains completely valid because token verification in [`Program.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Program.cs#L98-L107) is purely cryptographic and stateless.
+- **Unrevocable Stolen Credentials:** If an access token is intercepted, an attacker retains full access for up to 60 minutes. Even if an administrator immediately deactivates the user (`user.Deactivate()`) or the user resets their password, the JWT remains completely valid because token verification in [`Program.cs`](../src/API/CrowdFunding.API/Program.cs#L98-L107) is purely cryptographic and stateless.
 - **Violation of Security Standards:** Fails OWASP ASVS v4.0 (Section V3 Session Management) and PCI-DSS Requirement 8.
 
 #### Remediation Guidance
 1. **Shorten Access Token Lifetime:** Reduce JWT access token expiration from 60 minutes to **10–15 minutes**.
-2. **Implement Refresh Token Rotation (RTR):** Create a `RefreshToken` entity in [`IdentityDbContext`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Persistence/DbContexts/IdentityDbContext.cs):
+2. **Implement Refresh Token Rotation (RTR):** Create a `RefreshToken` entity in [`IdentityDbContext`](../src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Persistence/DbContexts/IdentityDbContext.cs):
 ```csharp
 public sealed class RefreshToken
 {
@@ -739,14 +739,14 @@ public sealed class RefreshToken
 }
 ```
 3. **Reuse Detection & Session Invalidation:** When a refresh token is exchanged, revoke it and issue a new pair. If an already-revoked refresh token is presented, **flag a compromise event and immediately revoke all active sessions for that user**.
-4. **Security Stamp / Revocation Cache:** Add `SecurityStamp` (Guid) to [`User.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Identity/CrowdFunding.Modules.Identity.Domain/Aggregates/User.cs). Embed `security_stamp` as a claim in the JWT. On password change or account deactivation, update the user's `SecurityStamp` and publish the revoked stamp to Redis with a 15-minute TTL.
+4. **Security Stamp / Revocation Cache:** Add `SecurityStamp` (Guid) to [`User.cs`](../src/Modules/Identity/CrowdFunding.Modules.Identity.Domain/Aggregates/User.cs). Embed `security_stamp` as a claim in the JWT. On password change or account deactivation, update the user's `SecurityStamp` and publish the revoked stamp to Redis with a 15-minute TTL.
 
 ---
 
 ### 6.2 Complete Lack of Audit Logging & Change History on Administrative Actions
 
 #### Architectural Flaw & Codebase Analysis
-In [`CampaignReview.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Moderation/CrowdFunding.Modules.Moderation.Domain/Aggregates/CampaignReview.cs#L42-L65):
+In [`CampaignReview.cs`](../src/Modules/Moderation/CrowdFunding.Modules.Moderation.Domain/Aggregates/CampaignReview.cs#L42-L65):
 ```csharp
 public void Approve(Guid moderatorId, string? notes, DateTime reviewedAtUtc)
 {
@@ -757,15 +757,15 @@ public void Approve(Guid moderatorId, string? notes, DateTime reviewedAtUtc)
     AddDomainEvent(new CampaignReviewApprovedDomainEvent(CampaignId, ModeratorId!.Value, Notes));
 }
 ```
-In [`CancelCampaignCommandHandler.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Application/Features/Campaigns/Commands/CancelCampaign/CancelCampaignCommandHandler.cs#L46):
+In [`CancelCampaignCommandHandler.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Application/Features/Campaigns/Commands/CancelCampaign/CancelCampaignCommandHandler.cs#L46):
 ```csharp
 campaign.Cancel();
 await _campaignRepository.UpdateAsync(campaign, ct);
 ```
 
 **Across all modules:**
-- When an administrator cancels a campaign, [`Campaign.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs#L97-L111) does not record `CancelledByUserId`, `CancelledAtUtc`, cancellation reason, or actor IP.
-- When a user is deactivated or assigned permissions in [`User.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Identity/CrowdFunding.Modules.Identity.Domain/Aggregates/User.cs#L64-L91), no historical log record is created.
+- When an administrator cancels a campaign, [`Campaign.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs#L97-L111) does not record `CancelledByUserId`, `CancelledAtUtc`, cancellation reason, or actor IP.
+- When a user is deactivated or assigned permissions in [`User.cs`](../src/Modules/Identity/CrowdFunding.Modules.Identity.Domain/Aggregates/User.cs#L64-L91), no historical log record is created.
 - There is **no `AuditLog` table or entity** in any module or database context.
 
 #### Impact & Severity: 🔴 P0 Critical
@@ -823,7 +823,7 @@ gantt
 ```
 
 ### Phase 1: Financial Correctness & Security Governance
-- [x] **Fixed ([`TICKET-027`](../qa-tickets/TICKET-027-DISTRIBUTED-CROWDFUNDING-LIFECYCLE-REFUND-SAGA.md)):** Implement `CampaignExpirationBackgroundService` and add `CompleteAsSuccessful` / `ExpireAsFailed` to [`Campaign.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs).
+- [x] **Fixed ([`TICKET-027`](../qa-tickets/TICKET-027-DISTRIBUTED-CROWDFUNDING-LIFECYCLE-REFUND-SAGA.md)):** Implement `CampaignExpirationBackgroundService` and add `CompleteAsSuccessful` / `ExpireAsFailed` to [`Campaign.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs).
 - [x] **Fixed ([`TICKET-027`](../qa-tickets/TICKET-027-DISTRIBUTED-CROWDFUNDING-LIFECYCLE-REFUND-SAGA.md)):** Implement `ContributionRefundSaga` and refund event choreography for cancelled/failed campaigns.
 - [ ] **Tracked ([`TICKET-036`](../qa-tickets/TICKET-036-DECENTRALIZED-SESSION-REVOCATION-REFRESH-TOKEN-ROTATION.md)):** Implement Refresh Token Rotation (RTR), session revocation store, and shorten access token TTL to 15 minutes.
 - [ ] **Tracked ([`TICKET-039`](../qa-tickets/TICKET-039-PIPELINE-BEHAVIORS-IMMUTABLE-AUDIT-LOGGING.md)):** Create append-only `audit_records` table and `AuditLoggingPipelineBehavior` for administrative operations.

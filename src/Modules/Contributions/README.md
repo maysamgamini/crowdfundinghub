@@ -1,19 +1,60 @@
 # Contributions Module
 
 ## Purpose
-The Contributions module manages the financial lifecycle of backer pledges, payment verification, transaction settlement, and revenue usage metering.
+The Contributions module manages backer pledges, payment confirmation, refunds when a campaign fails, and usage metering. The payment gateway is a mock; no real provider is called.
 
-## Capabilities & Workflows
-- **Pledge Creation**: Backers create pledges for active campaigns (`MakeContributionCommand`). Invariants verify campaign funding headroom and active status.
-- **Payment Processing**:
-  - `ConfirmPaymentCommand`: Marks the contribution as `Confirmed`, records payment reference, and raises `ContributionPaymentConfirmedApplicationEvent`.
-  - `FailPaymentCommand`: Transitions the contribution to `Failed` upon payment provider rejection.
-  - `CancelContributionCommand`: Cancels a pending pledge prior to settlement.
-- **Optimistic Concurrency & Advisory Locks**: Prevents double-spend and race conditions using aggregate concurrency tokens (`xmin`) and PostgreSQL transaction-level advisory locks.
-- **Monetization & Metering**: Confirmed pledges trigger `PledgeConfirmedMeteringEventHandler` which calculates platform fees and emits normalized CloudEvents to OpenMeter.
+## Pledge lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> Pending: MakeContribution
+    Pending --> Succeeded: ConfirmContributionPayment (webhook or manual)
+    Pending --> Failed: FailContributionPayment
+    Succeeded --> Refunded: campaign failed or cancelled
+    Failed --> [*]
+    Refunded --> [*]
+```
+
+## A pledge, end to end
+
+```mermaid
+sequenceDiagram
+    participant B as Backer
+    participant H as MakeContributionHandler
+    participant C as Contribution
+    participant G as Payment webhook
+    participant O as Contributions outbox
+    participant Ca as Campaigns
+    B->>H: POST /api/contributions
+    H->>H: check deadline and currency against the replicated campaign cache
+    H->>C: Create (Pending) + mock payment intent
+    G->>C: ConfirmPayment (Succeeded), signature and event-id checked
+    C->>O: ContributionPaymentConfirmed, same transaction
+    O->>Ca: outbox worker publishes
+    Ca->>Ca: credit ledger and raised total
+```
+
+## Capabilities
+- **Commands:** `MakeContribution`, `ConfirmContributionPayment`, `FailContributionPayment`, `ReconcilePaymentWebhook`.
+- **Queries:** `GetContributionById`, `ListContributionsByCampaign`.
+- **Event handlers:** `PledgeConfirmedMeteringEventHandler` (platform fee and CloudEvent to OpenMeter), `CampaignTerminationRefundHandler` (marks `Succeeded` pledges `Refunded` in batches of 100; state only, no gateway call), and replicated campaign read-model handlers.
+- **Webhook guard:** signature check, stale-timestamp rejection and dedupe by event id in `processed_payment_webhooks`.
+- **Concurrency:** `xmin` token on `Contribution` plus advisory locks.
+
+**Not built:** an idempotency key on pledge creation, a closing fence at the deadline, and charge-once settlement. See `educational/03-engineering-spec-and-roadmap/design-to-code-mapping-round1.md`.
+
+## Data and messaging
+
+| | |
+|---|---|
+| Database (local stack) | `contributions_db` |
+| PostgreSQL schema | `contributions`, with its own `__EFMigrationsHistory` |
+| Poly-pattern tier | 3 (money, xmin, unique-key webhook guard, events) (see `docs/POLY_PATTERN_TIER_ASSIGNMENT.md`) |
+| Outbox | `contributions` outbox, drained by `ContributionsOutboxBackgroundService` |
+| Inbox | `contributions_inbox_messages` |
 
 ## Projects & Layers
-- `CrowdFunding.Modules.Contributions.Domain`: Contains `Contribution` aggregate root, `ContributionStatus` enum, and domain events.
-- `CrowdFunding.Modules.Contributions.Application`: Orchestrates contribution commands, query handlers, and event handlers.
-- `CrowdFunding.Modules.Contributions.Infrastructure`: EF Core `ContributionsDbContext`, persistence configurations, repositories, and outbox tables.
-- `CrowdFunding.Modules.Contributions.Contracts`: Cross-module contracts and events (`ContributionPaymentConfirmedApplicationEvent`).
+- `Domain`: `Contribution` aggregate root, `ContributionStatus`, domain events.
+- `Application`: command, query and event handlers.
+- `Infrastructure`: `ContributionsDbContext`, repositories, transaction executor, webhook idempotency store, outbox worker.
+- `Contracts`: `ContributionPaymentConfirmedApplicationEvent` and related contracts.

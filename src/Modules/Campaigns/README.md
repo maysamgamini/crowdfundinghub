@@ -1,17 +1,55 @@
 # Campaigns Module
 
 ## Purpose
-The Campaigns module manages the core crowdfunding campaign lifecycle: draft creation, story and goal definition, publication, cancellation, and funding total tracking.
+The Campaigns module manages the campaign lifecycle: draft creation, publication, cancellation, reward tiers, funding totals, and the decision at the deadline.
 
-## Capabilities & Workflows
-- **Draft & Create**: Creators submit campaign proposals with title, description, funding target (`Money`), deadline, and category. Emits `CampaignCreatedApplicationEvent` which enqueues a moderation review.
-- **Review & Publish**: Once approved by moderation, the campaign owner can transition the campaign to `Active` status (`PublishCampaignCommand`), emitting `CampaignPublishedApplicationEvent`.
-- **Cancel Campaign**: Campaigns may be cancelled by creators or administrators before expiration, emitting `CampaignCancelledApplicationEvent`.
-- **Contribution Ledger**: When contributions are confirmed, `ApplyConfirmedContribution` updates the raised amount idempotently and notifies connected clients in real-time via SignalR.
-- **Distributed Caching**: Details for hot campaigns are cached using `CachedCampaignReadService` with active invalidation upon every balance modification.
+## Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> Draft: CreateCampaign
+    Draft --> Published: PublishCampaign
+    Draft --> Cancelled: CancelCampaign
+    Published --> Cancelled: CancelCampaign
+    Published --> Successful: CompleteCampaign (goal reached at deadline)
+    Published --> Failed: FailCampaign (goal missed at deadline)
+    Successful --> [*]
+    Failed --> [*]
+    Cancelled --> [*]
+```
+
+`CampaignExpirationBackgroundService` polls for expired campaigns and sends `CompleteCampaignCommand` or `FailCampaignCommand`; both re-validate under the campaign's advisory lock.
+
+## Who talks to whom
+
+```mermaid
+flowchart LR
+    Ca["Campaigns"] -- "CampaignCreated" --> Mo["Moderation"]
+    Ca -- "Published, Cancelled" --> No["Notifications"]
+    Ca -- "Published, Cancelled" --> Up["CampaignUpdates"]
+    Ca -- "CampaignFailed" --> Co["Contributions (refund)"]
+    Co -- "ContributionPaymentConfirmed" --> Ca
+```
+
+## Capabilities
+- **Commands:** `CreateCampaign`, `PublishCampaign`, `CancelCampaign`, `CompleteCampaign`, `FailCampaign`, `CreateRewardTier`, `ReserveRewardTierSlot`, `ReleaseExpiredRewardTierReservation`.
+- **Queries:** `GetCampaignById`, `ListCampaigns`, `GetRewardTierById`, `ListRewardTiersByCampaign`.
+- **Event handler:** `ContributionPaymentConfirmedApplicationEventHandler` credits the pledge to the campaign through a ledger with a unique key on `ContributionId` (`INSERT ... ON CONFLICT DO NOTHING`), then adds to `RaisedAmount` under a per-campaign `pg_advisory_xact_lock`, with an `xmin` token as a second guard.
+- **Reward tiers:** a per-tier advisory lock serialises the read-check-increment, and a reservation lasts 15 minutes unless payment confirms; `RewardTierReservationScavengerBackgroundService` releases expired ones.
+- **Caching:** `CachedCampaignReadService` with invalidation after commit.
+
+## Data and messaging
+
+| | |
+|---|---|
+| Database (local stack) | `campaigns_db` |
+| PostgreSQL schema | `campaigns`, with its own `__EFMigrationsHistory` |
+| Poly-pattern tier | 3 (advisory lock, xmin, ledger, events) (see `docs/POLY_PATTERN_TIER_ASSIGNMENT.md`) |
+| Outbox | `campaigns` outbox, drained by `CampaignsOutboxBackgroundService` |
+| Inbox | `campaigns_inbox_messages` |
 
 ## Projects & Layers
-- `CrowdFunding.Modules.Campaigns.Domain`: Contains the `Campaign` aggregate root, `CampaignStatus` enum, and domain events (`CampaignCreatedDomainEvent`, `CampaignPublishedDomainEvent`, `CampaignCancelledDomainEvent`).
-- `CrowdFunding.Modules.Campaigns.Application`: Implements CQRS command handlers (`CreateCampaign`, `PublishCampaign`, `CancelCampaign`, `AddContributionToCampaign`), query handlers (`GetCampaignById`, `ListCampaigns`, `GetCampaignContributionAvailability`), and event handlers (`ContributionPaymentConfirmedApplicationEventHandler`).
-- `CrowdFunding.Modules.Campaigns.Infrastructure`: EF Core `CampaignsDbContext`, configurations, repositories, caching decorators, and transactional outbox.
-- `CrowdFunding.Modules.Campaigns.Contracts`: Integration commands, queries, and application events shared with external modules.
+- `Domain`: `Campaign` aggregate root, `RewardTier`, `RewardTierReservation`, `ContributionLedgerEntry`, `CampaignStatus`, domain events.
+- `Application`: command, query and event handlers.
+- `Infrastructure`: `CampaignsDbContext`, repositories, transaction executor, caching decorators, outbox worker, background services.
+- `Contracts`: commands, queries and application events shared with other modules.

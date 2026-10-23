@@ -42,7 +42,7 @@ src/Samples/RosettaStone/
 ```
 
 > [!NOTE]
-> Fully implemented in [`src/Samples/RosettaStone/`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Samples/RosettaStone/README.md) with isolated `rosetta` schema, parity integration tests, and Swagger tag `RosettaStone`.
+> Fully implemented in [`src/Samples/RosettaStone/`](../../src/Samples/RosettaStone/README.md) with isolated `rosetta` schema, parity integration tests, and Swagger tag `RosettaStone`.
 
 ---
 
@@ -77,7 +77,7 @@ The transactional outbox poller is hardcoded to in-memory dispatching (`ServiceP
 ## 4. Epic 3: Asynchronous Replicated Read Models (Status: ✅ Completed via [`TICKET-023`](../../qa-tickets/TICKET-023-ASYNCHRONOUS-REPLICATED-READ-MODELS.md))
 
 ### Problem Statement:
-[`MakeContributionCommandHandler.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs) calls `ICampaignContributionAvailabilityReader` synchronously, creating a distributed monolith failure cascade.
+[`MakeContributionCommandHandler.cs`](../../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs) calls `ICampaignContributionAvailabilityReader` synchronously, creating a distributed monolith failure cascade.
 
 ### Technical Specification:
 1. In `contributions` schema, create a new table:

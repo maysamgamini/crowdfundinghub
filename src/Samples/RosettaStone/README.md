@@ -71,5 +71,4 @@ problem. A "no" to both is what Tier 1 or Tier 2 are for, and reaching for Tier 
 architectural dogmatism this sample exists to make expensive and visible.
 
 See also: [`educational/01-architecture-paradigms/poly-pattern-architecture.md`](../../../educational/01-architecture-paradigms/poly-pattern-architecture.md)
-for the narrative version of this argument, and TICKET-028 in `qa-tickets/` for the original
-finding.
+for the narrative version of this argument, and TICKET-028 (the original finding; the ticket text is not kept in this repository).

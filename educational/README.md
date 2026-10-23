@@ -25,8 +25,10 @@ graph TD
             CampM["Campaigns Module"]
             ContM["Contributions Module"]
             ModM["Moderation Module"]
+            NotM["Notifications Module"]
+            UpdM["CampaignUpdates Module"]
         end
-        PGShared[("PostgreSQL Instance<br/>(Strict Schema-per-Module Isolation)")]
+        PGShared[("One database per module in the local stack<br/>each with its own schema")]
     end
 
     subgraph Phase2["Phase 2: Frictionless Microservice Extraction"]
@@ -56,7 +58,7 @@ This directory is organized into four thematic areas serving both as **teaching 
 - **[`poly-pattern-architecture.md`](./01-architecture-paradigms/poly-pattern-architecture.md)**:  
   *Architectural Pragmatism vs. Dogmatism.* Why homogeneous architecture is an anti-pattern. Demonstrates how to balance 4 distinct architectural patterns in the same application (Simple CRUD Minimal APIs, Fast-Path CQRS Read Slices, Rich DDD Financial Aggregates, and Debezium CDC Event Choreography).
 - **[`monolith-to-microservices-blueprint.md`](./01-architecture-paradigms/monolith-to-microservices-blueprint.md)**:  
-  The 6 non-negotiable architectural prerequisites for zero-rewrite microservice extraction: Contract Assemblies, Schema Isolation, Zero Cross-Schema Foreign Keys, Transactional Outbox, Asymmetric JWKS Edge Verification, and NetArchTest Guardrails.
+  The 6 non-negotiable architectural prerequisites for zero-rewrite microservice extraction: Contract Assemblies, Schema Isolation, Zero Cross-Schema Foreign Keys, Transactional Outbox, Asymmetric JWKS Edge Verification, and assembly-reference architecture tests (the NetArchTest library is not used).
 - **[`justifying-the-outbox-and-complex-crud.md`](./01-architecture-paradigms/justifying-the-outbox-and-complex-crud.md)**:  
   *Justifying the Outbox Pattern & Complex CRUD.* Why in-memory same-database writes don't need outboxes, but external I/O integrations (SendGrid email receipts, AWS Lambda / Cloud Function AI moderation, Stripe payment intents, and reward perk allocation) mathematically require the Outbox and rich aggregate invariants.
 
@@ -82,19 +84,26 @@ This directory is organized into four thematic areas serving both as **teaching 
 
 ## 3. The 3 Core Tenets of the Curriculum
 
+```mermaid
+flowchart TB
+    T1["1. Pragmatism over dogmatism<br/>Right-size each slice to its transactional risk, concurrency and blast radius"]
+    T2["2. Physical boundaries before physical processes<br/>Isolate modules with schemas, contract assemblies and assembly-reference tests before paying the network tax"]
+    T3["3. Asynchronous event-carried state over synchronous RPC<br/>Replicate read models through events so each module stays autonomously available"]
+    T1 --> T2 --> T3
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ 1. PRAGMATISM OVER DOGMATISM (POLY-PATTERN ARCHITECTURE)                   │
-│    Do not treat every endpoint as a complex DDD aggregate. Right-size each  │
-│    slice according to its transactional risk, concurrency, and blast radius.│
-├─────────────────────────────────────────────────────────────────────────────┤
-│ 2. PHYSICAL BOUNDARIES BEFORE PHYSICAL PROCESSES                            │
-│    Enforce module boundaries in-process using isolated database schemas,    │
-│    contract assemblies, and NetArchTest before paying the network tax of   │
-│    distributed microservices.                                               │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ 3. ASYNCHRONOUS EVENT-CARRIED STATE OVER SYNCHRONOUS RPC                    │
-│    Avoid cross-service synchronous queries. Replicate read models via        │
-│    events to ensure each service remains 100% autonomously available.       │
-└─────────────────────────────────────────────────────────────────────────────┘
+
+Evidence for each tenet in the code: [`docs/POLY_PATTERN_TIER_ASSIGNMENT.md`](../docs/POLY_PATTERN_TIER_ASSIGNMENT.md) (tenet 1), [`docs/TESTS_THAT_TEACH.md`](../docs/TESTS_THAT_TEACH.md) and `ModuleSchemaRulesTests` (tenet 2), and the replicated read-model tests (tenet 3).
+
+---
+
+## 4. Where the running code differs from these documents
+
+```mermaid
+flowchart LR
+    Docs["These documents"] --> Check{"Checked against code"}
+    Check --> Map["design-to-code-mapping-round1.md<br/>what is built, simpler, or not built"]
+    Check --> Tests["docs/TESTS_THAT_TEACH.md<br/>which tests prove which rule"]
+    Check --> Tiers["docs/POLY_PATTERN_TIER_ASSIGNMENT.md<br/>3 tiers in code; this folder describes 4"]
 ```
+
+The tier count differs on purpose of history, not design: the code uses three tiers, and the four-pattern description in `poly-pattern-architecture.md` adds a read-only fast path and event choreography. Treat the code's three tiers and two deciding questions as the current rule until the two are reconciled.

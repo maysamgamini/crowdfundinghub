@@ -14,10 +14,47 @@ The platform is organized as a **modular monolith** divided into six distinct bo
    - `Infrastructure`: EF Core contexts, entity configurations, repositories, caching, and external service adapters.
    - `Contracts`: Integration DTOs, cross-module commands/queries, and application events consumed by peer modules.
 
-## Modules Summary
-- `Campaigns`: Manages campaign creation, draft editing, publication, cancellation, funding progress tracking, and distributed query caching.
-- `Contributions`: Handles backer pledges, payment state lifecycle (pending, confirmed, failed, cancelled), and usage metering integration.
-- `Identity`: Manages user registration, credential authentication, asymmetric ES256 JWT generation, public JWKS key rotation, and RBAC permission checks.
-- `Moderation`: Implements review workflows for newly created campaigns, enabling moderators to approve or reject submissions prior to publication.
-- `Notifications`: Listens to application events across the system and dispatches notifications to users and backers.
-- `CampaignUpdates`: Subscribes to campaign activity events to generate real-time activity feeds and audit timelines.
+## Modules at a glance
+
+| Module | Owns | Database / schema | Tier | Outbox | Inbox |
+|---|---|---|---|---|---|
+| Identity | users, roles, refresh tokens, signing keys | `identity_db` / `identity` | 3 | no | no |
+| Campaigns | campaigns, reward tiers, contribution ledger | `campaigns_db` / `campaigns` | 3 | yes | yes |
+| Contributions | pledges, payment webhooks, metering | `contributions_db` / `contributions` | 3 | yes | yes |
+| Moderation | campaign reviews, media analysis | `moderation_db` / `moderation` | 3 | yes | yes |
+| Notifications | preferences, receipts, alerts | `notifications_db` / `notifications` | 2 for preferences | no | yes |
+| CampaignUpdates | webhook subscriptions and delivery | `campaignupdates_db` / `campaignupdates` | 3 | no | yes |
+
+Each module has its own README with a lifecycle diagram, its message flows and its tier.
+
+## Who reacts to whom
+
+```mermaid
+flowchart LR
+    Ca["Campaigns"] -- "CampaignCreated" --> Mo["Moderation"]
+    Mo -- "ReviewApproved / Rejected" --> No["Notifications"]
+    Ca -- "Published / Cancelled" --> No
+    Ca -- "Published / Cancelled" --> Up["CampaignUpdates"]
+    Co["Contributions"] -- "PaymentConfirmed" --> Ca
+    Co -- "PaymentConfirmed / Refunded" --> No
+    Co -- "PaymentConfirmed" --> Up
+    Ca -- "CampaignFailed" --> Co
+    Id["Identity"] -. "public keys via JWKS" .-> Ca
+    Id -. "public keys via JWKS" .-> Co
+```
+
+Solid arrows are events through the outbox and inbox; dotted arrows are token verification with no call back to Identity.
+
+## Layering rule inside every module
+
+```mermaid
+flowchart BT
+    Infrastructure["Infrastructure"] --> Application["Application"]
+    Application --> Domain["Domain"]
+    Infrastructure --> Domain
+    Infrastructure --> Contracts["Contracts"]
+    Application --> Contracts
+    Other["Any other module"] -. "only this" .-> Contracts
+```
+
+`Domain` depends on nothing. `Application` depends on `Domain`. `Infrastructure` depends on both. Another module may reference only this module's `Contracts`. The architecture tests fail the build if that is broken.

@@ -89,7 +89,7 @@ sequenceDiagram
   P->>S: stream WAL
   S-->>P: flushed and applied (synchronous_commit = remote_apply)
   P-->>App: COMMIT acknowledged
-  Note over P,S: if the standby is unreachable, the commit waits; it is not acknowledged
+  Note over P,S: if the standby is unreachable, the commit waits and is not acknowledged
 ```
 
 PostgreSQL setting: `synchronous_standby_names` naming the standby and `synchronous_commit =

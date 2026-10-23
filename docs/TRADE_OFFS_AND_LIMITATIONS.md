@@ -29,7 +29,7 @@ This document serves as the authoritative architectural record for **CrowdFundin
 
 ## 1. Executive Summary & Architectural Topology
 
-CrowdFunding Hub is engineered as an **in-process Modular Monolith** in [.NET 10](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/README.md) backed by **PostgreSQL 16** and **Redis 7**. The architecture prioritizes **operational simplicity, financial correctness, strict domain boundaries, and strong consistency** over premature distributed systems infrastructure.
+CrowdFunding Hub is engineered as an **in-process Modular Monolith** in [.NET 10](../README.md) backed by **PostgreSQL 16** and **Redis 7**. The architecture prioritizes **operational simplicity, financial correctness, strict domain boundaries, and strong consistency** over premature distributed systems infrastructure.
 
 ```mermaid
 graph TB
@@ -163,10 +163,10 @@ graph LR
 ### 2.2 Single Database with Schema Isolation vs. Database-Per-Service
 
 CrowdFunding Hub hosts all module tables inside a single PostgreSQL database (`crowdfundingdb`), isolating modules through separate database schemas and dedicated EF Core contexts:
-- [`CampaignsDbContext`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Persistence/DbContexts/CampaignsDbContext.cs)
-- [`ContributionsDbContext`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Infrastructure/Persistence/DbContexts/ContributionsDbContext.cs)
-- [`IdentityDbContext`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Persistence/DbContexts/IdentityDbContext.cs)
-- [`ModerationDbContext`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Moderation/CrowdFunding.Modules.Moderation.Infrastructure/Persistence/DbContexts/ModerationDbContext.cs)
+- [`CampaignsDbContext`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Persistence/DbContexts/CampaignsDbContext.cs)
+- [`ContributionsDbContext`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Infrastructure/Persistence/DbContexts/ContributionsDbContext.cs)
+- [`IdentityDbContext`](../src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Persistence/DbContexts/IdentityDbContext.cs)
+- [`ModerationDbContext`](../src/Modules/Moderation/CrowdFunding.Modules.Moderation.Infrastructure/Persistence/DbContexts/ModerationDbContext.cs)
 
 Each module registers an isolated EF migration history table via `npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "<schema>")`.
 
@@ -217,9 +217,9 @@ graph TB
 
 ### 2.3 Polling Outbox (`FOR UPDATE SKIP LOCKED`) vs. Change Data Capture (CDC via Debezium / Kafka)
 
-To guarantee reliable at-least-once messaging without dual-write race conditions, write handlers persist domain events as [`OutboxMessage`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxMessage.cs) rows within the business transaction.
+To guarantee reliable at-least-once messaging without dual-write race conditions, write handlers persist domain events as [`OutboxMessage`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxMessage.cs) rows within the business transaction.
 
-The codebase implements **Option A: PostgreSQL-native Polling Outbox using `FOR UPDATE SKIP LOCKED`** via [`OutboxClaimQuery`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxClaimQuery.cs) executed by [`OutboxProcessorBackgroundService`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs).
+The codebase implements **Option A: PostgreSQL-native Polling Outbox using `FOR UPDATE SKIP LOCKED`** via [`OutboxClaimQuery`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxClaimQuery.cs) executed by [`OutboxProcessorBackgroundService`](../src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs).
 
 ```mermaid
 sequenceDiagram
@@ -296,7 +296,7 @@ Without aggressive `autovacuum` tuning (specifically lowering `autovacuum_vacuum
 
 ### 2.4 PostgreSQL Transactional Advisory Locks vs. Distributed Redis Redlock
 
-CrowdFunding Hub uses PostgreSQL transaction-scoped advisory locks via [`pg_advisory_xact_lock`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Transactions/CampaignTransactionExecutor.cs#L55) to serialize concurrent modifications to the same campaign aggregate (e.g. `AddContributionToCampaignCommandHandler` and `CancelCampaignCommandHandler`). Keys are computed deterministically via 64-bit entropy XOR in [`AdvisoryLockKey.FromGuid`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Domain/Common/AdvisoryLockKey.cs#L14).
+CrowdFunding Hub uses PostgreSQL transaction-scoped advisory locks via [`pg_advisory_xact_lock`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Transactions/CampaignTransactionExecutor.cs#L55) to serialize concurrent modifications to the same campaign aggregate (e.g. `AddContributionToCampaignCommandHandler` and `CancelCampaignCommandHandler`). Keys are computed deterministically via 64-bit entropy XOR in [`AdvisoryLockKey.FromGuid`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Domain/Common/AdvisoryLockKey.cs#L14).
 
 ```mermaid
 sequenceDiagram
@@ -360,8 +360,8 @@ When a backer attempts to pledge funds via `POST /api/campaigns/{campaignId}/con
 
 The architecture solves this via **Synchronous In-Process Read Delegation**:
 1. `CrowdFunding.Modules.Contributions.Application` references `CrowdFunding.Modules.Campaigns.Contracts`.
-2. [`MakeContributionCommandHandler`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs) injects [`ICampaignContributionAvailabilityReader`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Contracts/Queries/GetCampaignContributionAvailability/ICampaignContributionAvailabilityReader.cs).
-3. The implementation ([`CampaignContributionAvailabilityReader`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Services/CampaignContributionAvailabilityReader.cs)) executes the query directly against `CampaignsDbContext` in the same memory space.
+2. [`MakeContributionCommandHandler`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs) injects [`ICampaignContributionAvailabilityReader`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Contracts/Queries/GetCampaignContributionAvailability/ICampaignContributionAvailabilityReader.cs).
+3. The implementation ([`CampaignContributionAvailabilityReader`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Services/CampaignContributionAvailabilityReader.cs)) executes the query directly against `CampaignsDbContext` in the same memory space.
 
 ```mermaid
 sequenceDiagram
@@ -419,9 +419,9 @@ Consider what would occur if CrowdFunding Hub used an eventual consistency model
 > "Current State" description and Deployment Blocker callout below describe the *prior* state and
 > are kept for the architectural rationale; they no longer describe the shipped configuration.
 
-The API layer hosts [`CampaignHub`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/RealTime/CampaignHub.cs) to stream real-time funding progress (`PledgeReceived`) to connected browser clients via WebSocket connections.
+The API layer hosts [`CampaignHub`](../src/API/CrowdFunding.API/RealTime/CampaignHub.cs) to stream real-time funding progress (`PledgeReceived`) to connected browser clients via WebSocket connections.
 
-Previously, in [`Program.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Program.cs#L64), SignalR was configured using only the standard in-memory message bus:
+Previously, in [`Program.cs`](../src/API/CrowdFunding.API/Program.cs#L64), SignalR was configured using only the standard in-memory message bus:
 ```csharp
 builder.Services.AddSignalR();
 builder.Services.AddScoped<ICampaignRealtimeNotifier, SignalRCampaignRealtimeNotifier>();
@@ -480,7 +480,7 @@ graph TB
 #### Architectural Evaluation
 
 > [!NOTE]
-> **Resolved:** the codebase already provisioned Redis for response caching ([`CachedCampaignReadService`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Caching/CachedCampaignReadService.cs)); `AddStackExchangeRedis()` is now wired into SignalR against that same connection string (TICKET-048), so deploying across multiple instances behind a load balancer no longer silently drops real-time broadcasts.
+> **Resolved:** the codebase already provisioned Redis for response caching ([`CachedCampaignReadService`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Caching/CachedCampaignReadService.cs)); `AddStackExchangeRedis()` is now wired into SignalR against that same connection string (TICKET-048), so deploying across multiple instances behind a load balancer no longer silently drops real-time broadcasts.
 
 ---
 
@@ -515,7 +515,7 @@ graph TD
 - **Degradation Behavior**: Any concurrency exceeding 65 requests/second targeting the *same* campaign aggregate will queue inside the database driver. Once the queue exceeds the connection pool limit (`MaxPoolSize=100`), incoming HTTP requests fail immediately with Npgsql connection timeout exceptions.
 
 #### 2. Outbox Dispatch Latency Floor & Queue Starvation
-- **Root Cause**: In [`OutboxProcessorBackgroundService.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs#L18), constants are configured as:
+- **Root Cause**: In [`OutboxProcessorBackgroundService.cs`](../src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs#L18), constants are configured as:
   ```csharp
   private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
   private const int BatchSize = 20;
@@ -573,12 +573,12 @@ graph TD
 
 #### Scenario A: Worker Crash Mid-Batch
 - **Event**: An API container crashes or is terminated by the host while executing `eventPublisher.PublishAsync()` for message 5 of a 20-message claimed batch.
-- **System Defense**: In [`OutboxClaimQuery.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxClaimQuery.cs#L41), the claim sets `"LockedUntilUtc" = now() + (30000 || ' milliseconds')::interval`.
+- **System Defense**: In [`OutboxClaimQuery.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxClaimQuery.cs#L41), the claim sets `"LockedUntilUtc" = now() + (30000 || ' milliseconds')::interval`.
 - **Result**: The remaining unprocessed rows remain in `Processing` status for up to 30 seconds. Once `LockedUntilUtc <= now()`, subsequent worker iterations or healthy replicas automatically reclaim and reprocess the messages. **Zero message loss.**
 
 #### Scenario B: Poison / Corrupt Event Payload
 - **Event**: A serialized JSON payload in the outbox cannot be deserialized, or its CLR type cannot be resolved by `EventTypeRegistry`.
-- **System Defense**: In [`OutboxProcessorBackgroundService.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs#L78), if `message.TryResolve(...)` returns `false`, the processor marks the row as `DeadLetter`, writes an audited record to `DeadLetterEvent`, logs an alert, and executes `continue`.
+- **System Defense**: In [`OutboxProcessorBackgroundService.cs`](../src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs#L78), if `message.TryResolve(...)` returns `false`, the processor marks the row as `DeadLetter`, writes an audited record to `DeadLetterEvent`, logs an alert, and executes `continue`.
 - **Result**: **No Head-of-Line Blocking.** The single corrupt message is permanently isolated without blocking the remaining 19 messages in the batch.
 
 #### Scenario C: Database Network Drop During Advisory-Locked Mutation
@@ -644,7 +644,7 @@ Engineering should initiate the transition between architectural phases when the
 *Focus: Maximize single-process throughput, enable horizontal web scaling, and eliminate outbox dispatch latency without adding distributed infrastructure.*
 
 #### 1. Implement Dynamic Outbox Polling & Queue Draining
-- **Change**: Modify [`OutboxProcessorBackgroundService.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs) to eliminate the fixed 5-second sleep when a full batch is retrieved.
+- **Change**: Modify [`OutboxProcessorBackgroundService.cs`](../src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs) to eliminate the fixed 5-second sleep when a full batch is retrieved.
 - **Implementation**:
   ```csharp
   // If the batch claimed equals BatchSize, poll immediately for the next batch!
@@ -768,7 +768,7 @@ graph TB
 - Configure dedicated connection pools and independent backup/recovery schedules per service.
 
 #### 2. Asynchronous Replicated Read Models
-- Replace [`ICampaignContributionAvailabilityReader`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/Contracts/Queries/GetCampaignContributionAvailability/ICampaignContributionAvailabilityReader.cs) with an internal `CampaignReplica` table inside the `Contributions` database.
+- Replace [`ICampaignContributionAvailabilityReader`](../src/Modules/Campaigns/Contracts/Queries/GetCampaignContributionAvailability/ICampaignContributionAvailabilityReader.cs) with an internal `CampaignReplica` table inside the `Contributions` database.
 - Keep the replica updated via `CampaignCreated`, `CampaignPublished`, and `CampaignCancelled` Kafka stream consumers.
 - Implement an automated refund compensation saga if a contribution slips in during the eventual consistency window of a campaign cancellation.
 

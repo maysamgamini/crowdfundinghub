@@ -28,7 +28,7 @@ graph TD
 
 ### Roadblock 1: Synchronous Inter-Module Query Coupling (The Cascading Failure Trap)
 
-In [`MakeContributionCommandHandler.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs#L42-L44):
+In [`MakeContributionCommandHandler.cs`](../../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs#L42-L44):
 ```csharp
 var campaignAvailability = await _campaignContributionAvailabilityReader
     .GetCampaignContributionAvailabilityAsync(
@@ -58,7 +58,7 @@ Replace synchronous RPC with **Asynchronous Replicated Read Models (Event-Carrie
 
 ### Roadblock 2: Outbox Poller Coupled to In-Process Memory Dispatching
 
-In [`OutboxProcessorBackgroundService.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs#L70):
+In [`OutboxProcessorBackgroundService.cs`](../../src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs#L70):
 ```csharp
 await _eventPublisher.PublishAsync(appEvent, stoppingToken);
 ```
@@ -80,7 +80,7 @@ Introduce a pluggable **Message Bus Abstraction** (`IMessageBus`) or leverage Ma
 
 ### Roadblock 3: Shared PostgreSQL Host & Connection Pool Contention
 
-All DbContexts (`CampaignsDbContext`, `ContributionsDbContext`, `IdentityDbContext`, `ModerationDbContext`) are registered in [`Program.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Program.cs) using the exact same connection string.
+All DbContexts (`CampaignsDbContext`, `ContributionsDbContext`, `IdentityDbContext`, `ModerationDbContext`) are registered in [`Program.cs`](../../src/API/CrowdFunding.API/Program.cs) using the exact same connection string.
 
 #### The Architectural Trap:
 Although schemas are isolated (`campaigns`, `contributions`, etc.), all modules share a single physical connection pool (default: 100 connections). A surge of pledges in `Contributions` will exhaust all available connections, starving authentication (`Identity`) and moderation queries.

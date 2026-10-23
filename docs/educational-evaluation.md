@@ -57,8 +57,8 @@ quadrantChart
 ```
 
 ### Key Strengths as an Educational Resource
-1. **Architectural Guardrails via Unit Testing:** Using [`NetArchTest`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/tests/ArchitectureTests/CrowdFunding.ArchitectureTests/) to programmatically enforce that `Domain` has no dependencies and `API` never touches internal module domains is one of the best pedagogical lessons in modern .NET.
-2. **Real Database Integration Testing:** Using [`Testcontainers.PostgreSql`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/tests/IntegrationTests/CrowdFunding.IntegrationTests/) rather than the deceptive EF Core In-Memory provider teaches students that real database semantics (indexes, concurrency tokens, transactions) cannot be mocked.
+1. **Architectural Guardrails via Unit Testing:** Using [`NetArchTest`](../tests/ArchitectureTests/CrowdFunding.ArchitectureTests) to programmatically enforce that `Domain` has no dependencies and `API` never touches internal module domains is one of the best pedagogical lessons in modern .NET.
+2. **Real Database Integration Testing:** Using [`Testcontainers.PostgreSql`](../tests/IntegrationTests/CrowdFunding.IntegrationTests) rather than the deceptive EF Core In-Memory provider teaches students that real database semantics (indexes, concurrency tokens, transactions) cannot be mocked.
 3. **Transactional Outbox Demystification:** Provides a working, transparent implementation of the Transactional Outbox pattern with `FOR UPDATE SKIP LOCKED`, solving the classic dual-write distributed transaction fallacy.
 
 ### Key Weaknesses as an Educational Resource
@@ -125,7 +125,7 @@ The solution contains **29 distinct projects**:
 3. **Overkill for In-Process Monolith:** In .NET 10, internal module encapsulation can be achieved cleanly with **1 project per module** using C# `internal` visibility and file-scoped namespaces, or even **1 single project** using modern C# namespace folder structures.
 
 ### 3.2 Enterprise Cryptographic Infrastructure (ES256 / JWKS)
-In [`EfSigningKeyStore.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Services/EfSigningKeyStore.cs) and [`JwksEndpoint.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Security/JwksEndpoint.cs):
+In [`EfSigningKeyStore.cs`](../src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Services/EfSigningKeyStore.cs) and [`JwksEndpoint.cs`](../src/API/CrowdFunding.API/Security/JwksEndpoint.cs):
 - Custom Elliptic Curve Diffie-Hellman / ECDSA key pair generation (`ECDsa.Create(ECCurve.NamedCurves.nistP256)`).
 - Private key storage in PostgreSQL with active key retirement states (`IsActive`, `ExpiresAtUtc`).
 - Dynamic RFC 7517 JWKS JSON serialization emitting Base64URL-encoded curve points (`x`, `y`, `crv`, `kty`).
@@ -136,7 +136,7 @@ In [`EfSigningKeyStore.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20B
 - **Standard Practice:** A standard educational Clean Architecture project uses `Microsoft.AspNetCore.Authentication.JwtBearer` with a symmetric HMAC secret key (`builder.Configuration["Jwt:Secret"]`) or ASP.NET Core Identity.
 
 ### 3.3 Low-Level Database Locking & Concurrency Primitives
-In [`AdvisoryLockKey.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Domain/Common/AdvisoryLockKey.cs) and [`OutboxClaimQuery.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxClaimQuery.cs):
+In [`AdvisoryLockKey.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Domain/Common/AdvisoryLockKey.cs) and [`OutboxClaimQuery.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxClaimQuery.cs):
 ```csharp
 // From AdvisoryLockKey.cs
 var hash = MD5.HashData(Encoding.UTF8.GetBytes(resourceKey));
@@ -183,7 +183,7 @@ graph LR
 - Students perceive this as **"boilerplate for the sake of boilerplate"**, giving Clean Architecture an unfair reputation as verbose and inefficient.
 
 ### 3.5 External SaaS Vendor Coupling (OpenMeter CloudEvents)
-In [`OpenMeterClient.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Metering/OpenMeterClient.cs):
+In [`OpenMeterClient.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Metering/OpenMeterClient.cs):
 - An HTTP client that sends CloudEvents v1.0 JSON payloads to an external metering SaaS (`openmeter.cloud`).
 
 #### Why It Goes Too Far:
@@ -522,7 +522,7 @@ Even with the goal of designing for microservices extraction, several areas over
    - While asymmetric ES256 tokens and a JWKS endpoint (`/.well-known/jwks.json`) are the **gold standard for microservice edge authentication** (downstream services verify tokens offline without calling Identity), writing a custom ECDSA P-256 key generator, DER private key serializer, and EF Core `EfSigningKeyStore` is heavy.
    - In production, architects delegate key management to Keycloak, Duende IdentityServer, or AWS Cognito. Writing it by hand teaches cryptographic mechanics rather than service boundary architecture.
 3. **Hardcoded In-Memory Caching Instead of Distributed Invalidation**:
-   - [`CachedCampaignReadService.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Caching/CachedCampaignReadService.cs) uses `IMemoryCache` in-process.
+   - [`CachedCampaignReadService.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Caching/CachedCampaignReadService.cs) uses `IMemoryCache` in-process.
    - When extracted into multiple container replicas or a dedicated Campaigns microservice, in-memory caching causes split-brain cache inconsistency across replicas. Redis distributed caching should have been the default.
 4. **Third-Party SaaS Metering (OpenMeter CloudEvents)**:
    - Sending CloudEvents HTTP requests to `openmeter.cloud` during contribution confirmation adds external SaaS dependency that obscures the core architectural lesson of asynchronous event dispatching.
@@ -534,7 +534,7 @@ Even with the goal of designing for microservices extraction, several areas over
 If an architect attempts to extract `Campaigns` or `Contributions` into standalone microservices tomorrow, they will hit **four major roadblocks** that the current codebase hides behind in-process convenience:
 
 #### Roadblock 1: Synchronous Inter-Module Query Coupling (The Latency & Availability Trap)
-- **The Code Location**: In [`MakeContributionCommandHandler.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs#L42-L44):
+- **The Code Location**: In [`MakeContributionCommandHandler.cs`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs#L42-L44):
   ```csharp
   var campaignAvailability = await _campaignContributionAvailabilityReader
       .GetCampaignContributionAvailabilityAsync(
@@ -563,7 +563,7 @@ sequenceDiagram
 ```
 
 #### Roadblock 2: Outbox Poller Coupled to In-Process Memory Dispatcher
-- **The Code Location**: In [`OutboxProcessorBackgroundService.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs#L70):
+- **The Code Location**: In [`OutboxProcessorBackgroundService.cs`](../src/API/CrowdFunding.API/Background/OutboxProcessorBackgroundService.cs#L70):
   ```csharp
   await _eventPublisher.PublishAsync(appEvent, stoppingToken);
   ```
@@ -578,7 +578,7 @@ sequenceDiagram
   ```
 
 #### Roadblock 3: Shared PostgreSQL Host & Connection Pool Starvation
-- **The Code Location**: In [`Program.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Program.cs#L56-L60), all 4 DbContexts are registered with the same connection string:
+- **The Code Location**: In [`Program.cs`](../src/API/CrowdFunding.API/Program.cs#L56-L60), all 4 DbContexts are registered with the same connection string:
   ```csharp
   builder.Services.AddCampaignsInfrastructure(builder.Configuration);
   builder.Services.AddContributionsInfrastructure(builder.Configuration);
@@ -597,7 +597,7 @@ sequenceDiagram
   ```
 
 #### Roadblock 4: The Shared `BuildingBlocks` Dependency Trap
-- **The Code Location**: [`BuildingBlocks.Application`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/BuildingBlocks/CrowdFunding.BuildingBlocks.Application/), `BuildingBlocks.Domain`, `BuildingBlocks.Infrastructure`.
+- **The Code Location**: [`BuildingBlocks.Application`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Application), `BuildingBlocks.Domain`, `BuildingBlocks.Infrastructure`.
 - **The Microservice Gotcha**: Every module references the same building block projects.
 - **The Consequence**: In microservices, when teams share a monolithic "Common" or "BuildingBlocks" library, a change by Team A forces Teams B, C, and D to recompile, test, and redeploy. This recreates organizational coupling.
 - **The Architectural Fix to Teach**: Teach the difference between **Generic Utilities** (which can be distributed as versioned NuGet packages) and **Domain Concepts** (which must never be shared across bounded contexts).

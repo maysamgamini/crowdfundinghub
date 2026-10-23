@@ -1,35 +1,61 @@
 # API Controllers
 
 ## Purpose
-Hosts ASP.NET Core REST API controllers providing HTTP route endpoints for the system. Following `DEV_GUIDELINES.md`, controllers stay strictly thin: they handle parameter binding, perform request validation, dispatch commands or queries through `ICommandDispatcher` / `IQueryDispatcher`, and map domain/application results to HTTP response contracts.
+Thin REST controllers. Each one validates the request, maps it to a command or query, sends it to the dispatcher of the owning module, and maps the result back. Business rules live in the modules, not here.
 
-## Controllers
-- `CampaignsController.cs`: Exposes campaign management routes:
-  - `POST /api/campaigns`: Create a new campaign draft.
-  - `GET /api/campaigns/{id}`: Retrieve campaign details by ID.
-  - `GET /api/campaigns`: Paginated list of campaigns with status/category filtering.
-  - `POST /api/campaigns/{id}/publish`: Publish a draft campaign (enforces owner authorization).
-  - `POST /api/campaigns/{id}/cancel`: Cancel an active or draft campaign (enforces owner/admin authorization).
-  - `GET /api/campaigns/{id}/contribution-availability`: Check remaining funding headroom and pledge eligibility.
-- `ContributionsController.cs`: Exposes contribution and pledge routes:
-  - `POST /api/contributions`: Create a new contribution pledge (protected by `payment-strict` rate limiting).
-  - `POST /api/contributions/{id}/confirm-payment`: Confirm successful third-party payment processing.
-  - `POST /api/contributions/{id}/fail-payment`: Mark a contribution payment as failed.
-  - `POST /api/contributions/{id}/cancel`: Cancel a pending contribution before settlement.
-- `IdentityController.cs`: Exposes authentication and user identity routes:
-  - `POST /api/identity/register`: Register a new user account (protected by `auth-strict` rate limiting).
-  - `POST /api/identity/login`: Authenticate credentials and issue an asymmetric ES256 JWT access token (protected by `auth-strict` rate limiting).
-  - `GET /api/identity/me`: Retrieve profile details for the currently authenticated user.
-- `ModerationController.cs`: Exposes administrative and moderator review workflows:
-  - `GET /api/moderation/reviews/campaigns/{campaignId}`: Retrieve full review details for a campaign (requires `Reviews.Read` permission).
-  - `GET /api/moderation/reviews/campaigns/{campaignId}/status`: Check moderation review status for a campaign.
-  - `POST /api/moderation/reviews/{campaignId}/approve`: Approve a pending campaign review (requires `Reviews.Approve` permission).
-  - `POST /api/moderation/reviews/{campaignId}/reject`: Reject a campaign submission with review notes (requires `Reviews.Reject` permission).
-- `NotificationsController.cs`: Exposes backer notification preference and compliance endpoints (TICKET-056):
-  - `GET /api/notifications/preferences`: Retrieve notification settings for the authenticated user.
-  - `PUT /api/notifications/preferences`: Update granular notification preferences (campaign updates, marketing).
-  - `POST /api/notifications/unsubscribe`: One-click RFC 8058 unsubscribe endpoint for opt-out of commercial notifications.
+## Routes
 
-## Design Conventions
-- **Thin Controller Pattern**: Business logic, aggregate mutation, and transactional boundaries are encapsulated in application command handlers.
-- **Route Attributes & Status Codes**: Action methods use explicit HTTP verbs (`HttpGet`, `HttpPost`), status codes (`200 OK`, `201 Created`, `400 BadRequest`, `404 NotFound`, `409 Conflict`), and typed `ProducesResponseType` annotations for Swagger documentation.
+```mermaid
+flowchart LR
+    subgraph API["Controllers"]
+        Id["IdentityController<br/>api/identity"]
+        Ca["CampaignsController<br/>api/campaigns"]
+        Rt["RewardTiersController<br/>api/campaigns/{id}/reward-tiers"]
+        Co["ContributionsController<br/>api/campaigns/{id}/contributions"]
+        Wh["CampaignWebhookSubscriptionsController<br/>api/campaigns/{id}/webhook-subscriptions"]
+        Mo["ModerationController<br/>api/moderation/reviews"]
+        No["NotificationsController<br/>api/notifications"]
+        Pw["PaymentWebhooksController<br/>api/webhooks/payments"]
+        Mw["ModerationWebhooksController<br/>api/webhooks/moderation"]
+    end
+    Id --> M1["Identity"]
+    Ca --> M2["Campaigns"]
+    Rt --> M2
+    Co --> M3["Contributions"]
+    Pw --> M3
+    Wh --> M4["CampaignUpdates"]
+    Mo --> M5["Moderation"]
+    Mw --> M5
+    No --> M6["Notifications"]
+```
+
+| Controller | Routes |
+|---|---|
+| `IdentityController` | `POST register`, `login`, `refresh`, `logout`; `GET me`; `POST users/{userId}/roles`, `users/{userId}/permissions`, `users/{userId}/deactivate` |
+| `CampaignsController` | `GET /api/campaigns` (paged, filtered), `POST /api/campaigns`, `GET {id}`, `POST {id}/publish`, `POST {id}/cancel` (owner or admin) |
+| `RewardTiersController` | `POST`, `GET`, `GET {rewardTierId}`, `POST {rewardTierId}/reserve` under a campaign |
+| `ContributionsController` | `GET`, `POST`, `GET {contributionId}`, `POST {contributionId}/confirm-payment`, `POST {contributionId}/fail-payment` under a campaign |
+| `CampaignWebhookSubscriptionsController` | `POST`, `GET`, `GET {subscriptionId}`, `DELETE {subscriptionId}` under a campaign |
+| `ModerationController` | `GET` reviews, `GET {campaignId}`, `POST {campaignId}/approve`, `POST {campaignId}/reject` |
+| `NotificationsController` | `GET preferences`, `PUT preferences`, `POST unsubscribe` (Tier 2 handlers) |
+| `PaymentWebhooksController` | `POST /api/webhooks/payments/stripe` (signature and timestamp checked, event id deduplicated) |
+| `ModerationWebhooksController` | `POST /api/webhooks/moderation/media-analysis` (cloud-function result, signature checked) |
+
+## Request path
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant K as Controller
+    participant D as ICommandDispatcher
+    participant A as Audit behaviour
+    participant H as Handler
+    C->>K: HTTP
+    K->>D: SendAsync(command)
+    D->>A: pipeline
+    A->>H: Handle
+    H-->>K: result or domain exception
+    K-->>C: 2xx, or ProblemDetails (400, 403, 404, 409)
+```
+
+Authorisation uses permission policies such as `CampaignsCreate` and `CampaignsPublish`. Known gap: deleting a webhook subscription in a race with the dispatcher returns 500 instead of 409.

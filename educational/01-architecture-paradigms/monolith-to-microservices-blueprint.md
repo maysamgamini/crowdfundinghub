@@ -63,7 +63,7 @@ To extract a microservice from a monolith without rewriting business logic, the 
 
 ### 3. Absolute Elimination of Cross-Schema Database Foreign Keys
 - **The Rule:** Foreign key constraints across module boundaries are strictly forbidden.
-- **The Implementation:** In [`ContributionConfiguration.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/Modules/Contributions/CrowdFunding.Modules.Contributions.Infrastructure/Persistence/Configurations/ContributionConfiguration.cs):
+- **The Implementation:** In [`ContributionConfiguration.cs`](../../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Infrastructure/Persistence/Configurations/ContributionConfiguration.cs):
   ```csharp
   // Stores primitive Guid scalar; NO foreign key to campaigns.campaigns table!
   builder.Property(x => x.CampaignId).IsRequired();
@@ -78,14 +78,14 @@ To extract a microservice from a monolith without rewriting business logic, the 
 
 ### 5. Asymmetric Cryptography (ES256 ECDSA + RFC 7517 JWKS Discovery)
 - **The Rule:** Never use symmetric HMAC secrets (`HS256`) in an architecture intended for microservices.
-- **The Implementation:** In [`JwksEndpoint.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/src/API/CrowdFunding.API/Security/JwksEndpoint.cs):
+- **The Implementation:** In [`JwksEndpoint.cs`](../../src/API/CrowdFunding.API/Security/JwksEndpoint.cs):
   - Identity issues JWTs signed with a private elliptic-curve key (NIST P-256 / ES256).
   - Public keys are published at standard `/.well-known/jwks.json`.
 - **Why It Matters for Microservices:** If symmetric HMAC is used, extracting a service forces you to share the private secret string with every microservice. With ES256 and JWKS, extracted microservices download the public keys once, cache them, and **verify incoming user JWT tokens locally with zero network calls to the Identity service and zero knowledge of private keys**.
 
 ### 6. Automated Compile-Time Architecture Tests (`NetArchTest`)
 - **The Rule:** Human code review cannot prevent architectural rot; boundary integrity must be automated in CI.
-- **The Implementation:** In [`ModuleDependencyTests.cs`](file:///Users/maysamgamini/maysam-brain/Maysam's%20Brain/projects/projects-active/crowdfunding/tests/ArchitectureTests/CrowdFunding.ArchitectureTests/):
+- **The Implementation:** In [`ModuleDependencyTests.cs`](../../tests/ArchitectureTests/CrowdFunding.ArchitectureTests):
   ```csharp
   var result = Types.InAssembly(typeof(Campaign).Assembly)
       .ShouldNot()

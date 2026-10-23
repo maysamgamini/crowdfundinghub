@@ -4,12 +4,25 @@
 Contains fast-running in-memory unit tests exercising domain invariants, CQRS handlers, authorization policies, transactional outbox serialization, and OpenMeter usage metering.
 
 ## Test Suites & Coverage
-- `CampaignsTests.cs`: Tests campaign aggregate rules (title/description lengths, deadline validation, goal calculations), draft creation, state transitions (draft -> published -> cancelled), owner permission checks, and contribution ledger application.
-- `ContributionsTests.cs`: Tests contribution aggregate state transitions (pending -> confirmed / failed / cancelled), payment reference attachment, duplicate confirmation prevention, and currency mismatch validation.
+- `CampaignsTests.cs`: Tests campaign aggregate rules (title/description lengths, deadline validation, goal calculations), draft creation, state transitions (Draft -> Published -> Successful / Failed / Cancelled), owner permission checks, and contribution ledger application.
+- `ContributionsTests.cs`: Tests contribution aggregate state transitions (Pending -> Succeeded / Failed, Succeeded -> Refunded), payment reference attachment, duplicate confirmation prevention, and currency mismatch validation.
 - `IdentityTests.cs`: Tests user self-registration, unique email normalization, password hashing/verification, login credential validation, role assignment (`Admin`, `Moderator`, `User`), and asymmetric ES256 key generation.
 - `ModerationTests.cs`: Tests review creation upon campaign creation events, approval and rejection transitions, moderator permission enforcement, and reviewer feedback attachment.
 - `MeteringTests.cs`: Tests OpenMeter CloudEvent generation, fee calculations (basis points, fixed processing fee, net amount), deterministic CloudEvent ID deduplication, and resilient error swallowing.
 - `OutboxTests.cs`: Tests outbox message serialization, JSON payload integrity, event type discriminator mapping, and `EventTypeRegistry` resolution.
+
+- `RewardTierTests.cs`, `WebhookSubscriptionTests.cs`, `NotificationsTests.cs`, `MoneyTests.cs`: reward tier capacity and reservation rules, webhook target-URL safety (rejects loopback, cloud-metadata, private-range and non-HTTPS addresses), notification handlers (an email-provider failure propagates so the outbox retries), money arithmetic.
+- `StripeWebhookSignatureVerifierTests.cs`, `CloudFunctionSignatureVerifierTests.cs`: signature checks, including stale timestamps.
+- `RosettaStoneTests.cs`: validation rules of the Rosetta Stone sample, the same feature written in several patterns for comparison.
+
+## What unit tests cannot show
+
+```mermaid
+flowchart LR
+    U["Unit test: fake transaction executor"] -->|proves| R["the domain rule"]
+    U -.->|cannot prove| C["two requests racing, a real lock, a migration, a schema"]
+    C --> I["Integration test against real PostgreSQL"]
+```
 
 ## Shared Test Doubles & Utilities
 - `FakeTransactionExecutors.cs`: In-memory implementations of module transaction executors (`ICampaignsTransactionExecutor`, `IContributionsTransactionExecutor`, `IIdentityTransactionExecutor`, `IModerationTransactionExecutor`) executing actions directly without EF Core transactions.
