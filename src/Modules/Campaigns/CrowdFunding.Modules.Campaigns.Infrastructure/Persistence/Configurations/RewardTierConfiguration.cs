@@ -11,7 +11,11 @@ public sealed class RewardTierConfiguration : IEntityTypeConfiguration<RewardTie
 {
     public void Configure(EntityTypeBuilder<RewardTier> builder)
     {
-        builder.ToTable("reward_tiers");
+        // The oversell guard lives in the aggregate and under an advisory lock; this is the database saying the
+        // same thing, so a future write path that forgets the lock still cannot sell more than the tier holds.
+        builder.ToTable("reward_tiers", table => table.HasCheckConstraint(
+            "CK_reward_tiers_never_oversold",
+            "\"ClaimedCount\" >= 0 AND \"ReservedCount\" >= 0 AND \"ClaimedCount\" + \"ReservedCount\" <= \"TotalCapacity\""));
 
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).ValueGeneratedNever();

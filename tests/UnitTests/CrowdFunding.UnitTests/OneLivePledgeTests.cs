@@ -1,4 +1,5 @@
 using CrowdFunding.BuildingBlocks.Application.Exceptions;
+using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.MakeContribution;
 using CrowdFunding.Modules.Contributions.Domain.Aggregates;
@@ -120,5 +121,48 @@ public sealed class OneLivePledgeTests
         await Assert.ThrowsAsync<ResourceConflictException>(() =>
             HandlerFor(Backer(), new FakeContributionRepository(), new LosingTheRaceExecutor())
                 .Handle(new MakeContributionCommand(Guid.NewGuid(), 100m, "USD"), CancellationToken.None));
+    }
+
+    /// <summary>The key lookup finds nothing (the other request has not committed yet), then the live-pledge lookup finds the winner.</summary>
+    private sealed class WinnerAppearsLateRepository(Contribution winner) : IContributionRepository
+    {
+        public Task AddAsync(Contribution contribution, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<Contribution?> GetByIdAsync(Guid contributionId, CancellationToken cancellationToken) => Task.FromResult<Contribution?>(null);
+        public Task<Contribution?> GetByExternalPaymentIntentIdAsync(string externalPaymentIntentId, CancellationToken cancellationToken) => Task.FromResult<Contribution?>(null);
+        public Task<Contribution?> GetByIdempotencyKeyAsync(Guid contributorId, string idempotencyKey, CancellationToken cancellationToken) => Task.FromResult<Contribution?>(null);
+        public Task<Contribution?> GetLivePledgeAsync(Guid campaignId, Guid contributorId, CancellationToken cancellationToken) => Task.FromResult<Contribution?>(winner);
+        public Task UpdateAsync(Contribution contribution, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<IReadOnlyList<Contribution>> GetSucceededByCampaignIdAsync(Guid campaignId, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<Contribution>>([]);
+        public Task<IReadOnlyList<Contribution>> GetSucceededBatchByCampaignIdAsync(Guid campaignId, int batchSize, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<Contribution>>([]);
+    }
+
+    [Fact]
+    public async Task ARetryThatSeesTheWinnersPledgeOnlyInTheLivePledgeCheck_StillGetsTheFirstPledge()
+    {
+        var campaignId = Guid.NewGuid();
+        var user = Backer();
+        var winner = Contribution.Create(campaignId, user.UserId, 100m, "USD", Now, idempotencyKey: "same");
+        var handler = new MakeContributionCommandHandler(
+            new FakeActiveCampaignCacheRepository(exists: true, isActive: true), user, new FakeContributionDateTimeProvider(Now),
+            new WinnerAppearsLateRepository(winner), new FakeContributionTransactionExecutor());
+
+        var result = await handler.Handle(new MakeContributionCommand(campaignId, 100m, "USD", IdempotencyKey: "same"), CancellationToken.None);
+
+        Assert.True(result.IsReplay);
+        Assert.Equal(winner.Id, result.ContributionId);
+    }
+
+    [Fact]
+    public async Task ADifferentKeyAgainstTheSameLivePledge_IsStillAConflict()
+    {
+        var campaignId = Guid.NewGuid();
+        var user = Backer();
+        var winner = Contribution.Create(campaignId, user.UserId, 100m, "USD", Now, idempotencyKey: "first");
+        var handler = new MakeContributionCommandHandler(
+            new FakeActiveCampaignCacheRepository(exists: true, isActive: true), user, new FakeContributionDateTimeProvider(Now),
+            new WinnerAppearsLateRepository(winner), new FakeContributionTransactionExecutor());
+
+        await Assert.ThrowsAsync<ResourceConflictException>(() =>
+            handler.Handle(new MakeContributionCommand(campaignId, 100m, "USD", IdempotencyKey: "second"), CancellationToken.None));
     }
 }

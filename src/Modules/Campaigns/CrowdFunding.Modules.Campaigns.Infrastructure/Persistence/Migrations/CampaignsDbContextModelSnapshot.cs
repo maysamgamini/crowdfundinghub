@@ -257,7 +257,10 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("CampaignId");
 
-                    b.ToTable("reward_tiers", "campaigns");
+                    b.ToTable("reward_tiers", "campaigns", t =>
+                        {
+                            t.HasCheckConstraint("CK_reward_tiers_never_oversold", "\"ClaimedCount\" >= 0 AND \"ReservedCount\" >= 0 AND \"ClaimedCount\" + \"ReservedCount\" <= \"TotalCapacity\"");
+                        });
                 });
 
             modelBuilder.Entity("CrowdFunding.Modules.Campaigns.Domain.Aggregates.RewardTierReservation", b =>

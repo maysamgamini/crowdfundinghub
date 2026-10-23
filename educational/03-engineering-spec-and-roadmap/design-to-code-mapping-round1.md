@@ -14,7 +14,7 @@ Paths are relative to the repo root. `CAMP` = `src/Modules/Campaigns/CrowdFundin
 | 1.1 Where the money sits for 30 days | Contributions | NOT BUILT (charge-now state model only, payment gateway is a mock) | `ContributionDomainTests` |
 | 1.2 Double-click creates two pledges | Contributions | MATCHES (optional `Idempotency-Key` header, unique index per backer and key) | `PledgeIdempotencyTests`, `PledgeIdempotencyE2ETests` |
 | 1.3 The total on the page vs the pledges | Campaigns | SIMPLER VARIANT (idempotency table plus a locked counter) | `CampaignContributionConcurrencyTests` |
-| 1.4 Limited tier oversold | Campaigns | MATCHES (lock, invariant, 15-minute hold); no database CHECK | `RewardTierConcurrencyE2ETests` |
+| 1.4 Limited tier oversold | Campaigns | MATCHES (lock, invariant, 15-minute hold, and a database CHECK constraint) | `RewardTierConcurrencyE2ETests`, `RewardTierDatabaseGuardTests` |
 | 1.5 Pledge after the deadline | Contributions, Campaigns | SIMPLER VARIANT (lock and status check inside Campaigns, plus a refund for a late confirmation; no ENDED state) | `LateContributionTests`, `LateConfirmationRefundE2ETests` |
 | 1.6 Settlement at the deadline | Campaigns, Contributions | SIMPLER VARIANT (decision and state-only refunds); charge-once settlement NOT BUILT; webhook inbox MATCHES | `CampaignExpirationE2ETests`, `RefundSagaE2ETests`, webhook tests |
 | Outbox, event registry, dead letter | BuildingBlocks | MATCHES | `EventTypeRegistryTests`, `OutboxMessageTests`, `OutboxLeanTableE2ETests` |
@@ -93,7 +93,8 @@ sequenceDiagram
 
 - **Design:** serialise the claim of a limited slot, hold it for a short time.
 - **Code:** a per-tier advisory lock serialises read-check-increment. The aggregate enforces `claimed + reserved <= capacity` (`CAMP.Domain/Aggregates/RewardTier.cs`, `ReserveSlot` 82-92). A reservation lasts 15 minutes (`RewardTierReservation.cs:63`), becomes a claim when payment confirms, and is released by a failure handler or a scavenger (`RewardTierReservationScavengerBackgroundService.cs`).
-- **Gaps:** no database CHECK for the invariant (it lives only in code under the lock), the reservation is not tied to card setup, and nothing checks that a reservation belongs to the same backer and campaign.
+- **Database guard:** the same invariant is a CHECK constraint, `CK_reward_tiers_never_oversold` (claimed and reserved never negative, and together never above the capacity), so a write path that forgets the lock still cannot oversell. `RewardTierDatabaseGuardTests` writes around the aggregate and watches the database refuse.
+- **Gaps:** the reservation is not tied to card setup (there is no card saving), and nothing checks that a reservation belongs to the same backer and campaign.
 - **Tests:** `RewardTierConcurrencyE2ETests.FiftyConcurrentReservations_AgainstFiveRemainingSlots_ShouldYieldExactlyFiveSuccesses`; `RewardTierTests`. The scavenger has no test.
 
 ### Step 1.5: pledge after the deadline: SIMPLER VARIANT (closing fence)

@@ -89,8 +89,17 @@ public sealed class MakeContributionCommandHandler : ICommandHandler<MakeContrib
         // One live pledge per backer per campaign. An idempotency key only stops a retry of the same
         // request; a second tab with a new key is a different request and is refused here, and by a
         // unique index when two of them arrive together. The backer keeps the pledge they have.
-        if (await _contributionRepository.GetLivePledgeAsync(command.CampaignId, _currentUser.UserId, cancellationToken) is not null)
+        var livePledge = await _contributionRepository.GetLivePledgeAsync(command.CampaignId, _currentUser.UserId, cancellationToken);
+
+        if (livePledge is not null)
         {
+            // A request that arrives together with the one that created this pledge can get here before it
+            // sees the key. If the live pledge holds this request's key, this is a retry, not a second pledge.
+            if (command.IdempotencyKey is not null && livePledge.IdempotencyKey == command.IdempotencyKey)
+            {
+                return ReplayOf(livePledge, command);
+            }
+
             throw AlreadyBacking();
         }
 
@@ -118,6 +127,20 @@ public sealed class MakeContributionCommandHandler : ICommandHandler<MakeContrib
         }
         catch (AlreadyBackingException)
         {
+            // Two indexes can refuse the same insert: the one-live-pledge index and, when a key was sent, the
+            // key's own index. Which one the database reports first is not ours to choose, so when the request
+            // carried a key, look for a pledge that holds it: that is a retry and gets the first pledge back.
+            if (command.IdempotencyKey is not null)
+            {
+                var holder = await _contributionRepository.GetByIdempotencyKeyAsync(
+                    _currentUser.UserId, command.IdempotencyKey, cancellationToken);
+
+                if (holder is not null)
+                {
+                    return ReplayOf(holder, command);
+                }
+            }
+
             throw AlreadyBacking();
         }
         catch (IdempotencyKeyAlreadyUsedException) when (command.IdempotencyKey is not null)
