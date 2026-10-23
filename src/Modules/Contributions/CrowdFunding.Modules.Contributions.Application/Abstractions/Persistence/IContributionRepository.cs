@@ -17,6 +17,8 @@ public interface IContributionRepository
 
     Task<Contribution?> GetByIdempotencyKeyAsync(Guid contributorId, string idempotencyKey, CancellationToken cancellationToken);
 
+    Task<Contribution?> GetLivePledgeAsync(Guid campaignId, Guid contributorId, CancellationToken cancellationToken);
+
     Task UpdateAsync(Contribution contribution, CancellationToken cancellationToken);
 
     /// <summary>Loads every currently-Succeeded contribution for a campaign, for the refund

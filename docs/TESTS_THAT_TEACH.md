@@ -7,11 +7,11 @@ Most of the 450 tests in this repository protect the code. A handful do somethin
 ```mermaid
 flowchart TB
     subgraph Fast["Seconds, no Docker"]
-        U["Unit tests: 327<br/>domain rules, handlers, value objects"]
+        U["Unit tests: 340<br/>domain rules, handlers, value objects"]
         A["Architecture tests: 28<br/>who may reference whom, and that documents link to real things"]
     end
     subgraph Slow["Minutes, real PostgreSQL via Testcontainers"]
-        I["Integration tests: 116<br/>races, outbox, inbox, schemas, webhooks"]
+        I["Integration tests: 120<br/>races, outbox, inbox, schemas, webhooks"]
     end
     subgraph Drills["By hand, replicated stack"]
         D["Failure drills<br/>kill a primary, stop a standby"]
@@ -66,6 +66,8 @@ quadrantChart
 | `RabbitMqConsumerHostTests` | Events reach their handlers over a real broker with the outbox row id as the message id; unknown events are ignored; a failing handler is retried then dead-lettered. | Shows the consuming half of a broker transport and what a dead-letter queue is for. |
 | `ModerationReadAccessTests` | Reading a review needs the moderation permission in whichever host serves the module. | Why a rule that matters belongs in the handler, not only on the endpoint. |
 | `RetentionE2ETests`, `RetentionBackgroundServiceTests` | Idempotency keys older than a week are cleared and recent ones stay; old inbox rows are deleted; one failing cleanup task does not stop the others. | Data with a useful life needs an owner and a schedule, or the table grows for ever. |
+| `OneLivePledgeTests`, `PledgeIdempotencyE2ETests` (the two-tabs tests) | A second pledge with a new key is refused, twelve simultaneous pledges with twelve keys create exactly one, and a backer can pledge again once the first failed. | An idempotency key stops a retry; only a business rule enforced by the database stops a second attempt. |
+| `LateContributionTests`, `LateConfirmationRefundE2ETests` | A payment confirmed after the campaign ended is refused under the campaign lock and refunded, not retried into the dead-letter table. | The closing fence across two databases is a lock plus a compensation. |
 | `NotificationPreferencesTier2Tests` | A Tier 2 feature works with no aggregate or repository. | The poly-pattern in practice: small features stay small. |
 | `ReplicatedReadModelResilienceTests` | A module keeps serving from its replicated read model when the source module is down. | Why replicated read models exist. |
 

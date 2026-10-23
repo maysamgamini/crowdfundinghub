@@ -33,9 +33,8 @@ public sealed class RetentionE2ETests
     public async Task AnIdempotencyKeyOlderThanTheWindow_IsCleared_AndTheRecentOneAndThePledgesStay()
     {
         var campaignId = Guid.NewGuid();
-        var backerId = Guid.NewGuid();
-        var oldPledge = Contribution.Create(campaignId, backerId, 10m, "USD", DateTime.UtcNow.AddDays(-8), idempotencyKey: $"old-{Guid.NewGuid():N}");
-        var recentPledge = Contribution.Create(campaignId, backerId, 10m, "USD", DateTime.UtcNow.AddDays(-2), idempotencyKey: $"recent-{Guid.NewGuid():N}");
+        var oldPledge = Contribution.Create(campaignId, Guid.NewGuid(), 10m, "USD", DateTime.UtcNow.AddDays(-8), idempotencyKey: $"old-{Guid.NewGuid():N}");
+        var recentPledge = Contribution.Create(campaignId, Guid.NewGuid(), 10m, "USD", DateTime.UtcNow.AddDays(-2), idempotencyKey: $"recent-{Guid.NewGuid():N}");
         var recentKey = recentPledge.IdempotencyKey;
 
         await using (var seed = _factory.Services.CreateAsyncScope())

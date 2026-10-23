@@ -901,6 +901,9 @@ internal sealed class FakeRefundableContributionRepository : IContributionReposi
     public Task<Contribution?> GetByIdempotencyKeyAsync(Guid contributorId, string idempotencyKey, CancellationToken cancellationToken)
         => Task.FromResult(_contributions.FirstOrDefault(x => x.ContributorId == contributorId && x.IdempotencyKey == idempotencyKey));
 
+    public Task<Contribution?> GetLivePledgeAsync(Guid campaignId, Guid contributorId, CancellationToken cancellationToken)
+        => Task.FromResult(_contributions.FirstOrDefault(x => x.CampaignId == campaignId && x.ContributorId == contributorId && x.Status is ContributionStatus.Pending or ContributionStatus.Succeeded));
+
     public Task UpdateAsync(Contribution contribution, CancellationToken cancellationToken)
         => Task.CompletedTask;
 
@@ -1062,6 +1065,13 @@ internal sealed class FakeContributionRepository : IContributionRepository
     {
         SavedContribution = contribution;
         return Task.CompletedTask;
+    }
+
+    public Task<Contribution?> GetLivePledgeAsync(Guid campaignId, Guid contributorId, CancellationToken cancellationToken)
+    {
+        var match = new[] { _contribution, SavedContribution }
+            .FirstOrDefault(x => x is not null && x.CampaignId == campaignId && x.ContributorId == contributorId && x.Status is ContributionStatus.Pending or ContributionStatus.Succeeded);
+        return Task.FromResult(match);
     }
 
     public Task<Contribution?> GetByIdempotencyKeyAsync(Guid contributorId, string idempotencyKey, CancellationToken cancellationToken)

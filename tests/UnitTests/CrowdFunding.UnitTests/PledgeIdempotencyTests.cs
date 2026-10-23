@@ -153,16 +153,18 @@ public sealed class PledgeIdempotencyTests
     }
 
     [Fact]
-    public async Task Handle_WithoutAKey_ShouldCreateANewPledgeEveryTime()
+    public async Task Handle_WithoutAKey_IsNotDeduplicatedByKey_TheOneLivePledgeRuleStopsTheSecond()
     {
-        var (handler, _, executor, _) = Build();
+        var (handler, repository, executor, _) = Build();
         var command = new MakeContributionCommand(Guid.NewGuid(), 100m, "USD");
 
-        var one = await handler.Handle(command, CancellationToken.None);
-        var two = await handler.Handle(command, CancellationToken.None);
+        await handler.Handle(command, CancellationToken.None);
+        // The first pledge is now live for this backer on this campaign, so a second request with no key
+        // is refused by the one-live-pledge rule, not treated as a retry.
+        await Assert.ThrowsAsync<ResourceConflictException>(() => handler.Handle(command, CancellationToken.None));
 
-        Assert.NotEqual(one.ContributionId, two.ContributionId);
-        Assert.Equal(2, executor.InvocationCount);
+        Assert.NotNull(repository.SavedContribution);
+        Assert.Equal(1, executor.InvocationCount);
     }
 
     [Fact]
@@ -207,6 +209,7 @@ public sealed class PledgeIdempotencyTests
         public Task<Contribution?> GetByIdAsync(Guid contributionId, CancellationToken cancellationToken) => Task.FromResult<Contribution?>(null);
         public Task<Contribution?> GetByExternalPaymentIntentIdAsync(string externalPaymentIntentId, CancellationToken cancellationToken) => Task.FromResult<Contribution?>(null);
         public abstract Task<Contribution?> GetByIdempotencyKeyAsync(Guid contributorId, string idempotencyKey, CancellationToken cancellationToken);
+        public Task<Contribution?> GetLivePledgeAsync(Guid campaignId, Guid contributorId, CancellationToken cancellationToken) => Task.FromResult<Contribution?>(null);
         public Task UpdateAsync(Contribution contribution, CancellationToken cancellationToken) => Task.CompletedTask;
         public Task<IReadOnlyList<Contribution>> GetSucceededByCampaignIdAsync(Guid campaignId, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<Contribution>>([]);
         public Task<IReadOnlyList<Contribution>> GetSucceededBatchByCampaignIdAsync(Guid campaignId, int batchSize, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<Contribution>>([]);

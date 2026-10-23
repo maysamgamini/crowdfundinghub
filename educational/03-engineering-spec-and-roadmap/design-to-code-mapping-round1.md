@@ -15,7 +15,7 @@ Paths are relative to the repo root. `CAMP` = `src/Modules/Campaigns/CrowdFundin
 | 1.2 Double-click creates two pledges | Contributions | MATCHES (optional `Idempotency-Key` header, unique index per backer and key) | `PledgeIdempotencyTests`, `PledgeIdempotencyE2ETests` |
 | 1.3 The total on the page vs the pledges | Campaigns | SIMPLER VARIANT (idempotency table plus a locked counter) | `CampaignContributionConcurrencyTests` |
 | 1.4 Limited tier oversold | Campaigns | MATCHES (lock, invariant, 15-minute hold); no database CHECK | `RewardTierConcurrencyE2ETests` |
-| 1.5 Pledge after the deadline | Contributions, Campaigns | NOT BUILT (no closing fence) | partial |
+| 1.5 Pledge after the deadline | Contributions, Campaigns | SIMPLER VARIANT (lock and status check inside Campaigns, plus a refund for a late confirmation; no ENDED state) | `LateContributionTests`, `LateConfirmationRefundE2ETests` |
 | 1.6 Settlement at the deadline | Campaigns, Contributions | SIMPLER VARIANT (decision and state-only refunds); charge-once settlement NOT BUILT; webhook inbox MATCHES | `CampaignExpirationE2ETests`, `RefundSagaE2ETests`, webhook tests |
 | Outbox, event registry, dead letter | BuildingBlocks | MATCHES | `EventTypeRegistryTests`, `OutboxMessageTests`, `OutboxLeanTableE2ETests` |
 | Consumer inbox | all consumers | MATCHES in part (per-module inbox; written after the handler, so a crash window remains) | `InboxRetryTests` |
@@ -78,7 +78,8 @@ sequenceDiagram
 
 - **Design:** an idempotency key or client-supplied pledge ID makes a retry return the first pledge.
 - **Code:** `POST /api/campaigns/{id}/contributions` accepts an optional `Idempotency-Key` header (1 to 100 printable ASCII characters). The key is stored on the `Contribution` and a unique index on `(ContributorId, IdempotencyKey)` where the key is not null decides races (`ContributionConfiguration.cs`, `ContributionIndexes.IdempotencyKey`). `MakeContributionCommandHandler` looks the key up first, before any campaign check, so a retry after the deadline still gets the first pledge. A retry returns `200` with `Idempotent-Replayed: true`; the same key with a different amount, currency, campaign or reward reservation is a `409`; simultaneous requests are settled by the index and the losers read the winner. `ContributionTransactionExecutor` turns that specific unique violation into `IdempotencyKeyAlreadyUsedException`.
-- **Differences from the design:** the key is optional, so a client that sends none still gets a new pledge each time; keys are scoped to the backer, not global; a retention task clears a key after `Retention:IdempotencyKeyDays` (7 by default), so a retry later than that creates a new pledge.
+- **One live pledge per backer per campaign (also built):** a partial unique index on `(CampaignId, ContributorId)` for `Pending` and `Succeeded` pledges (`UX_contributions_one_live_pledge_per_backer`) and a check in `MakeContributionCommandHandler` refuse a second live pledge with `409`, so a backer with two tabs and two keys still gets one pledge. It ends when the pledge does (`Failed` or `Refunded`). Changing a pledge in place is not built; the message tells the backer to change or cancel the existing one. A migration check fails loudly if existing data already breaks the rule.
+- **Differences from the design:** the key is optional, but without one a second request is still refused by the one-live-pledge rule; keys are scoped to the backer, not global; a retention task clears a key after `Retention:IdempotencyKeyDays` (7 by default), so a retry later than that creates a new pledge.
 - **Tests:** `PledgeIdempotencyTests` (unit: replay, mismatch, retry after the campaign closed, lost race) and `PledgeIdempotencyE2ETests` (twelve simultaneous requests create one pledge; mismatch is a conflict; two backers may share a key; a malformed key is rejected).
 
 ### Step 1.3: the total vs the pledges: SIMPLER VARIANT
@@ -95,12 +96,13 @@ sequenceDiagram
 - **Gaps:** no database CHECK for the invariant (it lives only in code under the lock), the reservation is not tied to card setup, and nothing checks that a reservation belongs to the same backer and campaign.
 - **Tests:** `RewardTierConcurrencyE2ETests.FiftyConcurrentReservations_AgainstFiveRemainingSlots_ShouldYieldExactlyFiveSuccesses`; `RewardTierTests`. The scavenger has no test.
 
-### Step 1.5: pledge after the deadline: NOT BUILT (closing fence)
+### Step 1.5: pledge after the deadline: SIMPLER VARIANT (closing fence)
 
-- **Design:** a closing fence so no pledge is accepted after the deadline and none that was accepted is left out of the funded decision.
-- **Code:** the deadline is checked in application code at pledge time (`MakeContributionCommandHandler.cs:50`) against a replicated cache. The confirm path checks only that the campaign is active; the credit path checks only `Status == Published`. There is no database enforcement and no ENDED state.
-- **Consequence (from reading the code, untested):** a payment confirmed after the campaign turned Successful or Failed makes `ApplyConfirmedContribution` throw. The message is retried, then dead-lettered, and the money is not refunded.
-- **Tests:** `Handle_ShouldThrow_WhenCampaignCannotAcceptContributions`; the webhook-after-cancellation test. No test of the closing race.
+- **Design:** a closing fence so no pledge is accepted after the deadline and none that was accepted is left out of the funded decision. In one database that is a row lock on the campaign: every pledge write and the close job update the same row.
+- **Code:** Contributions and Campaigns are separate modules with separate databases, so a row lock cannot span them. The fence is split in two. Inside Campaigns, crediting a contribution and the deadline decision take the same per-campaign advisory lock (`CampaignTransactionExecutor`), so a credit either lands before the decision and is counted in it, or arrives after and sees a campaign that is no longer published. A pledge is refused at creation when Contributions' replicated copy of the campaign shows it ended or past its deadline.
+- **The gap that was closed:** a payment confirmed after the campaign ended used to throw, retry and dead-letter, and the backer was never refunded. Now `AddContributionToCampaignCommandHandler` rejects it inside the lock with `Campaign.RejectLateContribution`, which raises `LateContributionRejected` through the outbox, and `LateContributionRefundHandler` in Contributions refunds the pledge. Redelivery is harmless because only a `Succeeded` pledge is refunded.
+- **Differences from the design:** there is no ENDED state, because the decision happens in one step under the lock (Published to Successful or Failed), so a campaign cannot be stranded between closing and deciding. The refusal of a late pledge is compensation after the fact (an event and a refund) instead of a database error at write time, which is the price of two databases.
+- **Tests:** `LateContributionTests` (unit: rejection, no counting, refund, idempotent redelivery) and `LateConfirmationRefundE2ETests` (a confirmation accepted just as the campaign was cancelled ends refunded, uncounted and with no failed outbox rows).
 
 ### Step 1.6: settlement at the deadline: SIMPLER VARIANT
 
@@ -156,7 +158,7 @@ The loop's "See It Built" section describes the reference code ahead of the code
 | Gap | Design step | Suggested ticket |
 |---|---|---|
 | ~~No idempotency on pledge creation~~ **Closed:** `Idempotency-Key` header with a unique index per backer and key | 1.2 | Done |
-| No closing fence; late confirmations dead-letter without refund | 1.5 | Add an ENDED state and refund late confirmations |
+| ~~No closing fence; late confirmations dead-letter without refund~~ **Closed:** late confirmations are rejected under the campaign lock and refunded; no ENDED state by design | 1.5 | Done |
 | ~~Outbox rows stuck in `Processing` are never reclaimed~~ **Closed:** reclaim on lease expiry, lease on the application clock, attempts bounded | outbox | Done |
 | Ledger lacks entry kind, sign check, trigger, refund entries | 1.3 | Decide whether to build it or change the design text |
 | ~~Module tables are not in per-module schemas~~ **Closed:** every module has `HasDefaultSchema`, a `MoveTablesTo<Module>Schema` migration and its own history table, checked by `ModuleSchemaRulesTests` against a real database. Each module also now gets its own database in the local stack | Cross-cutting (schema per module) | Done |
@@ -170,14 +172,15 @@ The loop's "See It Built" section describes the reference code ahead of the code
 flowchart LR
     A["First reading"] --> B{"Re-checked against main"}
     B -->|changed| C["Inbox built<br/>Schemas built<br/>Outbox due-clock bug fixed<br/>Database per module locally"]
-    B -->|still true| D["No closing fence<br/>Ledger has no kind, sign check, trigger<br/>Success/failure email stubs"]
+    B -->|still true| D["Ledger has no kind, sign check, trigger<br/>Success/failure email stubs"]
     B -->|drifted| E["Line numbers only"]
 ```
 
 - **Outbox stuck rows (new, fixed).** A row left in `Processing` by a crashed worker is now reclaimed once its lease runs out, and the lease is written from the application clock.
 - **Outbox due-clock (new, fixed).** The claim query compared an application-set `ScheduledAtUtc` with the database's `now()`; a database clock slightly behind made just-queued rows unclaimable. It now compares against the application clock. 
 - **Pledge idempotency (new, built).** See step 1.2.
-- **Closing fence, ledger shape, success/failure email (still true).** Searches for check constraints, triggers and ledger entry kinds found nothing. The notification handlers for published, cancelled and review events are still `Task.CompletedTask`.
+- **Closing fence (new, built as a simpler variant).** See step 1.5.
+- **Ledger shape, success/failure email (still true).** Searches for check constraints, triggers and ledger entry kinds found nothing. The notification handlers for published, cancelled and review events are still `Task.CompletedTask`.
 - **Webhook subscriptions (new).** A stale background save could re-activate a deleted subscription; fixed with an `xmin` token and covered by `WebhookSubscriptionConcurrencyTests`. It also fixed the tier assignment for that feature (stays Tier 3).
 - **Tests added since the first reading:** `InboxRetryTests`, `ModuleSchemaRulesTests`, `NotificationPreferencesTier2Tests`, `WebhookSubscriptionConcurrencyTests`. See `docs/TESTS_THAT_TEACH.md`.
 - **Still untested:** the reservation scavenger. Outbox crash recovery is covered by `OutboxReclaimE2ETests`.

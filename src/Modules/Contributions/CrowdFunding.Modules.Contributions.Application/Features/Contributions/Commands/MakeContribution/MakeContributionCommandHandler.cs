@@ -86,6 +86,14 @@ public sealed class MakeContributionCommandHandler : ICommandHandler<MakeContrib
             throw new InvalidOperationException("Campaign creators cannot back or contribute to their own campaigns.");
         }
 
+        // One live pledge per backer per campaign. An idempotency key only stops a retry of the same
+        // request; a second tab with a new key is a different request and is refused here, and by a
+        // unique index when two of them arrive together. The backer keeps the pledge they have.
+        if (await _contributionRepository.GetLivePledgeAsync(command.CampaignId, _currentUser.UserId, cancellationToken) is not null)
+        {
+            throw AlreadyBacking();
+        }
+
         var contribution = Contribution.Create(
             command.CampaignId,
             _currentUser.UserId,
@@ -108,6 +116,10 @@ public sealed class MakeContributionCommandHandler : ICommandHandler<MakeContrib
                 await _contributionRepository.AddAsync(contribution, ct);
             }, cancellationToken);
         }
+        catch (AlreadyBackingException)
+        {
+            throw AlreadyBacking();
+        }
         catch (IdempotencyKeyAlreadyUsedException) when (command.IdempotencyKey is not null)
         {
             // Two requests with the same key arrived together and the other one inserted first.
@@ -121,6 +133,9 @@ public sealed class MakeContributionCommandHandler : ICommandHandler<MakeContrib
 
         return new MakeContributionResult(contribution.Id, contribution.Status.ToString());
     }
+
+    private static ResourceConflictException AlreadyBacking()
+        => new("You already have a pledge on this campaign. Change or cancel that pledge instead of making a second one.");
 
     private static MakeContributionResult ReplayOf(Contribution earlier, MakeContributionCommand command)
     {

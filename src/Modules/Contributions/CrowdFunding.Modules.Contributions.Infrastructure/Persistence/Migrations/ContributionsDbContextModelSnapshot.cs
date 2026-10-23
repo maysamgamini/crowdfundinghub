@@ -200,6 +200,11 @@ namespace CrowdFunding.Modules.Contributions.Infrastructure.Persistence.Migratio
                         .IsUnique()
                         .HasFilter("\"ExternalPaymentIntentId\" IS NOT NULL");
 
+                    b.HasIndex("CampaignId", "ContributorId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_contributions_one_live_pledge_per_backer")
+                        .HasFilter("\"Status\" IN ('Pending', 'Succeeded')");
+
                     b.HasIndex("CampaignId", "CreatedAtUtc");
 
                     b.HasIndex("ContributorId", "IdempotencyKey")

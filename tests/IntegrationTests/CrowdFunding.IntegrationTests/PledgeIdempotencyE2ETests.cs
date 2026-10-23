@@ -149,15 +149,16 @@ public sealed class PledgeIdempotencyE2ETests
     }
 
     [Fact]
-    public async Task RequestsWithoutAKey_ShouldKeepCreatingANewPledgeEachTime()
+    public async Task ASecondRequestWithoutAKey_IsRefusedByTheOneLivePledgeRule()
     {
         var campaignId = await CreatePublishedCampaignAsync("no-key");
         var token = await NewBackerTokenAsync("no-key-backer");
 
         (await PledgeAsync(campaignId, token, 100m, key: null)).EnsureSuccessStatusCode();
-        (await PledgeAsync(campaignId, token, 100m, key: null)).EnsureSuccessStatusCode();
+        var second = await PledgeAsync(campaignId, token, 100m, key: null);
 
-        Assert.Equal(2, await CountPledgesAsync(campaignId));
+        Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
+        Assert.Equal(1, await CountPledgesAsync(campaignId));
     }
 
     [Theory]
@@ -172,6 +173,54 @@ public sealed class PledgeIdempotencyE2ETests
 
         Assert.True(response.StatusCode is HttpStatusCode.BadRequest);
         Assert.Equal(0, await CountPledgesAsync(campaignId));
+    }
+
+    [Fact]
+    public async Task ASecondPledgeWithANewKey_IsRefusedWith409_WhileTheFirstIsLive()
+    {
+        var campaignId = await CreatePublishedCampaignAsync("two-tabs");
+        var token = await NewBackerTokenAsync("two-tabs-backer");
+
+        (await PledgeAsync(campaignId, token, 100m, Guid.NewGuid().ToString("N"))).EnsureSuccessStatusCode();
+        var second = await PledgeAsync(campaignId, token, 100m, Guid.NewGuid().ToString("N"));
+
+        Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
+        Assert.Equal(1, await CountPledgesAsync(campaignId));
+    }
+
+    [Fact]
+    public async Task TwelveSimultaneousPledgesWithTwelveDifferentKeys_CreateExactlyOne()
+    {
+        var campaignId = await CreatePublishedCampaignAsync("tabs-race");
+        var token = await NewBackerTokenAsync("tabs-race-backer");
+
+        var responses = await Task.WhenAll(Enumerable.Range(0, 12)
+            .Select(_ => PledgeAsync(campaignId, token, 100m, Guid.NewGuid().ToString("N"))));
+
+        Assert.Equal(1, responses.Count(r => r.StatusCode == HttpStatusCode.Created));
+        Assert.Equal(11, responses.Count(r => r.StatusCode == HttpStatusCode.Conflict));
+        Assert.Equal(1, await CountPledgesAsync(campaignId));
+    }
+
+    [Fact]
+    public async Task AfterTheFirstPledgeFailed_TheSameBackerCanPledgeAgain()
+    {
+        var campaignId = await CreatePublishedCampaignAsync("after-fail");
+        var token = await NewBackerTokenAsync("after-fail-backer");
+        var first = await (await PledgeAsync(campaignId, token, 100m, key: null)).Content.ReadFromJsonAsync<MakeContributionResponse>();
+
+        var adminEmail = ApiTestExtensions.UniqueEmail("after-fail-admin");
+        await AdminSeeder.RunAsync(_factory.Services, adminEmail, ApiTestExtensions.DefaultPassword, "Admin");
+        using var admin = _factory.CreateClient();
+        admin.SetBearerToken(await admin.LoginUserAsync(adminEmail));
+        (await admin.PostAsJsonAsync(
+            $"/api/campaigns/{campaignId}/contributions/{first!.ContributionId}/fail-payment",
+            new FailContributionPaymentRequest("card declined"))).EnsureSuccessStatusCode();
+
+        var again = await PledgeAsync(campaignId, token, 100m, key: null);
+
+        Assert.Equal(HttpStatusCode.Created, again.StatusCode);
+        Assert.Equal(2, await CountPledgesAsync(campaignId));
     }
 }
 

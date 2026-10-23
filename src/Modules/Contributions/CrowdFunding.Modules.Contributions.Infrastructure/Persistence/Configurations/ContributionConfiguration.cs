@@ -78,6 +78,14 @@ public sealed class ContributionConfiguration : IEntityTypeConfiguration<Contrib
         builder.Property(x => x.IdempotencyKey)
             .HasMaxLength(Contribution.MaxIdempotencyKeyLength);
 
+        // One live pledge per backer per campaign. An idempotency key stops a retry of the same attempt;
+        // it cannot stop a backer who opens two tabs and pledges twice with two keys. This index does, and
+        // it ends only when the pledge does (Failed or Refunded), so the backer can pledge again after that.
+        builder.HasIndex(x => new { x.CampaignId, x.ContributorId })
+            .IsUnique()
+            .HasDatabaseName(ContributionIndexes.OneLivePledge)
+            .HasFilter("\"Status\" IN ('Pending', 'Succeeded')");
+
         builder.HasIndex(x => new { x.ContributorId, x.IdempotencyKey })
             .IsUnique()
             .HasDatabaseName(ContributionIndexes.IdempotencyKey)

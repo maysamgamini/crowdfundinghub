@@ -101,6 +101,16 @@ public sealed class ContributionTransactionExecutor : IContributionTransactionEx
             _dbContext.ChangeTracker.Clear();
             throw new IdempotencyKeyAlreadyUsedException(ex);
         }
+        catch (DbUpdateException ex) when (IsOneLivePledgeViolation(ex))
+        {
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+            }
+
+            _dbContext.ChangeTracker.Clear();
+            throw new AlreadyBackingException(ex);
+        }
         catch
         {
             if (transaction is not null)
@@ -118,6 +128,13 @@ public sealed class ContributionTransactionExecutor : IContributionTransactionEx
             }
         }
     }
+
+    private static bool IsOneLivePledgeViolation(DbUpdateException exception)
+        => exception.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation,
+            ConstraintName: ContributionIndexes.OneLivePledge
+        };
 
     private static bool IsIdempotencyKeyViolation(DbUpdateException exception)
         => exception.InnerException is PostgresException

@@ -85,7 +85,11 @@ sequenceDiagram
 
 A retention task clears a pledge's idempotency key after `Retention:IdempotencyKeyDays` (7 by default), so the key only protects a genuine retry window and the unique index does not carry keys for ever; the pledge itself is untouched.
 
-**Not built:** a closing fence at the deadline, and charge-once settlement. See `educational/03-engineering-spec-and-roadmap/design-to-code-mapping-round1.md`.
+**One live pledge per backer per campaign.** A partial unique index on `(CampaignId, ContributorId)` for `Pending` and `Succeeded` pledges, plus a check in the handler, refuses a second live pledge with `409`; it ends when the pledge fails or is refunded. This is what stops a backer with two tabs and two idempotency keys.
+
+**Late confirmations are refunded.** A payment confirmed after its campaign ended is refused by Campaigns inside the campaign lock (`LateContributionRejected`), and `LateContributionRefundHandler` refunds the pledge.
+
+**Not built:** charge-once settlement, real payouts and a real payment provider. See `educational/03-engineering-spec-and-roadmap/design-to-code-mapping-round1.md`.
 
 ## Data and messaging
 

@@ -50,6 +50,18 @@ public sealed class ContributionRepository : IContributionRepository
     }
 
     /// <inheritdoc/>
+    public Task<Contribution?> GetLivePledgeAsync(Guid campaignId, Guid contributorId, CancellationToken cancellationToken)
+    {
+        return _dbContext.Contributions
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                x => x.CampaignId == campaignId
+                     && x.ContributorId == contributorId
+                     && (x.Status == ContributionStatus.Pending || x.Status == ContributionStatus.Succeeded),
+                cancellationToken);
+    }
+
+    /// <inheritdoc/>
     public Task UpdateAsync(Contribution contribution, CancellationToken cancellationToken)
     {
         _dbContext.Contributions.Update(contribution);
