@@ -18,6 +18,8 @@ public sealed class NotificationsDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // Every table of this module lives in its own PostgreSQL schema.
+        modelBuilder.HasDefaultSchema("notifications");
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(NotificationsDbContext).Assembly);
         base.OnModelCreating(modelBuilder);
     }

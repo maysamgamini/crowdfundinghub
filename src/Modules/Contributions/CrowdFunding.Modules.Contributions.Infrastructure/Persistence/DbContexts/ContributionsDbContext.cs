@@ -23,6 +23,8 @@ public sealed class ContributionsDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // Every table of this module lives in its own PostgreSQL schema.
+        modelBuilder.HasDefaultSchema("contributions");
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(ContributionsDbContext).Assembly);
         modelBuilder.ConfigureOutbox("contributions_outbox_messages");
         modelBuilder.ConfigureDeadLetter("contributions_dead_letter_events");

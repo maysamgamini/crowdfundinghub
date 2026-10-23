@@ -32,7 +32,7 @@ public sealed class ContributionLedger : IContributionLedger
         // ContributionLedgerEntryConfiguration.
         var rowsInserted = await _dbContext.Database.ExecuteSqlInterpolatedAsync(
             $"""
-             INSERT INTO campaign_contributions_ledger ("Id", "CampaignId", "ContributionId", "Amount", "Currency", "RecordedAtUtc")
+             INSERT INTO campaigns.campaign_contributions_ledger ("Id", "CampaignId", "ContributionId", "Amount", "Currency", "RecordedAtUtc")
              VALUES ({Guid.NewGuid()}, {campaignId}, {contributionId}, {amount}, {currency}, {DateTime.UtcNow})
              ON CONFLICT ("ContributionId") DO NOTHING
              """,

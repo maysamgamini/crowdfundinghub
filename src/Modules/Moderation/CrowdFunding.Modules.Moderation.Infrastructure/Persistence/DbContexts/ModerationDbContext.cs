@@ -20,6 +20,8 @@ public sealed class ModerationDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // Every table of this module lives in its own PostgreSQL schema.
+        modelBuilder.HasDefaultSchema("moderation");
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(ModerationDbContext).Assembly);
         modelBuilder.ConfigureOutbox("moderation_outbox_messages");
         modelBuilder.ConfigureDeadLetter("moderation_dead_letter_events");

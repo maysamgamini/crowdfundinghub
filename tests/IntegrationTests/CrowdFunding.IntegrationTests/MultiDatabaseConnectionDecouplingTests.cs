@@ -90,7 +90,7 @@ public sealed class MultiDatabaseConnectionDecouplingTests : IAsyncLifetime
         await using var campaignsDbConnection = new NpgsqlConnection(_campaignsDb.GetConnectionString());
         await campaignsDbConnection.OpenAsync();
         await using var campaignsCommand = new NpgsqlCommand(
-            "SELECT COUNT(*) FROM campaigns WHERE \"Id\" = @id", campaignsDbConnection);
+            "SELECT COUNT(*) FROM campaigns.campaigns WHERE \"Id\" = @id", campaignsDbConnection);
         campaignsCommand.Parameters.AddWithValue("id", created!.CampaignId);
         var countInIsolatedDb = (long)(await campaignsCommand.ExecuteScalarAsync())!;
         Assert.Equal(1, countInIsolatedDb);
@@ -98,12 +98,12 @@ public sealed class MultiDatabaseConnectionDecouplingTests : IAsyncLifetime
         await using var primaryDbConnection = new NpgsqlConnection(_primaryDb.GetConnectionString());
         await primaryDbConnection.OpenAsync();
         await using var checkTableCommand = new NpgsqlCommand(
-            "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'campaigns'",
+            "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'campaigns' AND table_name = 'campaigns'",
             primaryDbConnection);
         var campaignsTableExistsInPrimary = (long)(await checkTableCommand.ExecuteScalarAsync())! > 0;
         Assert.False(campaignsTableExistsInPrimary);
 
-        await using var identityCheckCommand = new NpgsqlCommand("SELECT COUNT(*) FROM users", primaryDbConnection);
+        await using var identityCheckCommand = new NpgsqlCommand("SELECT COUNT(*) FROM identity.users", primaryDbConnection);
         var usersInPrimary = (long)(await identityCheckCommand.ExecuteScalarAsync())!;
         Assert.True(usersInPrimary > 0);
     }

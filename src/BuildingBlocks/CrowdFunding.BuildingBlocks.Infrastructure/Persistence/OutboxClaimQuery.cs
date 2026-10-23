@@ -25,17 +25,22 @@ public static class OutboxClaimQuery
         // and the Pending -> Processing transition happen in one statement (CTE + UPDATE ...
         // RETURNING) so there is no window between "select candidate rows" and "mark them
         // claimed" for a second worker to slip into.
+        // The module's schema comes from the model, so the statement hits the right table
+        // whatever schema the module's DbContext maps to.
+        var schema = dbContext.Model.FindEntityType(typeof(OutboxMessage))?.GetSchema();
+        var qualifiedTable = schema is null ? tableName : $"\"{schema}\".{tableName}";
+
         var sql = $$"""
             WITH claimable AS (
                 SELECT "Id"
-                FROM {{tableName}}
+                FROM {{qualifiedTable}}
                 WHERE "Status" = {{(int)OutboxMessageStatus.Pending}}
                   AND "ScheduledAtUtc" <= now()
                 ORDER BY "ScheduledAtUtc", "Id"
                 FOR UPDATE SKIP LOCKED
                 LIMIT {0}
             )
-            UPDATE {{tableName}} m
+            UPDATE {{qualifiedTable}} m
             SET "Status" = {{(int)OutboxMessageStatus.Processing}},
                 "LockedBy" = {1},
                 "LockedUntilUtc" = now() + ({2} || ' milliseconds')::interval

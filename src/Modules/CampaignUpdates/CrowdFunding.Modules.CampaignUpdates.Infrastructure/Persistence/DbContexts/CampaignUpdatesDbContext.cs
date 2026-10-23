@@ -20,6 +20,8 @@ public sealed class CampaignUpdatesDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // Every table of this module lives in its own PostgreSQL schema.
+        modelBuilder.HasDefaultSchema("campaignupdates");
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(CampaignUpdatesDbContext).Assembly);
         base.OnModelCreating(modelBuilder);
     }

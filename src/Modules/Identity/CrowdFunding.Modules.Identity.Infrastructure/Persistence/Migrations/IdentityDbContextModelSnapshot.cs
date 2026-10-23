@@ -17,6 +17,7 @@ namespace CrowdFunding.Modules.Identity.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
+                .HasDefaultSchema("identity")
                 .HasAnnotation("ProductVersion", "10.0.5")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
@@ -67,7 +68,7 @@ namespace CrowdFunding.Modules.Identity.Infrastructure.Persistence.Migrations
                     b.HasIndex("NormalizedEmail")
                         .IsUnique();
 
-                    b.ToTable("users", (string)null);
+                    b.ToTable("users", "identity");
                 });
 
             modelBuilder.Entity("CrowdFunding.Modules.Identity.Domain.Entities.RefreshToken", b =>
@@ -119,7 +120,7 @@ namespace CrowdFunding.Modules.Identity.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("refresh_tokens", (string)null);
+                    b.ToTable("refresh_tokens", "identity");
                 });
 
             modelBuilder.Entity("CrowdFunding.Modules.Identity.Infrastructure.Persistence.SigningKeyRecord", b =>
@@ -147,7 +148,7 @@ namespace CrowdFunding.Modules.Identity.Infrastructure.Persistence.Migrations
                     b.HasIndex("Kid")
                         .IsUnique();
 
-                    b.ToTable("identity_signing_keys", (string)null);
+                    b.ToTable("identity_signing_keys", "identity");
                 });
 
             modelBuilder.Entity("CrowdFunding.Modules.Identity.Domain.Aggregates.User", b =>
@@ -170,7 +171,7 @@ namespace CrowdFunding.Modules.Identity.Infrastructure.Persistence.Migrations
 
                             b1.HasIndex("user_id");
 
-                            b1.ToTable("user_permissions", (string)null);
+                            b1.ToTable("user_permissions", "identity");
 
                             b1.WithOwner()
                                 .HasForeignKey("user_id");
@@ -194,7 +195,7 @@ namespace CrowdFunding.Modules.Identity.Infrastructure.Persistence.Migrations
 
                             b1.HasIndex("user_id");
 
-                            b1.ToTable("user_roles", (string)null);
+                            b1.ToTable("user_roles", "identity");
 
                             b1.WithOwner()
                                 .HasForeignKey("user_id");

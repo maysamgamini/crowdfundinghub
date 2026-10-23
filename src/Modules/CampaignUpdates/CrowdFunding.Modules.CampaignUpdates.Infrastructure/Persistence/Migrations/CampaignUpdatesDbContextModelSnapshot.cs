@@ -17,6 +17,7 @@ namespace CrowdFunding.Modules.CampaignUpdates.Infrastructure.Persistence.Migrat
         {
 #pragma warning disable 612, 618
             modelBuilder
+                .HasDefaultSchema("campaignupdates")
                 .HasAnnotation("ProductVersion", "10.0.5")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
@@ -65,7 +66,7 @@ namespace CrowdFunding.Modules.CampaignUpdates.Infrastructure.Persistence.Migrat
 
                     b.HasIndex("Status", "ScheduledAtUtc");
 
-                    b.ToTable("webhook_delivery_tasks", (string)null);
+                    b.ToTable("webhook_delivery_tasks", "campaignupdates");
                 });
 
             modelBuilder.Entity("CrowdFunding.Modules.CampaignUpdates.Domain.Aggregates.WebhookSubscription", b =>
@@ -99,7 +100,7 @@ namespace CrowdFunding.Modules.CampaignUpdates.Infrastructure.Persistence.Migrat
 
                     b.HasIndex("CampaignId", "IsActive");
 
-                    b.ToTable("webhook_subscriptions", (string)null);
+                    b.ToTable("webhook_subscriptions", "campaignupdates");
                 });
 
             modelBuilder.Entity("CrowdFunding.Modules.CampaignUpdates.Infrastructure.Persistence.ReadModels.CampaignOwnerCache", b =>
@@ -115,7 +116,7 @@ namespace CrowdFunding.Modules.CampaignUpdates.Infrastructure.Persistence.Migrat
 
                     b.HasKey("CampaignId");
 
-                    b.ToTable("campaign_owner_cache", (string)null);
+                    b.ToTable("campaign_owner_cache", "campaignupdates");
                 });
 #pragma warning restore 612, 618
         }

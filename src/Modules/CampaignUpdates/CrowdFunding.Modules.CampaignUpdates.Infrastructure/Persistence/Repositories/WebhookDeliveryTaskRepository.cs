@@ -38,14 +38,14 @@ public sealed class WebhookDeliveryTaskRepository : IWebhookDeliveryTaskReposito
         const string sql = """
             WITH claimable AS (
                 SELECT "Id"
-                FROM webhook_delivery_tasks
+                FROM campaignupdates.webhook_delivery_tasks
                 WHERE ("Status" = 'Pending' AND "ScheduledAtUtc" <= {0})
                    OR ("Status" = 'Processing' AND "LockedUntilUtc" IS NOT NULL AND "LockedUntilUtc" <= {0})
                 ORDER BY "ScheduledAtUtc"
                 FOR UPDATE SKIP LOCKED
                 LIMIT {1}
             )
-            UPDATE webhook_delivery_tasks t
+            UPDATE campaignupdates.webhook_delivery_tasks t
             SET "Status" = 'Processing',
                 "WorkerId" = {2},
                 "LockedUntilUtc" = {3}
