@@ -6,4 +6,5 @@
 public sealed record AddContributionToCampaignResult(
     Guid CampaignId,
     decimal RaisedAmount,
-    string Currency);
+    string Currency,
+    bool Accepted = true);

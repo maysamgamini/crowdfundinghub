@@ -104,7 +104,7 @@ public sealed class CampaignContributionConcurrencyTests
         var rewardTierRepository = new RewardTierRepository(dbContext);
         var rewardTierReservationRepository = new RewardTierReservationRepository(dbContext);
         var handler = new AddContributionToCampaignCommandHandler(
-            repository, ledger, rewardTierRepository, rewardTierReservationRepository, transactionExecutor, new NoOpCampaignRealtimeNotifier());
+            repository, ledger, rewardTierRepository, rewardTierReservationRepository, transactionExecutor, new NoOpCampaignRealtimeNotifier(), new CrowdFunding.Modules.Campaigns.Infrastructure.Services.SystemDateTimeProvider());
 
         await handler.Handle(
             new AddContributionToCampaignCommand(campaignId, contributionId, amount, currency),

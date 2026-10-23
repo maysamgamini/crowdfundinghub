@@ -1,3 +1,4 @@
+using CrowdFunding.Modules.Campaigns.Domain.Enums;
 using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
 using CrowdFunding.BuildingBlocks.Domain.Common;
@@ -29,6 +30,7 @@ public sealed class AddContributionToCampaignCommandHandler : ICommandHandler<Ad
     private readonly IRewardTierReservationRepository _rewardTierReservationRepository;
     private readonly ICampaignTransactionExecutor _transactionExecutor;
     private readonly ICampaignRealtimeNotifier _realtimeNotifier;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     public AddContributionToCampaignCommandHandler(
         ICampaignRepository campaignRepository,
@@ -36,7 +38,8 @@ public sealed class AddContributionToCampaignCommandHandler : ICommandHandler<Ad
         IRewardTierRepository rewardTierRepository,
         IRewardTierReservationRepository rewardTierReservationRepository,
         ICampaignTransactionExecutor transactionExecutor,
-        ICampaignRealtimeNotifier realtimeNotifier)
+        ICampaignRealtimeNotifier realtimeNotifier,
+        IDateTimeProvider dateTimeProvider)
     {
         _campaignRepository = campaignRepository;
         _contributionLedger = contributionLedger;
@@ -44,6 +47,7 @@ public sealed class AddContributionToCampaignCommandHandler : ICommandHandler<Ad
         _rewardTierReservationRepository = rewardTierReservationRepository;
         _transactionExecutor = transactionExecutor;
         _realtimeNotifier = realtimeNotifier;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     public async Task<AddContributionToCampaignResult> Handle(
@@ -65,6 +69,7 @@ public sealed class AddContributionToCampaignCommandHandler : ICommandHandler<Ad
                 var raisedAmount = 0m;
                 var raisedCurrency = string.Empty;
                 var wasRecorded = false;
+                var wasRejected = false;
 
                 await _transactionExecutor.ExecuteAsync(advisoryLockKey, async ct =>
                 {
@@ -79,6 +84,25 @@ public sealed class AddContributionToCampaignCommandHandler : ICommandHandler<Ad
                     if (campaign is null)
                     {
                         throw new KeyNotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
+                    }
+
+                    // The closing fence. This lock is the same one the deadline decision takes, so a
+                    // credit either lands before the decision and is counted in it, or arrives after
+                    // and sees the campaign no longer published. A payment that was confirmed after the
+                    // campaign ended is not counted and not an error: the campaign says so with an event,
+                    // and Contributions refunds it. Throwing here (the old behaviour) retried the event
+                    // and then dead-lettered it, leaving the backer charged for a campaign that ended.
+                    if (campaign.Status != CampaignStatus.Published)
+                    {
+                        campaign.RejectLateContribution(
+                            command.ContributionId, new Money(command.Amount, command.Currency), _dateTimeProvider.UtcNow);
+                        await _campaignRepository.UpdateAsync(campaign, ct);
+
+                        campaignId = campaign.Id;
+                        raisedAmount = campaign.RaisedAmount.Amount;
+                        raisedCurrency = campaign.RaisedAmount.Currency;
+                        wasRejected = true;
+                        return 0;
                     }
 
                     // Idempotency guard: at-least-once delivery of the payment-confirmed event
@@ -118,7 +142,7 @@ public sealed class AddContributionToCampaignCommandHandler : ICommandHandler<Ad
                     await _realtimeNotifier.NotifyPledgeReceivedAsync(campaignId, raisedAmount, raisedCurrency, cancellationToken);
                 }
 
-                return new AddContributionToCampaignResult(campaignId, raisedAmount, raisedCurrency);
+                return new AddContributionToCampaignResult(campaignId, raisedAmount, raisedCurrency, Accepted: !wasRejected);
             }
             catch (ConcurrencyConflictException) when (attempt < MaxConcurrencyRetries)
             {

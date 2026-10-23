@@ -678,7 +678,8 @@ public sealed class AddContributionToCampaignCommandHandlerTests
             new FakeRewardTierRepository(),
             new FakeRewardTierReservationRepository(),
             transactionExecutor,
-            new FakeCampaignRealtimeNotifier());
+            new FakeCampaignRealtimeNotifier(),
+            new FakeDateTimeProvider(new DateTime(2026, 4, 8, 12, 0, 0, DateTimeKind.Utc)));
 
         var result = await handler.Handle(
             new AddContributionToCampaignCommand(campaign.Id, Guid.NewGuid(), 125m, "usd"),
@@ -714,7 +715,8 @@ public sealed class AddContributionToCampaignCommandHandlerTests
             new FakeRewardTierRepository(),
             new FakeRewardTierReservationRepository(),
             transactionExecutor,
-            new FakeCampaignRealtimeNotifier());
+            new FakeCampaignRealtimeNotifier(),
+            new FakeDateTimeProvider(new DateTime(2026, 4, 8, 12, 0, 0, DateTimeKind.Utc)));
 
         var contributionId = Guid.NewGuid();
 
@@ -742,7 +744,8 @@ public sealed class AddContributionToCampaignCommandHandlerTests
             new FakeRewardTierRepository(),
             new FakeRewardTierReservationRepository(),
             transactionExecutor,
-            new FakeCampaignRealtimeNotifier());
+            new FakeCampaignRealtimeNotifier(),
+            new FakeDateTimeProvider(new DateTime(2026, 4, 8, 12, 0, 0, DateTimeKind.Utc)));
 
         var action = async () => await handler.Handle(
             new AddContributionToCampaignCommand(Guid.NewGuid(), Guid.NewGuid(), 125m, "usd"),

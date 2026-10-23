@@ -197,6 +197,23 @@ public sealed class Campaign : BaseEntity
         RaisedAmount = RaisedAmount.Add(contribution);
     }
 
+    /// <summary>
+    /// Refuses a confirmed contribution that arrived after the campaign stopped accepting funds, and
+    /// records that so the contributor can be refunded. A campaign that is still published never calls this.
+    /// </summary>
+    public void RejectLateContribution(Guid contributionId, Money contribution, DateTime nowUtc)
+    {
+        if (Status == CampaignStatus.Published)
+        {
+            throw new InvalidOperationException("A published campaign accepts contributions; it does not reject them.");
+        }
+
+        ArgumentNullException.ThrowIfNull(contribution);
+
+        AddDomainEvent(new LateContributionRejectedDomainEvent(
+            Id, contributionId, contribution.Amount, contribution.Currency, Status.ToString(), nowUtc));
+    }
+
     private static void ValidateOwner(Guid ownerId)
     {
         if (ownerId == Guid.Empty)
