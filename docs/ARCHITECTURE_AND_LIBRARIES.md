@@ -321,15 +321,16 @@ stateDiagram-v2
     Pending --> Processing: claim via SKIP LOCKED
     Processing --> Deleted: publish success, row removed
     Processing --> Pending: failure and attempts below max, exponential backoff
+    Processing --> Processing: lease ran out, another worker reclaims it (counts as an attempt)
     Processing --> DeadLetter: failure at max attempts or unknown type
     DeadLetter --> [*]: recorded in dead_letter_events for operator review
     note right of Processing
-        A crash here strands the row.
-        Nothing reclaims Processing outbox rows.
+        A crash here leaves the row leased.
+        When the lease runs out another worker reclaims it.
     end note
 ```
 
-Processing outbox rows are never reclaimed: the claim query selects only `Status = Pending`, and `LockedUntilUtc` is written but not read. A worker that dies after claiming leaves its rows in `Processing`.
+A worker that dies after claiming leaves its rows in `Processing` with a lease (`LockedUntilUtc`, written from the application clock). The claim query also selects `Processing` rows whose lease has run out, and each reclaim counts as an attempt, so a message that keeps killing its worker ends in the dead-letter table after five claims (`OutboxReclaimE2ETests`). A handler that runs longer than the 30-second lease can be reclaimed while still running, which is another reason consumers must be idempotent.
 
 ---
 

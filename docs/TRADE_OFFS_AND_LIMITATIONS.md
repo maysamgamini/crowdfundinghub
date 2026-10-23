@@ -568,7 +568,7 @@ The following operational matrix defines the tested safe ranges, warning thresho
 ```mermaid
 graph TD
     subgraph "Failure Analysis Scenarios"
-        F1["Scenario A: Worker Crash During Outbox Batch"] --> R1["Claimed rows stay in Processing<br/>Nothing reclaims them (LockedUntilUtc is never read)<br/>Stranded until an operator resets them"]
+        F1["Scenario A: Worker Crash During Outbox Batch"] --> R1["Claimed rows stay in Processing until the 30 s lease runs out<br/>Another worker then reclaims them, counting an attempt<br/>A message that keeps killing workers is dead-lettered"]
         F2["Scenario B: Invalid Currency in Event Payload"] --> R2["TryResolve fails -> Routed to DeadLetterEvent<br/>Remaining batch items continue processing<br/>Zero head-of-line blocking"]
         F3["Scenario C: Database Network Drop"] --> R3["Advisory locks auto-released by Postgres<br/>Transactions roll back cleanly<br/>Zero orphaned locks"]
     end
@@ -576,8 +576,8 @@ graph TD
 
 #### Scenario A: Worker Crash Mid-Batch
 - **Event**: An API container crashes or is terminated by the host while executing `eventPublisher.PublishAsync()` for message 5 of a 20-message claimed batch.
-- **System Defense**: In [`OutboxClaimQuery.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxClaimQuery.cs#L41), the claim sets `"LockedUntilUtc" = now() + (30000 || ' milliseconds')::interval`.
-- **Result**: The remaining unprocessed rows remain in `Processing` status for up to 30 seconds. `LockedUntilUtc` is written but never read for the outbox: the claim query selects only `Status = Pending`, so no worker or replica picks these rows up again. They are **stranded** until an operator resets them to `Pending`. Only `WebhookDeliveryTaskRepository` reclaims expired `Processing` rows, and that is a different table. No test covers outbox crash recovery. The consumer-side inbox (2.3.1) does not help here; it only deduplicates redelivery.
+- **System Defense**: In [`OutboxClaimQuery.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxClaimQuery.cs#L41), the claim writes `"LockedUntilUtc"` as the application clock plus the 30-second lock duration, and the same statement also selects `Processing` rows whose lease has already run out.
+- **Result**: The remaining unprocessed rows stay in `Processing` until their lease runs out (30 seconds). The next claim by any worker or replica takes them again and counts that as an attempt; after five claims that never finished, the message is written to the dead-letter table instead of being handed out again, so a message that crashes the process cannot loop forever. A handler that runs longer than the lease can be claimed twice, so consumers must stay idempotent (the inbox, 2.3.1). Covered by `OutboxReclaimE2ETests`. `WebhookDeliveryTaskRepository` has its own reclaim for its own table.
 
 #### Scenario B: Poison / Corrupt Event Payload
 - **Event**: A serialized JSON payload in the outbox cannot be deserialized, or its CLR type cannot be resolved by `EventTypeRegistry`.

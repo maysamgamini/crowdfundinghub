@@ -190,7 +190,7 @@ Failure modes, all of them harmless:
 |---|---|---|
 | Process restarts with signals pending | Signals are gone; rows are still in the table | Up to one poll interval of extra delay |
 | Signal sent, worker busy | One wake-up stays pending | The next batch starts immediately |
-| Worker crashes mid-batch | Claimed rows stay in `Processing` (**known gap**: nothing reclaims them yet) | See the outbox reclaim item in the gap list |
+| Worker crashes mid-batch | Claimed rows stay in `Processing` until their 30-second lease runs out; any worker then reclaims them and counts an attempt, and after five unfinished claims the message is dead-lettered | Up to the lease length of extra delay for those rows |
 | Two batches in one process | A per-worker gate allows one at a time; across processes `SKIP LOCKED` keeps them apart | None |
 
 ## 6. Where the other approaches slot in

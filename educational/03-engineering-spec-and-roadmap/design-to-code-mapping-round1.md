@@ -125,7 +125,7 @@ flowchart TD
 - **Write:** each module's transaction executor maps domain events to outbox rows in the same transaction (`CampaignTransactionExecutor.cs:57-148`, `ContributionTransactionExecutor.cs`).
 - **Drain:** `BB.Infrastructure/Outbox/ModuleOutboxProcessor.cs`, one worker per module. Claim query uses `FOR UPDATE SKIP LOCKED` (`OutboxClaimQuery.cs`); batch 20, five attempts, then dead letter.
 - **Registry and bus:** `EventTypeRegistry` keyed by event name and version; in-process bus by default, RabbitMQ optional.
-- **Gap:** the claim query takes only `Pending` rows, and nothing resets rows stuck in `Processing`, so a worker crash mid-batch can strand them. `docs/TRADE_OFFS_AND_LIMITATIONS.md` says they are reclaimed; the code does not.
+- **Crash recovery:** the claim also takes `Processing` rows whose lease has run out, writes the lease from the application clock, and counts a reclaim as an attempt so a message that keeps killing its worker is dead-lettered (`OutboxReclaimE2ETests`).
 - **Tests:** `OutboxTests`, `OutboxLeanTableE2ETests`, `ContributionAndOutboxE2ETests`, `RabbitMqMessageBusTests`.
 
 ### Cross-cutting: consumer inbox: MATCHES IN PART
@@ -157,7 +157,7 @@ The loop's "See It Built" section describes the reference code ahead of the code
 |---|---|---|
 | ~~No idempotency on pledge creation~~ **Closed:** `Idempotency-Key` header with a unique index per backer and key | 1.2 | Done |
 | No closing fence; late confirmations dead-letter without refund | 1.5 | Add an ENDED state and refund late confirmations |
-| Outbox rows stuck in `Processing` are never reclaimed | outbox | Reclaim on lock expiry, or correct the docs |
+| ~~Outbox rows stuck in `Processing` are never reclaimed~~ **Closed:** reclaim on lease expiry, lease on the application clock, attempts bounded | outbox | Done |
 | Ledger lacks entry kind, sign check, trigger, refund entries | 1.3 | Decide whether to build it or change the design text |
 | ~~Module tables are not in per-module schemas~~ **Closed:** every module has `HasDefaultSchema`, a `MoveTablesTo<Module>Schema` migration and its own history table, checked by `ModuleSchemaRulesTests` against a real database. Each module also now gets its own database in the local stack | Cross-cutting (schema per module) | Done |
 | No settlement charge-once mechanism | 1.6 | Out of scope while charge-now stands; document the choice |
@@ -170,12 +170,12 @@ The loop's "See It Built" section describes the reference code ahead of the code
 flowchart LR
     A["First reading"] --> B{"Re-checked against main"}
     B -->|changed| C["Inbox built<br/>Schemas built<br/>Outbox due-clock bug fixed<br/>Database per module locally"]
-    B -->|still true| D["No closing fence<br/>Ledger has no kind, sign check, trigger<br/>Outbox rows stuck in Processing<br/>Success/failure email stubs"]
+    B -->|still true| D["No closing fence<br/>Ledger has no kind, sign check, trigger<br/>Success/failure email stubs"]
     B -->|drifted| E["Line numbers only"]
 ```
 
-- **Outbox stuck rows (still true).** `OutboxClaimQuery` claims `Pending` rows only. `LockedUntilUtc` is written on claim and never read, so a row left in `Processing` by a crashed worker stays there. `docs/TRADE_OFFS_AND_LIMITATIONS.md` still says such rows are reclaimed.
-- **Outbox due-clock (new, fixed).** The claim query compared an application-set `ScheduledAtUtc` with the database's `now()`; a database clock slightly behind made just-queued rows unclaimable. It now compares against the application clock. One leftover inconsistency: `LockedUntilUtc` is still set from the database clock, harmless today because nothing reads it, but it matters the moment the reclaim above is built.
+- **Outbox stuck rows (new, fixed).** A row left in `Processing` by a crashed worker is now reclaimed once its lease runs out, and the lease is written from the application clock.
+- **Outbox due-clock (new, fixed).** The claim query compared an application-set `ScheduledAtUtc` with the database's `now()`; a database clock slightly behind made just-queued rows unclaimable. It now compares against the application clock. 
 - **Pledge idempotency (new, built).** See step 1.2.
 - **Closing fence, ledger shape, success/failure email (still true).** Searches for check constraints, triggers and ledger entry kinds found nothing. The notification handlers for published, cancelled and review events are still `Task.CompletedTask`.
 - **Webhook subscriptions (new).** A stale background save could re-activate a deleted subscription; fixed with an `xmin` token and covered by `WebhookSubscriptionConcurrencyTests`. It also fixed the tier assignment for that feature (stays Tier 3).

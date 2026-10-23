@@ -150,12 +150,12 @@ flowchart LR
         B2["Per-module schema, inbox, database"]
         B3["xmin and advisory-lock concurrency"]
         B6["Idempotent pledge creation"]
+        B7["Outbox wake-up signal and crash reclaim"]
         B4["Reward tier reservations, expiry, state-only refunds"]
         B5["Replicated profile with quorum witness"]
     end
     subgraph Open["Open gaps"]
         O2["Closing fence at the deadline"]
-        O3["Outbox rows stuck in Processing are not reclaimed"]
         O4["Ledger has no entry kind, sign check or trigger"]
         O5["Success and failure emails; charge-once settlement"]
     end

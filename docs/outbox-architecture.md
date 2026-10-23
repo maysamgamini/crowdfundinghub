@@ -68,10 +68,11 @@ coordination needed.
 4. Resolve: on success the row is deleted (it has no reason to stay in the active table); on failure it either goes back to `Pending`
    with a backed-off `ScheduledAtUtc` (if under the attempt limit) or to the terminal `DeadLetter`
    status (if not, or if the event type/payload couldn't be resolved at all) — see
-   `DeadLetterEvent`. A crash between claim and resolve strands the row in `Processing`: nothing
-   reclaims `Processing` outbox rows (`LockedUntilUtc` is written but never read). The inbox
-   (`<module>_inbox_messages`, keyed by message id and handler) is the consumer-side counterpart:
-   it makes a redelivered message run each handler at most once, but it does not rescue stranded rows.
+   `DeadLetterEvent`. A crash between claim and resolve leaves the row in `Processing` with a lease
+   (`LockedUntilUtc`, written from the application clock). The claim statement also selects
+   `Processing` rows whose lease has run out, and counts that as an attempt, so after the attempt limit a message
+   that keeps killing its worker is dead-lettered. The inbox (`<module>_inbox_messages`, keyed by message id
+   and handler) is the consumer-side counterpart: it makes a redelivered message run each handler at most once.
 
 **Advantages:**
 - **Zero extra infrastructure.** No Kafka/Redpanda cluster, no Kafka Connect, no schema registry
