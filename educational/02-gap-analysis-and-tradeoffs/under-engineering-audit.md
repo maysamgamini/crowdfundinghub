@@ -76,7 +76,7 @@ Introduce a pluggable **Message Bus Abstraction** (`IMessageBus`) or leverage Ma
 
 > [!NOTE]
 > **Resolved in Reference Codebase (`TICKET-024` & `TICKET-025`):**  
-> `IMessageBus` was implemented with a pluggable `InProcessMessageBus` (calls the in-process event publisher) and a publish-only `RabbitMqMessageBus` (no consumer exists yet), alongside autonomous per-module outbox workers.
+> `IMessageBus` was implemented with a pluggable `InProcessMessageBus` (calls the in-process event publisher) and a `RabbitMqMessageBus` with a matching `RabbitMqConsumerHost` that reads a durable queue and dead-letters failing messages, alongside autonomous per-module outbox workers.
 
 ---
 

@@ -17,4 +17,12 @@ public interface IMessageBus
     /// in-process provider, since local handlers receive the event object directly.
     /// </summary>
     Task PublishAsync(object applicationEvent, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Publishes an event that came from an outbox row, with that row's id. A transport that crosses a
+    /// process boundary uses the id as the message id, so a consumer can recognise a redelivery (the same
+    /// row published twice because the first delete failed) and handle it once. The default ignores the id.
+    /// </summary>
+    Task PublishAsync(object applicationEvent, Guid messageId, CancellationToken cancellationToken = default)
+        => PublishAsync(applicationEvent, cancellationToken);
 }

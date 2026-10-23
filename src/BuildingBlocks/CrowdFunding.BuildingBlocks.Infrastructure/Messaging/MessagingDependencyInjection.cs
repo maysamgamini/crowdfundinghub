@@ -24,6 +24,9 @@ public static class MessagingDependencyInjection
             services.Configure<RabbitMqOptions>(configuration.GetSection(RabbitMqOptions.SectionName));
             services.AddSingleton<RabbitMqMessageBus>();
             services.AddSingleton<IMessageBus>(sp => sp.GetRequiredService<RabbitMqMessageBus>());
+
+            // Publishing is only half of a broker transport; this host is the half that makes handlers run.
+            services.AddHostedService<RabbitMqConsumerHost>();
         }
         else
         {

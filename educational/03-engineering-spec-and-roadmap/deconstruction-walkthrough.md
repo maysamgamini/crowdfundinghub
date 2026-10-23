@@ -136,7 +136,7 @@ Because the monolith used **schema-per-module** with **zero cross-schema foreign
 
 In the monolith, `CampaignCreatedApplicationEvent` was polled in-process. In the microservices topology:
 1. The **Monolith** (or Campaigns microservice) publishes `CampaignCreated` to a RabbitMQ exchange or Kafka topic `campaigns.events`.
-2. The **Moderation Service** (`services/CrowdFunding.Moderation.Service`) reuses the module's existing `IEventHandler<T>` (registered with `AddEventHandlersFromAssemblies`). The RabbitMQ transport in `BuildingBlocks.Infrastructure` (`RabbitMqMessageBus`, built on `RabbitMQ.Client`, no MassTransit) only **publishes**: it writes the event as a CloudEvents message to the exchange. No consumer exists yet, so a subscriber that reads the exchange and calls the handlers below is the piece still to be written:
+2. The **Moderation Service** (`services/CrowdFunding.Moderation.Service`) reuses the module's existing `IEventHandler<T>` (registered with `AddEventHandlersFromAssemblies`). The RabbitMQ transport in `BuildingBlocks.Infrastructure` (built on `RabbitMQ.Client`, no MassTransit) has both halves: `RabbitMqMessageBus` writes the event as a CloudEvents message to the exchange, and `RabbitMqConsumerHost` reads the service's own durable queue, hands each event to the same `IEventPublisher` and per-module inbox the monolith uses, acknowledges only after the handlers finish, and dead-letters a message whose handlers keep failing. The handler below runs unchanged:
    ```csharp
    public class CampaignCreatedApplicationEventHandler : IEventHandler<CampaignCreatedApplicationEvent>
    {

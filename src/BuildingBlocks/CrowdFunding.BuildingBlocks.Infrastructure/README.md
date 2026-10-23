@@ -5,7 +5,7 @@ Provides shared technical implementations for persistence, transactional outbox 
 
 ## Subdirectories
 - `Outbox`: `ModuleOutboxProcessor<TDbContext>` is the polling worker every module subclasses; `IOutboxDispatcher` is its contract.
-- `Messaging`: `InProcessMessageBus` (default, calls the event publisher directly), `RabbitMqMessageBus` (optional, `Messaging:Provider`), `CloudEventEnvelope`, `RabbitMqOptions`, `MessagingDependencyInjection`.
+- `Messaging`: `InProcessMessageBus` (default, calls the event publisher directly), `RabbitMqMessageBus` and `RabbitMqConsumerHost` (optional, `Messaging:Provider = RabbitMQ`: the host consumes a durable queue, acknowledges after the handlers finish, retries, then dead-letters to `<queue>.dead`), `CloudEventEnvelope`, `RabbitMqOptions`, `MessagingDependencyInjection`.
 - `Caching`: Redis publish/subscribe for cross-replica cache invalidation.
 - `Audit`: `AuditDbContext`, `EfAuditStore`, and the pipeline behaviour that records every command (its own `audit_db` in the local stack).
 - `Configuration`: `GetRequiredModuleConnectionString` reads `ConnectionStrings:<Module>Db` and falls back to `DefaultConnection`.
@@ -32,6 +32,9 @@ flowchart LR
     Pr --> Bus{"Messaging:Provider"}
     Bus -- InProcess --> Pub["ServiceProviderEventPublisher"]
     Bus -- RabbitMQ --> Rb["RabbitMqMessageBus"]
+    Rb --> Q[("durable queue, dead-letter queue")]
+    Q --> Ch["RabbitMqConsumerHost"]
+    Ch --> Pub
     Pub --> In[("module inbox table")]
     Pub --> Hd["IEventHandler"]
 ```

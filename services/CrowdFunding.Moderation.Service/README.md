@@ -15,7 +15,7 @@ When transitioning an in-process module to an autonomous microservice, the Stran
 1. **Zero Domain Logic Rewrites:** The existing domain aggregate ([`CampaignReview`](../../src/Modules/Moderation/CrowdFunding.Modules.Moderation.Domain/Aggregates/CampaignReview.cs)), application command/query handlers, validation rules, and EF Core entity mappings are reused as-is without code modifications.
 2. **Autonomous Physical Boundary:** The service boots its own independent Web API host ([`Program.cs`](Program.cs)), mounts its own PostgreSQL schema (`moderation`), and performs its own migrations (`dotnet run -- migrate`).
 3. **Decentralized Cryptographic Security:** The service authenticates incoming requests using public JWKS discovery (`/.well-known/jwks.json`) fetched from the Identity issuer over HTTP, completely independent of the monolith host.
-4. **Pluggable Message Bus Integration:** Event publishing runs through `IMessageBus` (`RabbitMqMessageBus` in distributed mode, `InProcessMessageBus` in local mode). The RabbitMQ bus only publishes; no consumer reads the exchange yet.
+4. **Pluggable Message Bus Integration:** Event publishing runs through `IMessageBus` (`RabbitMqMessageBus` in distributed mode, `InProcessMessageBus` in local mode). With `Messaging:Provider = RabbitMQ` the host also runs `RabbitMqConsumerHost`, which reads the service's own durable queue (`Messaging:RabbitMq:Queue`) and hands each event to the module's handlers; a message whose handlers keep failing goes to `<queue>.dead`.
 
 ```mermaid
 graph TD

@@ -52,6 +52,20 @@ public sealed class EventTypeRegistry
     /// </summary>
     /// <param name="eventType">The event CLR type.</param>
     /// <returns>The simple name of the type.</returns>
+    /// <summary>
+    /// Resolves the newest registered version of an event by its type name, for transports (such as the
+    /// RabbitMQ envelope) that carry the type name but not the version.
+    /// </summary>
+    public bool TryResolveLatest(string eventType, out Type? resolvedType)
+    {
+        resolvedType = _types
+            .Where(entry => entry.Key.EventType == eventType)
+            .OrderByDescending(entry => entry.Key.Version)
+            .Select(entry => entry.Value)
+            .FirstOrDefault();
+        return resolvedType is not null;
+    }
+
     public static string GetDiscriminator(Type eventType) => eventType.Name;
 
     /// <summary>

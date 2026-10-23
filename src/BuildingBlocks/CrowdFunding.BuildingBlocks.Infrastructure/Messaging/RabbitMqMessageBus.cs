@@ -28,13 +28,17 @@ public sealed class RabbitMqMessageBus : IMessageBus, IAsyncDisposable
     }
 
     /// <inheritdoc/>
-    public async Task PublishAsync(object applicationEvent, CancellationToken cancellationToken = default)
+    public Task PublishAsync(object applicationEvent, CancellationToken cancellationToken = default)
+        => PublishAsync(applicationEvent, Guid.NewGuid(), cancellationToken);
+
+    /// <inheritdoc/>
+    public async Task PublishAsync(object applicationEvent, Guid messageId, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(applicationEvent);
 
         var eventType = applicationEvent.GetType();
         var envelope = new CloudEventEnvelope(
-            Id: Guid.NewGuid().ToString(),
+            Id: messageId.ToString(),
             Source: "urn:crowdfunding:monolith",
             Type: eventType.Name,
             Time: DateTimeOffset.UtcNow,

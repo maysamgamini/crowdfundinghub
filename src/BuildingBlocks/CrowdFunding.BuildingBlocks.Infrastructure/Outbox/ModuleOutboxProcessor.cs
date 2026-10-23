@@ -160,7 +160,7 @@ public abstract class ModuleOutboxProcessor<TDbContext> : BackgroundService, IOu
             try
             {
                 inboxContext.MessageId = message.Id;
-                await messageBus.PublishAsync(applicationEvent!, cancellationToken);
+                await messageBus.PublishAsync(applicationEvent!, message.Id, cancellationToken);
                 // Delete-on-success (TICKET-038 Strategy A): no UPDATE-then-keep-forever: a
                 // successfully published message has no further reason to exist in the active
                 // table, so it's removed immediately rather than marked Processed and left behind.

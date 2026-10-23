@@ -130,7 +130,7 @@ flowchart TD
 
 ### Cross-cutting: consumer inbox: MATCHES IN PART
 
-> A per-module inbox now exists: table `<module>_inbox_messages`, keyed by message ID and handler, written after the handler succeeds (`InboxRegistration.cs`, `EfInbox.cs`, `ServiceProviderEventPublisher.cs`; test `InboxRetryTests`). It is used by the in-process outbox dispatch only; the RabbitMQ path does not set a message ID. The record is written after the handler, so a crash between the two re-runs the handler once. The text below describes the code before that change and still explains why handlers must stay idempotent.
+> A per-module inbox now exists: table `<module>_inbox_messages`, keyed by message ID and handler, written after the handler succeeds (`InboxRegistration.cs`, `EfInbox.cs`, `ServiceProviderEventPublisher.cs`; test `InboxRetryTests`). It is used on both transports: in process the outbox row id is the message id, and over RabbitMQ it travels as the envelope id and the consumer host sets it. The record is written after the handler, so a crash between the two re-runs the handler once. The text below describes the code before that change and still explains why handlers must stay idempotent.
 
 Before the inbox existed, there was no inbox type and no per-consumer processed-event table, and consumers relied on natural state checks, which still back the inbox up: the ledger unique index, `Contribution.Refund` only from Succeeded, reservation status checks, and upserts in the replicated cache. Handlers run one after another inside one publish, so a failure in a later handler re-runs the earlier ones.
 

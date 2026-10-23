@@ -439,11 +439,11 @@ In TICKET-023 (the ticket text is not kept in this repository), this was replace
 #### Pluggable `IMessageBus` Abstraction
 In TICKET-024, the monolith decoupled event delivery from in-process memory via `IMessageBus`:
 - `InProcessMessageBus`: Calls `IEventPublisher` directly in the same process, for zero-infrastructure local execution (no `System.Threading.Channels`).
-- `RabbitMqMessageBus`: Pluggable distributed broker implementation for cluster deployments.
+- `RabbitMqMessageBus` and `RabbitMqConsumerHost`: the distributed broker transport, publishing and consuming. The host reads a durable queue bound to the events exchange, acknowledges a message only after its handlers finish, retries a failing handler a few times in process, and then dead-letters the message to `<queue>.dead`. Events this process has no registered type for are acknowledged and ignored.
 
 #### Consumer-Side Inbox
 
-Every module except Identity has a `<module>_inbox_messages` table keyed `(MessageId, Consumer)`, where `Consumer` is the handler's full type name (`EfInbox<TDbContext>`, called from `ServiceProviderEventPublisher`). The handler runs first; only after it succeeds is the pair recorded, with `INSERT ... ON CONFLICT DO NOTHING`. A crash between the handler and the record re-runs the handler once, so handlers must tolerate a repeat. The inbox applies only to in-process outbox dispatch, which sets `InboxMessageContext.MessageId`; the RabbitMQ path does not set a message id and bypasses it. Inbox rows are not pruned.
+Every module except Identity has a `<module>_inbox_messages` table keyed `(MessageId, Consumer)`, where `Consumer` is the handler's full type name (`EfInbox<TDbContext>`, called from `ServiceProviderEventPublisher`). The handler runs first; only after it succeeds is the pair recorded, with `INSERT ... ON CONFLICT DO NOTHING`. A crash between the handler and the record re-runs the handler once, so handlers must tolerate a repeat. The inbox applies on both transports: in-process dispatch sets `InboxMessageContext.MessageId` from the outbox row id, and over RabbitMQ the outbox row id travels as the envelope id and `RabbitMqConsumerHost` sets it on the consuming side, so a redelivered message runs each handler once. Inbox rows are not pruned.
 
 ### 2.9 Schema Versus Database Topology
 
