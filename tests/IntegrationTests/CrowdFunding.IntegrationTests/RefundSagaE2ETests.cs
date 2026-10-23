@@ -3,6 +3,11 @@ using CrowdFunding.API.Contracts.Campaigns;
 using CrowdFunding.API.Contracts.Contributions;
 using CrowdFunding.API.Contracts.Moderation;
 using CrowdFunding.API.Migrations;
+using CrowdFunding.Modules.Campaigns.Domain.Aggregates;
+using CrowdFunding.Modules.Campaigns.Domain.Enums;
+using CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.DbContexts;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CrowdFunding.IntegrationTests;
 
@@ -107,5 +112,16 @@ public sealed class RefundSagaE2ETests
             var contribution = await contributionResponse.Content.ReadFromJsonAsync<GetContributionByIdResponse>();
             Assert.Equal("Refunded", contribution!.Status);
         }
+
+        // The books balance. Each refund reached the campaign as a negative compensating ledger entry
+        // (nothing was edited or deleted), the exact ledger total is back to zero, and so is the stored balance.
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var campaigns = scope.ServiceProvider.GetRequiredService<CampaignsDbContext>();
+        var entries = await campaigns.Set<ContributionLedgerEntry>().AsNoTracking().Where(e => e.CampaignId == campaignId).ToListAsync();
+        Assert.Equal(3, entries.Count(e => e.Kind == LedgerEntryKind.Pledge && e.Amount == 100m));
+        Assert.Equal(3, entries.Count(e => e.Kind == LedgerEntryKind.Refund && e.Amount == -100m));
+        Assert.Equal(0m, entries.Sum(e => e.Amount));
+        var campaign = await campaigns.Campaigns.AsNoTracking().SingleAsync(c => c.Id == campaignId);
+        Assert.Equal(0m, campaign.RaisedAmount.Amount);
     }
 }

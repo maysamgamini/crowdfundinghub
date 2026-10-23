@@ -198,6 +198,34 @@ public sealed class Campaign : BaseEntity
     }
 
     /// <summary>
+    /// Takes a refunded contribution back out of the raised balance. Allowed in any status: a campaign that
+    /// failed or was cancelled still refunds its backers, and its balance follows.
+    /// </summary>
+    public void ReverseConfirmedContribution(Money contribution)
+    {
+        ArgumentNullException.ThrowIfNull(contribution);
+
+        RaisedAmount = RaisedAmount.Subtract(contribution);
+    }
+
+    /// <summary>
+    /// Sets the raised balance to the exact ledger total. Returns true when the stored counter had drifted
+    /// from the ledger, which the caller must report: the ledger is the record, the counter is a snapshot.
+    /// </summary>
+    public bool ReconcileRaisedAmount(Money exact)
+    {
+        ArgumentNullException.ThrowIfNull(exact);
+
+        if (exact.Currency == RaisedAmount.Currency && exact.Amount == RaisedAmount.Amount)
+        {
+            return false;
+        }
+
+        RaisedAmount = exact;
+        return true;
+    }
+
+    /// <summary>
     /// Refuses a confirmed contribution that arrived after the campaign stopped accepting funds, and
     /// records that so the contributor can be refunded. A campaign that is still published never calls this.
     /// </summary>

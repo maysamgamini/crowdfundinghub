@@ -94,6 +94,13 @@ public sealed class AddContributionToCampaignCommandHandler : ICommandHandler<Ad
                     // and then dead-lettered it, leaving the backer charged for a campaign that ended.
                     if (campaign.Status != CampaignStatus.Published)
                     {
+                        // The ledger tells the whole story: the payment arrived (a pledge entry) and the campaign
+                        // refused it (the matching refund entry), so the two cancel and nothing is counted.
+                        await _contributionLedger.TryRecordAsync(
+                            command.CampaignId, command.ContributionId, command.Amount, command.Currency, ct);
+                        await _contributionLedger.TryRecordRefundAsync(
+                            command.CampaignId, command.ContributionId, command.Amount, command.Currency, ct);
+
                         campaign.RejectLateContribution(
                             command.ContributionId, new Money(command.Amount, command.Currency), _dateTimeProvider.UtcNow);
                         await _campaignRepository.UpdateAsync(campaign, ct);
@@ -114,6 +121,14 @@ public sealed class AddContributionToCampaignCommandHandler : ICommandHandler<Ad
                         command.Amount,
                         command.Currency,
                         ct);
+
+                    // A refund can overtake the credit it reverses (events are not ordered). If this contribution
+                    // already has its refund entry, the pledge entry just written cancels it in the ledger and the
+                    // raised balance must not move.
+                    if (recorded && await _contributionLedger.HasRefundAsync(command.ContributionId, ct))
+                    {
+                        recorded = false;
+                    }
 
                     if (recorded)
                     {

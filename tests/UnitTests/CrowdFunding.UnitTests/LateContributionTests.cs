@@ -48,7 +48,11 @@ public sealed class LateContributionTests
 
         Assert.False(result.Accepted);
         Assert.Equal(0m, result.RaisedAmount);
-        Assert.Equal(0, ledger.RecordAttemptCount);
+        // The ledger tells the whole story: the payment arrived and the campaign refused it, so the two entries cancel.
+        Assert.Collection(ledger.Entries.OrderBy(e => e.Amount),
+            refund => { Assert.Equal("Refund", refund.Kind); Assert.Equal(-125m, refund.Amount); },
+            pledge => { Assert.Equal("Pledge", pledge.Kind); Assert.Equal(125m, pledge.Amount); });
+        Assert.Equal(0m, await ledger.SumAsync(campaign.Id, CancellationToken.None));
         Assert.Equal(new Money(0m, "USD"), campaign.RaisedAmount);
         var rejected = Assert.IsType<LateContributionRejectedDomainEvent>(Assert.Single(campaign.DomainEvents));
         Assert.Equal(contributionId, rejected.ContributionId);

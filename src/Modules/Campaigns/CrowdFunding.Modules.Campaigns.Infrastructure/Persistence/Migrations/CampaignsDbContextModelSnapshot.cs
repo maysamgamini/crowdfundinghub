@@ -203,6 +203,11 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Migrations
                         .HasMaxLength(3)
                         .HasColumnType("character varying(3)");
 
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
                     b.Property<DateTime>("RecordedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -210,11 +215,14 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("CampaignId");
 
-                    b.HasIndex("ContributionId")
+                    b.HasIndex("ContributionId", "Kind")
                         .IsUnique()
-                        .HasDatabaseName("uq_campaign_contributions_ledger_contribution_id");
+                        .HasDatabaseName("uq_campaign_contributions_ledger_contribution_kind");
 
-                    b.ToTable("campaign_contributions_ledger", "campaigns");
+                    b.ToTable("campaign_contributions_ledger", "campaigns", t =>
+                        {
+                            t.HasCheckConstraint("CK_campaign_contributions_ledger_sign_matches_kind", "(\"Kind\" = 'Pledge' AND \"Amount\" > 0) OR (\"Kind\" = 'Refund' AND \"Amount\" < 0)");
+                        });
                 });
 
             modelBuilder.Entity("CrowdFunding.Modules.Campaigns.Domain.Aggregates.RewardTier", b =>

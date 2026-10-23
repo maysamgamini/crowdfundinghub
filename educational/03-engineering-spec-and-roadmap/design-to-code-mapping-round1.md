@@ -82,12 +82,14 @@ sequenceDiagram
 - **Differences from the design:** the key is optional, but without one a second request is still refused by the one-live-pledge rule; keys are scoped to the backer, not global; a retention task clears a key after `Retention:IdempotencyKeyDays` (7 by default), so a retry later than that creates a new pledge.
 - **Tests:** `PledgeIdempotencyTests` (unit: replay, mismatch, retry after the campaign closed, lost race) and `PledgeIdempotencyE2ETests` (twelve simultaneous requests create one pledge; mismatch is a conflict; two backers may share a key; a malformed key is rejected).
 
-### Step 1.3: the total vs the pledges: SIMPLER VARIANT
+### Step 1.3: the total vs the pledges: MATCHES (with a stored counter beside the ledger)
 
-- **Design:** an append-only ledger. The total is derived from it.
-- **Code:** a table `campaign_contributions_ledger` with a unique index on `ContributionId` only; insert is `ON CONFLICT DO NOTHING` (`CAMP.Infrastructure/Persistence/Repositories/ContributionLedger.cs:22-42`). The total is a running counter, `Campaign.RaisedAmount`, added to in the same transaction under a per-campaign `pg_advisory_xact_lock` (`CampaignTransactionExecutor.cs:72-82`, `Campaign.cs:182-198`), with an `xmin` token and three retries as a second guard.
-- **Not present:** an entry kind, a sign check constraint, an update/delete trigger, negative refund entries, and a total computed as a ledger sum. Append-only is by convention.
-- **Tests:** `CampaignContributionConcurrencyTests.ConcurrentPledges_ShouldNotLoseUpdates`, `RedeliveredContribution_ShouldBeAppliedOnlyOnce`; `CampaignDomainTests.ApplyConfirmedContribution_*`.
+- **Design:** an append-only ledger. The total is derived from it, a refund is a negative compensating entry, and a decision uses the exact ledger sum, never a snapshot.
+- **Code:** a table `campaign_contributions_ledger` with an entry **kind** (`Pledge` or `Refund`). A pledge is stored positive and a refund negative, enforced by a CHECK constraint (`CK_campaign_contributions_ledger_sign_matches_kind`). Each contribution can appear once per kind (unique index on `(ContributionId, Kind)`), so a redelivered event cannot count twice. A trigger (`trg_campaign_contributions_ledger_append_only`) refuses every UPDATE and DELETE, so the only way to undo an entry is another entry. Refunds reach the campaign through `ContributionRefundedApplicationEvent` and `ReverseContributionOnCampaignCommandHandler`, which writes the negative entry and lowers the balance in the same per-campaign lock as crediting and deciding.
+- **The exact total decides:** `CompleteCampaignCommandHandler` and `FailCampaignCommandHandler` call `CampaignLedgerReconciliation` first. It sums the ledger, and when the stored `Campaign.RaisedAmount` disagrees it logs an error and uses the ledger total, so a drifted counter cannot fund or fail a campaign wrongly.
+- **Order-independent:** a refund can be processed before the credit it reverses. The refund entry is written anyway, the balance is left alone, and the credit that arrives later finds the refund and counts nothing; the two entries cancel in the ledger. A payment refused because the campaign had ended is recorded as a pledge and its matching refund together.
+- **Differences from the design:** the stored counter (`Campaign.RaisedAmount`) is kept for fast reads and is healed from the ledger at decision time instead of being removed.
+- **Tests:** `CampaignLedgerTests` (unit: refund then credit in either order, double delivery, refund on a failed campaign, a drifted counter), `CampaignLedgerDatabaseGuardTests` (the sign check, the trigger and the uniqueness, with plain SQL against PostgreSQL), `RefundSagaE2ETests` (three pledges and three refunds sum to zero), `CampaignContributionConcurrencyTests`.
 
 ### Step 1.4: limited tier oversold: MATCHES
 
@@ -149,8 +151,8 @@ The loop's "See It Built" section describes the reference code ahead of the code
 2. "A unique key on contribution and entry kind": the unique index is on `ContributionId` alone.
 3. "A check constraint ties each entry's sign to its kind": not found.
 4. "A trigger rejects updates and deletes": not found.
-5. "Refunds are negative compensating entries": refunds change contribution status and never touch the ledger or decrement `RaisedAmount`.
-6. "Recomputes the raised total as a sum over the ledger": the total is an incremental counter.
+5. "Refunds are negative compensating entries": true now. A refund writes a negative ledger entry and lowers the balance.
+6. "Recomputes the raised total as a sum over the ledger": the decision recomputes it from the ledger and heals the stored counter; reads use the counter.
 
 ## 5. Gaps this mapping exposes
 
@@ -161,7 +163,7 @@ The loop's "See It Built" section describes the reference code ahead of the code
 | ~~No idempotency on pledge creation~~ **Closed:** `Idempotency-Key` header with a unique index per backer and key | 1.2 | Done |
 | ~~No closing fence; late confirmations dead-letter without refund~~ **Closed:** late confirmations are rejected under the campaign lock and refunded; no ENDED state by design | 1.5 | Done |
 | ~~Outbox rows stuck in `Processing` are never reclaimed~~ **Closed:** reclaim on lease expiry, lease on the application clock, attempts bounded | outbox | Done |
-| Ledger lacks entry kind, sign check, trigger, refund entries | 1.3 | Decide whether to build it or change the design text |
+| ~~Ledger lacks entry kind, sign check, trigger, refund entries~~ **Closed:** kind, sign CHECK, append-only trigger, negative refund entries, decision on the exact sum | 1.3 | Done |
 | ~~Module tables are not in per-module schemas~~ **Closed:** every module has `HasDefaultSchema`, a `MoveTablesTo<Module>Schema` migration and its own history table, checked by `ModuleSchemaRulesTests` against a real database. Each module also now gets its own database in the local stack | Cross-cutting (schema per module) | Done |
 | No settlement charge-once mechanism | 1.6 | Out of scope while charge-now stands; document the choice |
 | No success/failure outcome email | "Tell people" | Add handlers or remove the stubs |
@@ -173,7 +175,7 @@ The loop's "See It Built" section describes the reference code ahead of the code
 flowchart LR
     A["First reading"] --> B{"Re-checked against main"}
     B -->|changed| C["Inbox built<br/>Schemas built<br/>Outbox due-clock bug fixed<br/>Database per module locally"]
-    B -->|still true| D["Ledger has no kind, sign check, trigger<br/>Success/failure email stubs"]
+    B -->|still true| D["Success/failure email stubs"]
     B -->|drifted| E["Line numbers only"]
 ```
 
@@ -181,7 +183,8 @@ flowchart LR
 - **Outbox due-clock (new, fixed).** The claim query compared an application-set `ScheduledAtUtc` with the database's `now()`; a database clock slightly behind made just-queued rows unclaimable. It now compares against the application clock. 
 - **Pledge idempotency (new, built).** See step 1.2.
 - **Closing fence (new, built as a simpler variant).** See step 1.5.
-- **Ledger shape, success/failure email (still true).** Searches for check constraints, triggers and ledger entry kinds found nothing. The notification handlers for published, cancelled and review events are still `Task.CompletedTask`.
+- **Ledger shape (new, built).** See step 1.3.
+- **Success/failure email (still true).** Searches for check constraints, triggers and ledger entry kinds found nothing. The notification handlers for published, cancelled and review events are still `Task.CompletedTask`.
 - **Webhook subscriptions (new).** A stale background save could re-activate a deleted subscription; fixed with an `xmin` token and covered by `WebhookSubscriptionConcurrencyTests`. It also fixed the tier assignment for that feature (stays Tier 3).
 - **Tests added since the first reading:** `InboxRetryTests`, `ModuleSchemaRulesTests`, `NotificationPreferencesTier2Tests`, `WebhookSubscriptionConcurrencyTests`. See `docs/TESTS_THAT_TEACH.md`.
 - **Still untested:** the reservation scavenger. Outbox crash recovery is covered by `OutboxReclaimE2ETests`.

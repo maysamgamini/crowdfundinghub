@@ -7,11 +7,11 @@ Most of the 450 tests in this repository protect the code. A handful do somethin
 ```mermaid
 flowchart TB
     subgraph Fast["Seconds, no Docker"]
-        U["Unit tests: 342<br/>domain rules, handlers, value objects"]
+        U["Unit tests: 349<br/>domain rules, handlers, value objects"]
         A["Architecture tests: 28<br/>who may reference whom, and that documents link to real things"]
     end
     subgraph Slow["Minutes, real PostgreSQL via Testcontainers"]
-        I["Integration tests: 123<br/>races, outbox, inbox, schemas, webhooks"]
+        I["Integration tests: 130<br/>races, outbox, inbox, schemas, webhooks"]
     end
     subgraph Drills["By hand, replicated stack"]
         D["Failure drills<br/>kill a primary, stop a standby"]
@@ -69,6 +69,7 @@ quadrantChart
 | `OneLivePledgeTests`, `PledgeIdempotencyE2ETests` (the two-tabs tests) | A second pledge with a new key is refused, twelve simultaneous pledges with twelve keys create exactly one, and a backer can pledge again once the first failed. | An idempotency key stops a retry; only a business rule enforced by the database stops a second attempt. |
 | `LateContributionTests`, `LateConfirmationRefundE2ETests` | A payment confirmed after the campaign ended is refused under the campaign lock and refunded, not retried into the dead-letter table. | The closing fence across two databases is a lock plus a compensation. |
 | `RewardTierDatabaseGuardTests` | Writing around the aggregate with plain SQL cannot oversell a reward tier, because the database holds the same rule as a CHECK constraint. | Defence in depth: the lock and the aggregate are the first line, the database is the last. |
+| `CampaignLedgerTests`, `CampaignLedgerDatabaseGuardTests` | A refund processed before its credit still ends at zero; the database refuses a wrongly signed entry and any update or delete; the deadline decision uses the ledger total when the counter has drifted. | A ledger is a record: constraints and a trigger make the rules unbreakable, and an exact sum beats a snapshot. |
 | `NotificationPreferencesTier2Tests` | A Tier 2 feature works with no aggregate or repository. | The poly-pattern in practice: small features stay small. |
 | `ReplicatedReadModelResilienceTests` | A module keeps serving from its replicated read model when the source module is down. | Why replicated read models exist. |
 

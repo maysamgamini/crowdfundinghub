@@ -17,4 +17,24 @@ public interface IContributionLedger
         decimal amount,
         string currency,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Records the compensating entry for a refunded or refused contribution (stored as a negative amount).
+    /// Returns false when the refund was already recorded.
+    /// </summary>
+    Task<bool> TryRecordRefundAsync(
+        Guid campaignId,
+        Guid contributionId,
+        decimal amount,
+        string currency,
+        CancellationToken cancellationToken);
+
+    /// <summary>True when a pledge entry for this contribution exists.</summary>
+    Task<bool> HasPledgeAsync(Guid contributionId, CancellationToken cancellationToken);
+
+    /// <summary>True when a refund entry for this contribution exists.</summary>
+    Task<bool> HasRefundAsync(Guid contributionId, CancellationToken cancellationToken);
+
+    /// <summary>The exact total of a campaign: every pledge minus every refund. This, not a stored counter, is what a funding decision can trust.</summary>
+    Task<decimal> SumAsync(Guid campaignId, CancellationToken cancellationToken);
 }

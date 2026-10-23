@@ -1127,9 +1127,11 @@ internal sealed class FakeRewardTierReservationRepository : IRewardTierReservati
 
 internal sealed class FakeContributionLedger : IContributionLedger
 {
-    private readonly HashSet<Guid> _recordedContributionIds = [];
+    private readonly List<(Guid CampaignId, Guid ContributionId, string Kind, decimal Amount)> _entries = [];
 
     public int RecordAttemptCount { get; private set; }
+
+    public IReadOnlyList<(Guid CampaignId, Guid ContributionId, string Kind, decimal Amount)> Entries => _entries;
 
     public Task<bool> TryRecordAsync(
         Guid campaignId,
@@ -1139,7 +1141,35 @@ internal sealed class FakeContributionLedger : IContributionLedger
         CancellationToken cancellationToken)
     {
         RecordAttemptCount++;
-        return Task.FromResult(_recordedContributionIds.Add(contributionId));
+        return Task.FromResult(Add(campaignId, contributionId, "Pledge", amount));
+    }
+
+    public Task<bool> TryRecordRefundAsync(
+        Guid campaignId,
+        Guid contributionId,
+        decimal amount,
+        string currency,
+        CancellationToken cancellationToken)
+        => Task.FromResult(Add(campaignId, contributionId, "Refund", -Math.Abs(amount)));
+
+    public Task<bool> HasPledgeAsync(Guid contributionId, CancellationToken cancellationToken)
+        => Task.FromResult(_entries.Any(e => e.ContributionId == contributionId && e.Kind == "Pledge"));
+
+    public Task<bool> HasRefundAsync(Guid contributionId, CancellationToken cancellationToken)
+        => Task.FromResult(_entries.Any(e => e.ContributionId == contributionId && e.Kind == "Refund"));
+
+    public Task<decimal> SumAsync(Guid campaignId, CancellationToken cancellationToken)
+        => Task.FromResult(_entries.Where(e => e.CampaignId == campaignId).Sum(e => e.Amount));
+
+    private bool Add(Guid campaignId, Guid contributionId, string kind, decimal amount)
+    {
+        if (_entries.Any(e => e.ContributionId == contributionId && e.Kind == kind))
+        {
+            return false;
+        }
+
+        _entries.Add((campaignId, contributionId, kind, amount));
+        return true;
     }
 }
 

@@ -1,3 +1,5 @@
+using CrowdFunding.Modules.Campaigns.Domain.Enums;
+
 namespace CrowdFunding.Modules.Campaigns.Domain.Aggregates;
 
 /// <summary>
@@ -11,6 +13,9 @@ public sealed class ContributionLedgerEntry
     public Guid Id { get; private set; }
     public Guid CampaignId { get; private set; }
     public Guid ContributionId { get; private set; }
+    public LedgerEntryKind Kind { get; private set; }
+
+    /// <summary>Positive for a pledge, negative for a refund. The database refuses any other combination.</summary>
     public decimal Amount { get; private set; }
     public string Currency { get; private set; } = string.Empty;
     public DateTime RecordedAtUtc { get; private set; }
@@ -19,11 +24,12 @@ public sealed class ContributionLedgerEntry
     {
     }
 
-    public ContributionLedgerEntry(Guid campaignId, Guid contributionId, decimal amount, string currency, DateTime recordedAtUtc)
+    public ContributionLedgerEntry(Guid campaignId, Guid contributionId, LedgerEntryKind kind, decimal amount, string currency, DateTime recordedAtUtc)
     {
         Id = Guid.NewGuid();
         CampaignId = campaignId;
         ContributionId = contributionId;
+        Kind = kind;
         Amount = amount;
         Currency = currency;
         RecordedAtUtc = recordedAtUtc;
