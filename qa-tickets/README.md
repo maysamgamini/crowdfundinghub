@@ -51,8 +51,8 @@ Findings from a consistency check across the active repositories (crowdfundinghu
 | [QA-012](QA-012.md) | P2 | crowdfunding | Audit trail covers one command and records refresh tokens in payloads | Open |
 | [QA-013](QA-013.md) | P2 | crowdfunding | Default email provider keeps every email in an unbounded in-memory queue | Open |
 | [QA-014](QA-014.md) | P2 | crowdfunding | Outbox trace spans have no listener, so trace context is dropped | Open |
-| [QA-016](QA-016.md) | P2 | crowdfunding | One live pledge per backer per campaign is not enforced | Open |
-| [QA-017](QA-017.md) | P2 | crowdfunding | Closing fence at the deadline is not built | Open |
+| [QA-016](QA-016.md) | P2 | crowdfunding | One live pledge per backer per campaign is not enforced | Fixed |
+| [QA-017](QA-017.md) | P2 | crowdfunding | Closing fence at the deadline is not built | Fixed |
 | [QA-024](QA-024.md) | P2 | crowdfunding | 'Every module has an outbox/inbox/Contracts' and the counts (projects, tests, xmin tokens) are wrong | Fixed |
 | [QA-025](QA-025.md) | P2 | crowdfunding | Dead links and wrong file names | Fixed |
 | [QA-026](QA-026.md) | P2 | crowdfunding | Wrong routes, status names, stale HA plan, pre-hardening documents without banners, mapping paragraph denying the inbox | Fixed |
@@ -65,7 +65,7 @@ Findings from a consistency check across the active repositories (crowdfundinghu
 | [QA-046](QA-046.md) | P2 | hispeedsystem | Broken links and naming | Open |
 | [QA-047](QA-047.md) | P2 | process | Automate the checks that found these problems | Open |
 | [QA-015](QA-015.md) | P3 | crowdfunding | Code hygiene: hard-coded schemas in raw SQL, bypassed clock, mixed index naming, dead code, test names that promise more than they check | Open |
-| [QA-018](QA-018.md) | P3 | crowdfunding | Ledger lacks entry kind, sign check, trigger and negative refund entries; total is a counter | Open |
+| [QA-018](QA-018.md) | P3 | crowdfunding | Ledger lacks entry kind, sign check, trigger and negative refund entries; total is a counter | Fixed |
 | [QA-019](QA-019.md) | P3 | crowdfunding | Success and failure outcome emails are not built | Open |
 | [QA-020](QA-020.md) | P3 | crowdfunding | Inbox is written after the handler and never pruned | Partly fixed |
 | [QA-042](QA-042.md) | P3 | hicleanarch | Hygiene: dates, commit ids, branch names, localhost URL, stray backup file, trace data and anchors | Open |
