@@ -42,6 +42,9 @@ public static class ContributionsInfrastructureDependencyInjection
         services.AddScoped<IActiveCampaignCacheRepository, ActiveCampaignCacheRepository>();
         services.AddScoped<IContributionReadService, ContributionReadService>();
         services.AddScoped<IContributionTransactionExecutor, ContributionTransactionExecutor>();
+        services.AddScoped<IPledgeSettlementStore, PledgeSettlementStore>();
+        services.AddOptions<PaymentOptions>().BindConfiguration(PaymentOptions.SectionName);
+        services.AddSingleton<IPaymentSettings>(sp => sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PaymentOptions>>().Value);
         services.AddSingleton<FakePaymentProvider>();
         services.AddSingleton<IPaymentProvider>(sp => sp.GetRequiredService<FakePaymentProvider>());
         services.AddSingleton<IContributionDateTimeProvider, SystemDateTimeProvider>();
@@ -49,6 +52,7 @@ public static class ContributionsInfrastructureDependencyInjection
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IRetentionTask, IdempotencyKeyExpiryTask>());
         services.AddOutboxSignal<ContributionsDbContext>();
         services.AddHostedService<ContributionsOutboxBackgroundService>();
+        services.AddHostedService<SettlementBackgroundService>();
 
         return services;
     }

@@ -141,6 +141,48 @@ namespace CrowdFunding.Modules.Contributions.Infrastructure.Persistence.Migratio
                     b.ToTable("contributions_outbox_messages", "contributions");
                 });
 
+            modelBuilder.Entity("CrowdFunding.Modules.Contributions.Domain.Aggregates.ChargeAttempt", b =>
+                {
+                    b.Property<Guid>("ContributionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AttemptNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeclineCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ProviderKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ProviderPaymentId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.HasKey("ContributionId", "AttemptNumber");
+
+                    b.HasIndex("ContributionId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_charge_attempts_one_success_per_pledge")
+                        .HasFilter("\"Status\" = 'Succeeded'");
+
+                    b.HasIndex("ProviderKey")
+                        .IsUnique();
+
+                    b.ToTable("charge_attempts", "contributions");
+                });
+
             modelBuilder.Entity("CrowdFunding.Modules.Contributions.Domain.Aggregates.Contribution", b =>
                 {
                     b.Property<Guid>("Id")
@@ -148,6 +190,14 @@ namespace CrowdFunding.Modules.Contributions.Infrastructure.Persistence.Migratio
 
                     b.Property<Guid>("CampaignId")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("ChargeAttempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTime?>("ChargeLeaseUntilUtc")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("ContributorId")
                         .HasColumnType("uuid");
@@ -171,9 +221,16 @@ namespace CrowdFunding.Modules.Contributions.Infrastructure.Persistence.Migratio
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<DateTime?>("NextChargeAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("PaymentGateway")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
+
+                    b.Property<string>("PaymentMethodReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("PaymentReference")
                         .HasMaxLength(100)
@@ -207,16 +264,24 @@ namespace CrowdFunding.Modules.Contributions.Infrastructure.Persistence.Migratio
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ChargeLeaseUntilUtc")
+                        .HasDatabaseName("ix_contributions_charging_lease")
+                        .HasFilter("\"Status\" = 'Charging'");
+
                     b.HasIndex("ContributorId");
 
                     b.HasIndex("ExternalPaymentIntentId")
                         .IsUnique()
                         .HasFilter("\"ExternalPaymentIntentId\" IS NOT NULL");
 
+                    b.HasIndex("NextChargeAtUtc")
+                        .HasDatabaseName("ix_contributions_due_for_charge")
+                        .HasFilter("\"Status\" = 'ToCharge'");
+
                     b.HasIndex("CampaignId", "ContributorId")
                         .IsUnique()
                         .HasDatabaseName("UX_contributions_one_live_pledge_per_backer")
-                        .HasFilter("\"Status\" IN ('Pending', 'Succeeded')");
+                        .HasFilter("\"Status\" IN ('Pending', 'Active', 'ToCharge', 'Charging', 'Succeeded')");
 
                     b.HasIndex("CampaignId", "CreatedAtUtc");
 

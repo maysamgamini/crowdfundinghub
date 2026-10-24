@@ -1,3 +1,4 @@
+using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.ConfirmPledgeSetup;
 using CrowdFunding.API.Contracts.Common;
 using CrowdFunding.API.Contracts.Contributions;
 using CrowdFunding.API.RateLimiting;
@@ -30,6 +31,7 @@ public sealed class ContributionsController : ControllerBase
     private readonly IQueryDispatcher _queryDispatcher;
     private readonly IMapper _mapper;
     private readonly IValidator<ConfirmContributionPaymentCommand> _confirmPaymentValidator;
+    private readonly IValidator<ConfirmPledgeSetupCommand> _confirmSetupValidator;
     private readonly IValidator<FailContributionPaymentCommand> _failPaymentValidator;
     private readonly IValidator<MakeContributionCommand> _validator;
 
@@ -38,6 +40,7 @@ public sealed class ContributionsController : ControllerBase
         IQueryDispatcher queryDispatcher,
         IMapper mapper,
         IValidator<ConfirmContributionPaymentCommand> confirmPaymentValidator,
+        IValidator<ConfirmPledgeSetupCommand> confirmSetupValidator,
         IValidator<FailContributionPaymentCommand> failPaymentValidator,
         IValidator<MakeContributionCommand> validator)
     {
@@ -45,6 +48,7 @@ public sealed class ContributionsController : ControllerBase
         _queryDispatcher = queryDispatcher;
         _mapper = mapper;
         _confirmPaymentValidator = confirmPaymentValidator;
+        _confirmSetupValidator = confirmSetupValidator;
         _failPaymentValidator = failPaymentValidator;
         _validator = validator;
     }
@@ -212,6 +216,46 @@ public sealed class ContributionsController : ControllerBase
 
         var result = await _commandDispatcher.SendAsync<ConfirmContributionPaymentResult>(command, cancellationToken);
         return Ok(_mapper.Map<ConfirmContributionPaymentResponse>(result));
+    }
+
+    /// <summary>
+    /// Records that the backer's card was saved (save-then-charge funding model): the pledge becomes active and
+    /// starts to count toward the campaign. Nothing is charged here; the card is charged once at the deadline if the
+    /// campaign is funded. In production this is the payment provider's "setup succeeded" news.
+    /// </summary>
+    /// <param name="campaignId">The unique identifier of the campaign.</param>
+    /// <param name="contributionId">The unique identifier of the pledge.</param>
+    /// <param name="request">The provider's reference for the saved card.</param>
+    /// <param name="cancellationToken">Cancellation token for asynchronous operation.</param>
+    /// <response code="200">The pledge is active.</response>
+    /// <response code="400">Invalid request or the pledge cannot be activated.</response>
+    /// <response code="401">Unauthorized if the request lacks a valid Bearer token.</response>
+    /// <response code="403">Forbidden if the caller lacks the 'contributions:payments:manage' permission.</response>
+    /// <response code="404">Contribution or campaign not found.</response>
+    [Authorize(Policy = PermissionConstants.ContributionsPaymentsManage)]
+    [HttpPost("{contributionId:guid}/confirm-setup")]
+    [ProducesResponseType(typeof(ConfirmPledgeSetupResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ConfirmPledgeSetupResponse>> ConfirmSetup(
+        [FromRoute] Guid campaignId,
+        [FromRoute] Guid contributionId,
+        [FromBody] ConfirmPledgeSetupRequest request,
+        CancellationToken cancellationToken)
+    {
+        var command = new ConfirmPledgeSetupCommand(campaignId, contributionId, request.PaymentMethodReference);
+        var validationResult = await _confirmSetupValidator.ValidateAsync(command, cancellationToken);
+
+        if (!validationResult.IsValid)
+        {
+            validationResult.AddToModelState(ModelState);
+            return ValidationProblem(ModelState);
+        }
+
+        var result = await _commandDispatcher.SendAsync<ConfirmPledgeSetupResult>(command, cancellationToken);
+        return Ok(_mapper.Map<ConfirmPledgeSetupResponse>(result));
     }
 
     /// <summary>

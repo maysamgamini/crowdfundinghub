@@ -22,7 +22,9 @@ public sealed class OneLivePledgeTests
             user,
             new FakeContributionDateTimeProvider(Now),
             repository,
-            executor ?? new FakeContributionTransactionExecutor());
+            executor ?? new FakeContributionTransactionExecutor(),
+            new CrowdFunding.Modules.Contributions.Infrastructure.Payments.FakePaymentProvider(),
+            new FakePaymentSettings());
 
     private static TestCurrentUser Backer() => new() { UserId = Guid.NewGuid(), Permissions = [PermissionConstants.CampaignsContribute] };
 
@@ -144,7 +146,7 @@ public sealed class OneLivePledgeTests
         var winner = Contribution.Create(campaignId, user.UserId, 100m, "USD", Now, idempotencyKey: "same");
         var handler = new MakeContributionCommandHandler(
             new FakeActiveCampaignCacheRepository(exists: true, isActive: true), user, new FakeContributionDateTimeProvider(Now),
-            new WinnerAppearsLateRepository(winner), new FakeContributionTransactionExecutor());
+            new WinnerAppearsLateRepository(winner), new FakeContributionTransactionExecutor(), new CrowdFunding.Modules.Contributions.Infrastructure.Payments.FakePaymentProvider(), new FakePaymentSettings());
 
         var result = await handler.Handle(new MakeContributionCommand(campaignId, 100m, "USD", IdempotencyKey: "same"), CancellationToken.None);
 
@@ -160,7 +162,7 @@ public sealed class OneLivePledgeTests
         var winner = Contribution.Create(campaignId, user.UserId, 100m, "USD", Now, idempotencyKey: "first");
         var handler = new MakeContributionCommandHandler(
             new FakeActiveCampaignCacheRepository(exists: true, isActive: true), user, new FakeContributionDateTimeProvider(Now),
-            new WinnerAppearsLateRepository(winner), new FakeContributionTransactionExecutor());
+            new WinnerAppearsLateRepository(winner), new FakeContributionTransactionExecutor(), new CrowdFunding.Modules.Contributions.Infrastructure.Payments.FakePaymentProvider(), new FakePaymentSettings());
 
         await Assert.ThrowsAsync<ResourceConflictException>(() =>
             handler.Handle(new MakeContributionCommand(campaignId, 100m, "USD", IdempotencyKey: "second"), CancellationToken.None));

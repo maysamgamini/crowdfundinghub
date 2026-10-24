@@ -1,3 +1,5 @@
+using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPledgeActivated;
+using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionReleased;
 using CrowdFunding.BuildingBlocks.Application.Outbox;
 using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Domain.Common;
@@ -155,6 +157,14 @@ public sealed class ContributionTransactionExecutor : IContributionTransactionEx
                     @event.Amount,
                     @event.Currency,
                     @event.RewardTierReservationId),
+                DateTime.UtcNow),
+            ContributionPledgeActivatedDomainEvent @event => OutboxMessage.Create(
+                new ContributionPledgeActivatedApplicationEvent(
+                    @event.ContributionId, @event.CampaignId, @event.ContributorId, @event.Amount, @event.Currency, @event.RewardTierReservationId),
+                DateTime.UtcNow),
+            ContributionReleasedDomainEvent @event => OutboxMessage.Create(
+                new ContributionReleasedApplicationEvent(
+                    @event.ContributionId, @event.CampaignId, @event.ContributorId, @event.Amount, @event.Currency, @event.RewardTierReservationId),
                 DateTime.UtcNow),
             ContributionRefundedDomainEvent @event => OutboxMessage.Create(
                 new ContributionRefundedApplicationEvent(

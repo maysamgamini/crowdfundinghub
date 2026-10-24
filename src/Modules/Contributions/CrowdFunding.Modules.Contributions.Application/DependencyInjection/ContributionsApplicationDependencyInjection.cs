@@ -1,3 +1,4 @@
+using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.ConfirmPledgeSetup;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions;
 ﻿using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.ConfirmContributionPayment;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.FailContributionPayment;
@@ -25,6 +26,9 @@ public static class ContributionsApplicationDependencyInjection
         services.AddScoped<FailContributionPaymentCommandHandler>();
         services.AddScoped<MakeContributionCommandHandler>();
         services.AddScoped<ContributionRefunder>();
+        services.AddScoped<PledgeChargeService>();
+        services.AddScoped<ConfirmPledgeSetupCommandHandler>();
+        services.AddScoped<IValidator<ConfirmPledgeSetupCommand>, ConfirmPledgeSetupCommandValidator>();
         services.AddScoped<ReconcilePaymentWebhookCommandHandler>();
         services.AddScoped<ListContributionsByCampaignQueryHandler>();
         services.AddScoped<IValidator<ConfirmContributionPaymentCommand>, ConfirmContributionPaymentCommandValidator>();

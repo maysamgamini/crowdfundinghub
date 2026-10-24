@@ -45,7 +45,10 @@ public sealed class ContributionRefunder
     public async Task RefundAsync(Contribution contribution, CancellationToken cancellationToken)
     {
         var result = await _paymentProvider.RefundAsync(
-            contribution.ExternalPaymentIntentId ?? $"contribution:{contribution.Id:N}",
+            // A pledge charged at the deadline is refunded against the provider's payment (the charge);
+            // one paid at confirmation against its payment intent.
+            (contribution.PaymentMethodReference is not null ? contribution.PaymentReference : contribution.ExternalPaymentIntentId)
+                ?? $"contribution:{contribution.Id:N}",
             contribution.Money.Amount,
             contribution.Money.Currency,
             RefundKey(contribution.Id, contribution.RefundFailures + 1),

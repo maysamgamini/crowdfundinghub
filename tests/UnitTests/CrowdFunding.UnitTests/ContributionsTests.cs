@@ -324,7 +324,7 @@ public sealed class MakeContributionCommandHandlerTests
             currentUser,
             new FakeContributionDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
             repository,
-            transactionExecutor);
+            transactionExecutor, new CrowdFunding.Modules.Contributions.Infrastructure.Payments.FakePaymentProvider(), new FakePaymentSettings());
 
         var command = new MakeContributionCommand(
             Guid.NewGuid(),
@@ -352,7 +352,7 @@ public sealed class MakeContributionCommandHandlerTests
             new TestCurrentUser { IsAuthenticated = false, UserId = Guid.Empty },
             new FakeContributionDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
             new FakeContributionRepository(),
-            new FakeContributionTransactionExecutor());
+            new FakeContributionTransactionExecutor(), new CrowdFunding.Modules.Contributions.Infrastructure.Payments.FakePaymentProvider(), new FakePaymentSettings());
 
         var action = async () => await handler.Handle(
             new MakeContributionCommand(Guid.NewGuid(), 100m, "USD"),
@@ -371,7 +371,7 @@ public sealed class MakeContributionCommandHandlerTests
             new TestCurrentUser(),
             new FakeContributionDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
             new FakeContributionRepository(),
-            new FakeContributionTransactionExecutor());
+            new FakeContributionTransactionExecutor(), new CrowdFunding.Modules.Contributions.Infrastructure.Payments.FakePaymentProvider(), new FakePaymentSettings());
 
         var action = async () => await handler.Handle(
             new MakeContributionCommand(Guid.NewGuid(), 100m, "USD"),
@@ -396,7 +396,7 @@ public sealed class MakeContributionCommandHandlerTests
             },
             new FakeContributionDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
             new FakeContributionRepository(),
-            transactionExecutor);
+            transactionExecutor, new CrowdFunding.Modules.Contributions.Infrastructure.Payments.FakePaymentProvider(), new FakePaymentSettings());
 
         var action = async () => await handler.Handle(
             new MakeContributionCommand(campaignId, 100m, "USD"),
@@ -422,7 +422,7 @@ public sealed class MakeContributionCommandHandlerTests
             },
             new FakeContributionDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
             new FakeContributionRepository(),
-            transactionExecutor);
+            transactionExecutor, new CrowdFunding.Modules.Contributions.Infrastructure.Payments.FakePaymentProvider(), new FakePaymentSettings());
 
         var action = async () => await handler.Handle(
             new MakeContributionCommand(campaignId, 100m, "USD"),
@@ -451,7 +451,7 @@ public sealed class MakeContributionCommandHandlerTests
             },
             new FakeContributionDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
             repository,
-            transactionExecutor);
+            transactionExecutor, new CrowdFunding.Modules.Contributions.Infrastructure.Payments.FakePaymentProvider(), new FakePaymentSettings());
 
         var action = async () => await handler.Handle(
             new MakeContributionCommand(campaignId, 100m, "EUR"),
@@ -485,7 +485,7 @@ public sealed class MakeContributionCommandHandlerTests
             },
             new FakeContributionDateTimeProvider(new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc)),
             repository,
-            transactionExecutor);
+            transactionExecutor, new CrowdFunding.Modules.Contributions.Infrastructure.Payments.FakePaymentProvider(), new FakePaymentSettings());
 
         var action = async () => await handler.Handle(
             new MakeContributionCommand(campaignId, 100m, "USD"),

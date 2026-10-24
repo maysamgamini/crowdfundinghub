@@ -86,6 +86,18 @@ public sealed class AddContributionToCampaignCommandHandler : ICommandHandler<Ad
                         throw new KeyNotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
                     }
 
+                    // A contribution that is already in the ledger is a repeat, whatever state the campaign is in now.
+                    // In the save-then-charge model it is counted when the card is saved and announced again when it is
+                    // charged, which can be long after the campaign succeeded; that second message must not be taken
+                    // for a late payment.
+                    if (await _contributionLedger.HasPledgeAsync(command.ContributionId, ct))
+                    {
+                        campaignId = campaign.Id;
+                        raisedAmount = campaign.RaisedAmount.Amount;
+                        raisedCurrency = campaign.RaisedAmount.Currency;
+                        return 0;
+                    }
+
                     // The closing fence. This lock is the same one the deadline decision takes, so a
                     // credit either lands before the decision and is counted in it, or arrives after
                     // and sees the campaign no longer published. A payment that was confirmed after the

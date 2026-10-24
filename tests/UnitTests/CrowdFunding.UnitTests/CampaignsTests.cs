@@ -693,6 +693,44 @@ public sealed class AddContributionToCampaignCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_ShouldNotTreatARepeatAsLate_WhenTheCampaignHasSucceededSinceTheFirstCredit()
+    {
+        var campaign = Campaign.Create(
+            Guid.NewGuid(),
+            "Launch a school robotics lab",
+            "This campaign funds tools and equipment for a new school robotics lab.",
+            "Education",
+            new Money(100m, "USD"),
+            new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
+        campaign.Publish(new DateTime(2026, 4, 7, 12, 0, 0, DateTimeKind.Utc));
+
+        var ledger = new FakeContributionLedger();
+        var handler = new CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.AddContributionToCampaign.AddContributionToCampaignCommandHandler(
+            new FakeCampaignRepository(campaign),
+            ledger,
+            new FakeRewardTierRepository(),
+            new FakeRewardTierReservationRepository(),
+            new FakeCampaignTransactionExecutor(),
+            new FakeCampaignRealtimeNotifier(),
+            new FakeDateTimeProvider(new DateTime(2026, 4, 8, 12, 0, 0, DateTimeKind.Utc)));
+
+        var contributionId = Guid.NewGuid();
+        var command = new AddContributionToCampaignCommand(campaign.Id, contributionId, 100m, "usd");
+
+        await handler.Handle(command, CancellationToken.None);
+        campaign.CompleteSuccessfully(new DateTime(2026, 6, 2, 0, 0, 0, DateTimeKind.Utc));
+        campaign.ClearDomainEvents();
+
+        // The same pledge is announced again once its card is charged, after the campaign succeeded.
+        await handler.Handle(command, CancellationToken.None);
+
+        Assert.DoesNotContain(campaign.DomainEvents, e => e.GetType().Name.Contains("Late"));
+        Assert.Equal(new Money(100m, "USD"), campaign.RaisedAmount);
+        Assert.Single(ledger.Entries);
+    }
+
+    [Fact]
     public async Task Handle_ShouldBeIdempotent_WhenSameContributionIsAppliedTwice()
     {
         var campaign = Campaign.Create(
@@ -731,7 +769,8 @@ public sealed class AddContributionToCampaignCommandHandlerTests
         Assert.Equal(125m, firstResult.RaisedAmount);
         Assert.Equal(125m, secondResult.RaisedAmount);
         Assert.Equal(new Money(125m, "USD"), campaign.RaisedAmount);
-        Assert.Equal(2, ledger.RecordAttemptCount);
+        // The repeat is recognised from the ledger and never reaches the insert.
+        Assert.Equal(1, ledger.RecordAttemptCount);
     }
 
     [Fact]

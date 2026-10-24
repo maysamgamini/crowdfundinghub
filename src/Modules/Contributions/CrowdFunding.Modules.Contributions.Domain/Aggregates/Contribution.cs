@@ -45,6 +45,18 @@ public sealed class Contribution : BaseEntity
     /// <summary>How many refund attempts the provider has answered with a failure. The next attempt gets the next number, and with it a new idempotency key.</summary>
     public int RefundFailures { get; private set; }
 
+    /// <summary>The saved card the provider returned when the backer finished setup. Only a reference: card numbers never reach this system.</summary>
+    public string? PaymentMethodReference { get; private set; }
+
+    /// <summary>How many charge attempts have been started at the deadline. The attempt in flight is this number.</summary>
+    public int ChargeAttempts { get; private set; }
+
+    /// <summary>When the pledge is next due to be charged (set when the campaign is funded, and after a declined attempt).</summary>
+    public DateTime? NextChargeAtUtc { get; private set; }
+
+    /// <summary>Until when a worker holds the charge attempt. After this another worker may resume the SAME attempt.</summary>
+    public DateTime? ChargeLeaseUntilUtc { get; private set; }
+
     /// <summary>The provider's reason for the most recent failed refund attempt.</summary>
     public string? LastRefundFailure { get; private set; }
 
@@ -205,6 +217,108 @@ public sealed class Contribution : BaseEntity
     /// Records that the provider answered a refund attempt with a failure. The next attempt is a new one
     /// (the number goes up, so it gets a new key); a timeout is not recorded here, because a timeout is not an answer.
     /// </summary>
+    /// <summary>The backer finished setup: the card is saved, nothing is charged, and the pledge now counts.</summary>
+    public void ActivatePledge(string paymentMethodReference, DateTime processedAtUtc)
+    {
+        if (Status != ContributionStatus.Pending)
+        {
+            throw new InvalidOperationException("Only a pending pledge can be activated.");
+        }
+
+        if (string.IsNullOrWhiteSpace(paymentMethodReference))
+        {
+            throw new ArgumentException("A saved payment method reference is required.", nameof(paymentMethodReference));
+        }
+
+        Status = ContributionStatus.Active;
+        PaymentMethodReference = paymentMethodReference.Trim();
+        FailureReason = null;
+        ProcessedAtUtc = processedAtUtc;
+        AddDomainEvent(new ContributionPledgeActivatedDomainEvent(
+            Id, CampaignId, ContributorId, Money.Amount, Money.Currency, RewardTierReservationId));
+    }
+
+    /// <summary>The campaign ended without being funded, or was cancelled: the promise ends and nothing is charged.</summary>
+    public void ReleasePledge(DateTime processedAtUtc)
+    {
+        if (Status is not (ContributionStatus.Pending or ContributionStatus.Active))
+        {
+            throw new InvalidOperationException($"Only a pending or active pledge can be released. Current status: '{Status}'.");
+        }
+
+        Status = ContributionStatus.Released;
+        ProcessedAtUtc = processedAtUtc;
+        AddDomainEvent(new ContributionReleasedDomainEvent(
+            Id, CampaignId, ContributorId, Money.Amount, Money.Currency, RewardTierReservationId));
+    }
+
+    /// <summary>The campaign was funded: this pledge now waits to be charged.</summary>
+    public void QueueForCharge(DateTime nowUtc)
+    {
+        if (Status != ContributionStatus.Active)
+        {
+            throw new InvalidOperationException($"Only an active pledge can be queued for charging. Current status: '{Status}'.");
+        }
+
+        Status = ContributionStatus.ToCharge;
+        NextChargeAtUtc = nowUtc;
+    }
+
+    /// <summary>
+    /// The charge succeeded: the money was taken. From here on the pledge is <c>Succeeded</c>, like any other
+    /// paid pledge, and the same payment-confirmed event goes out (receipt, platform fee, creator webhooks).
+    /// </summary>
+    public void RecordChargeSucceeded(string providerPaymentId, DateTime processedAtUtc)
+    {
+        if (Status != ContributionStatus.Charging)
+        {
+            throw new InvalidOperationException($"Only a pledge being charged can record a successful charge. Current status: '{Status}'.");
+        }
+
+        if (string.IsNullOrWhiteSpace(providerPaymentId))
+        {
+            throw new ArgumentException("The provider's payment id is required.", nameof(providerPaymentId));
+        }
+
+        Status = ContributionStatus.Succeeded;
+        PaymentReference = providerPaymentId.Trim();
+        FailureReason = null;
+        NextChargeAtUtc = null;
+        ChargeLeaseUntilUtc = null;
+        ProcessedAtUtc = processedAtUtc;
+        AddDomainEvent(new ContributionPaymentConfirmedDomainEvent(
+            Id, CampaignId, ContributorId, Money.Amount, Money.Currency, RewardTierReservationId));
+    }
+
+    /// <summary>
+    /// The provider answered a charge attempt with a decline. Below <paramref name="maxAttempts"/> the pledge goes
+    /// back to waiting, to be tried again later as the next numbered attempt; at the limit it fails for good.
+    /// </summary>
+    public void RecordChargeDeclined(string declineCode, int maxAttempts, TimeSpan retryDelay, DateTime nowUtc)
+    {
+        if (Status != ContributionStatus.Charging)
+        {
+            throw new InvalidOperationException($"Only a pledge being charged can record a declined charge. Current status: '{Status}'.");
+        }
+
+        ChargeLeaseUntilUtc = null;
+
+        if (ChargeAttempts >= maxAttempts)
+        {
+            Status = ContributionStatus.Failed;
+            FailureReason = $"The charge was declined {ChargeAttempts} times. Last reason: {declineCode}.";
+            NextChargeAtUtc = null;
+            ProcessedAtUtc = nowUtc;
+            AddDomainEvent(new ContributionPaymentFailedDomainEvent(
+                Id, CampaignId, ContributorId, Money.Amount, Money.Currency, FailureReason, RewardTierReservationId));
+            return;
+        }
+
+        Status = ContributionStatus.ToCharge;
+        FailureReason = declineCode;
+        NextChargeAtUtc = nowUtc.Add(retryDelay);
+    }
+
     public void RecordRefundFailure(string failureCode)
     {
         if (Status != ContributionStatus.Succeeded)

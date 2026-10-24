@@ -47,6 +47,25 @@ public sealed class ContributionConfiguration : IEntityTypeConfiguration<Contrib
         builder.Property(x => x.RefundReference)
             .HasMaxLength(100);
 
+        builder.Property(x => x.PaymentMethodReference)
+            .HasMaxLength(100);
+
+        builder.Property(x => x.ChargeAttempts)
+            .HasDefaultValue(0);
+
+        builder.Property(x => x.NextChargeAtUtc);
+        builder.Property(x => x.ChargeLeaseUntilUtc);
+
+        // The settlement worker's two questions, each answered from a small partial index: which pledges are
+        // due to be charged, and which charge attempts have lost their worker (the lease ran out).
+        builder.HasIndex(x => x.NextChargeAtUtc)
+            .HasDatabaseName("ix_contributions_due_for_charge")
+            .HasFilter("\"Status\" = 'ToCharge'");
+
+        builder.HasIndex(x => x.ChargeLeaseUntilUtc)
+            .HasDatabaseName("ix_contributions_charging_lease")
+            .HasFilter("\"Status\" = 'Charging'");
+
         builder.Property(x => x.RefundFailures)
             .HasDefaultValue(0);
 
@@ -93,7 +112,7 @@ public sealed class ContributionConfiguration : IEntityTypeConfiguration<Contrib
         builder.HasIndex(x => new { x.CampaignId, x.ContributorId })
             .IsUnique()
             .HasDatabaseName(ContributionIndexes.OneLivePledge)
-            .HasFilter("\"Status\" IN ('Pending', 'Succeeded')");
+            .HasFilter("\"Status\" IN ('Pending', 'Active', 'ToCharge', 'Charging', 'Succeeded')");
 
         builder.HasIndex(x => new { x.ContributorId, x.IdempotencyKey })
             .IsUnique()

@@ -1,3 +1,4 @@
+using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.ConfirmPledgeSetup;
 using CrowdFunding.API.Contracts.Contributions;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.ConfirmContributionPayment;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.FailContributionPayment;
@@ -20,6 +21,7 @@ public static class ContributionsMappingConfig
     public static void Register(TypeAdapterConfig config)
     {
         config.NewConfig<ConfirmContributionPaymentResult, ConfirmContributionPaymentResponse>();
+        config.NewConfig<ConfirmPledgeSetupResult, ConfirmPledgeSetupResponse>();
         config.NewConfig<FailContributionPaymentResult, FailContributionPaymentResponse>();
         config.NewConfig<MakeContributionResult, MakeContributionResponse>();
         config.NewConfig<ListContributionsByCampaignResult, ListContributionsResponse>();

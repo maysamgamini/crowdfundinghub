@@ -6,4 +6,5 @@
 public sealed record MakeContributionResult(
     Guid ContributionId,
     string Status,
-    bool IsReplay = false);
+    bool IsReplay = false,
+    string? ClientSecret = null);

@@ -22,7 +22,7 @@ public sealed class PledgeIdempotencyTests
             user,
             new FakeContributionDateTimeProvider(Now),
             repository,
-            executor);
+            executor, new CrowdFunding.Modules.Contributions.Infrastructure.Payments.FakePaymentProvider(), new FakePaymentSettings());
         return (handler, repository, executor, user);
     }
 
@@ -94,7 +94,7 @@ public sealed class PledgeIdempotencyTests
         var executor = new FakeContributionTransactionExecutor();
         var retryHandler = new MakeContributionCommandHandler(
             new FakeActiveCampaignCacheRepository(exists: true, isActive: true),
-            user, new FakeContributionDateTimeProvider(Now), repository, executor);
+            user, new FakeContributionDateTimeProvider(Now), repository, executor, new CrowdFunding.Modules.Contributions.Infrastructure.Payments.FakePaymentProvider(), new FakePaymentSettings());
 
         var replay = await retryHandler.Handle(new MakeContributionCommand(campaignId, 100m, "usd", IdempotencyKey: "k1"), CancellationToken.None);
 
@@ -114,7 +114,7 @@ public sealed class PledgeIdempotencyTests
         // The campaign is no longer active, which would reject a brand new pledge.
         var handler = new MakeContributionCommandHandler(
             new FakeActiveCampaignCacheRepository(exists: true, isActive: false),
-            user, new FakeContributionDateTimeProvider(Now), repository, new FakeContributionTransactionExecutor());
+            user, new FakeContributionDateTimeProvider(Now), repository, new FakeContributionTransactionExecutor(), new CrowdFunding.Modules.Contributions.Infrastructure.Payments.FakePaymentProvider(), new FakePaymentSettings());
 
         var replay = await handler.Handle(new MakeContributionCommand(campaignId, 100m, "USD", IdempotencyKey: "k1"), CancellationToken.None);
 
@@ -132,7 +132,7 @@ public sealed class PledgeIdempotencyTests
         var repository = new FakeContributionRepository(Contribution.Create(campaignId, user.UserId, 100m, "USD", Now, idempotencyKey: "k1"));
         var handler = new MakeContributionCommandHandler(
             new FakeActiveCampaignCacheRepository(exists: true, isActive: true),
-            user, new FakeContributionDateTimeProvider(Now), repository, new FakeContributionTransactionExecutor());
+            user, new FakeContributionDateTimeProvider(Now), repository, new FakeContributionTransactionExecutor(), new CrowdFunding.Modules.Contributions.Infrastructure.Payments.FakePaymentProvider(), new FakePaymentSettings());
 
         await Assert.ThrowsAsync<ResourceConflictException>(() =>
             handler.Handle(new MakeContributionCommand(campaignId, amount, currency, IdempotencyKey: "k1"), CancellationToken.None));
@@ -176,7 +176,7 @@ public sealed class PledgeIdempotencyTests
         var repository = new RaceLosingRepository(winner);
         var handler = new MakeContributionCommandHandler(
             new FakeActiveCampaignCacheRepository(exists: true, isActive: true),
-            user, new FakeContributionDateTimeProvider(Now), repository, new RaceLosingExecutor());
+            user, new FakeContributionDateTimeProvider(Now), repository, new RaceLosingExecutor(), new CrowdFunding.Modules.Contributions.Infrastructure.Payments.FakePaymentProvider(), new FakePaymentSettings());
 
         var result = await handler.Handle(new MakeContributionCommand(campaignId, 100m, "USD", IdempotencyKey: "k1"), CancellationToken.None);
 

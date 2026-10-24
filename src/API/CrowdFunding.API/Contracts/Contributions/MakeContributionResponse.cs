@@ -7,4 +7,5 @@ namespace CrowdFunding.API.Contracts.Contributions;
 /// <param name="Status">The initial status of the contribution (Pending).</param>
 public sealed record MakeContributionResponse(
     Guid ContributionId,
-    string Status);
+    string Status,
+    string? ClientSecret = null);

@@ -19,19 +19,25 @@ public sealed class MakeContributionCommandHandler : ICommandHandler<MakeContrib
     private readonly IContributionDateTimeProvider _dateTimeProvider;
     private readonly IContributionRepository _contributionRepository;
     private readonly IContributionTransactionExecutor _transactionExecutor;
+    private readonly IPaymentProvider _paymentProvider;
+    private readonly IPaymentSettings _paymentSettings;
 
     public MakeContributionCommandHandler(
         IActiveCampaignCacheRepository activeCampaignCacheRepository,
         ICurrentUser currentUser,
         IContributionDateTimeProvider dateTimeProvider,
         IContributionRepository contributionRepository,
-        IContributionTransactionExecutor transactionExecutor)
+        IContributionTransactionExecutor transactionExecutor,
+        IPaymentProvider paymentProvider,
+        IPaymentSettings paymentSettings)
     {
         _activeCampaignCacheRepository = activeCampaignCacheRepository;
         _currentUser = currentUser;
         _dateTimeProvider = dateTimeProvider;
         _contributionRepository = contributionRepository;
         _transactionExecutor = transactionExecutor;
+        _paymentProvider = paymentProvider;
+        _paymentSettings = paymentSettings;
     }
 
     /// <inheritdoc/>
@@ -112,11 +118,26 @@ public sealed class MakeContributionCommandHandler : ICommandHandler<MakeContrib
             command.RewardTierReservationId,
             command.IdempotencyKey);
 
-        // In a real integration this id/reference comes back from creating a PaymentIntent (or
-        // equivalent) with the external gateway before the client is redirected to complete
-        // authentication (3DS) — see TICKET-033. No live gateway call is made here; this is the
-        // correlation key an inbound webhook reconciles against in ReconcilePaymentWebhookCommandHandler.
-        contribution.AttachPaymentIntent($"pi_mock_{contribution.Id:N}", "Mock");
+        string? clientSecret = null;
+
+        if (_paymentSettings.FundingModel == FundingModel.SaveThenCharge)
+        {
+            // Save now, charge at the deadline: nothing is charged here. The provider starts a card save and the
+            // backer's browser finishes it directly with the provider (card details never reach this system).
+            // The key is fixed per pledge, so a retry of this call cannot start a second save.
+            var setup = await _paymentProvider.CreateSetupIntentAsync(
+                contribution.Id, _currentUser.UserId, $"contribution:{contribution.Id:N}:setup", cancellationToken);
+            contribution.AttachPaymentIntent(setup.SetupIntentId, "Mock");
+            clientSecret = setup.ClientSecret;
+        }
+        else
+        {
+            // In a real integration this id/reference comes back from creating a PaymentIntent (or equivalent) with
+            // the external gateway before the client is redirected to complete authentication (3DS), see
+            // TICKET-033. No live gateway call is made here; this is the correlation key an inbound webhook
+            // reconciles against in ReconcilePaymentWebhookCommandHandler.
+            contribution.AttachPaymentIntent($"pi_mock_{contribution.Id:N}", "Mock");
+        }
 
         try
         {
@@ -154,7 +175,7 @@ public sealed class MakeContributionCommandHandler : ICommandHandler<MakeContrib
             return ReplayOf(winner, command);
         }
 
-        return new MakeContributionResult(contribution.Id, contribution.Status.ToString());
+        return new MakeContributionResult(contribution.Id, contribution.Status.ToString(), ClientSecret: clientSecret);
     }
 
     private static ResourceConflictException AlreadyBacking()
