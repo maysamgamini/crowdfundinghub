@@ -39,6 +39,15 @@ public sealed class Contribution : BaseEntity
     /// available inventory for an abandoned or declined checkout.</summary>
     public Guid? RewardTierReservationId { get; private set; }
 
+    /// <summary>The payment provider's id for the refund of this pledge, once it has been refunded through the provider.</summary>
+    public string? RefundReference { get; private set; }
+
+    /// <summary>How many refund attempts the provider has answered with a failure. The next attempt gets the next number, and with it a new idempotency key.</summary>
+    public int RefundFailures { get; private set; }
+
+    /// <summary>The provider's reason for the most recent failed refund attempt.</summary>
+    public string? LastRefundFailure { get; private set; }
+
     /// <summary>The client-chosen key that makes creating this pledge safe to retry. A second
     /// request from the same backer with the same key returns this pledge instead of creating
     /// another. Null when the client sent no key (the old behaviour: every request is a new pledge).</summary>
@@ -192,7 +201,22 @@ public sealed class Contribution : BaseEntity
     /// already Refunded and is filtered out by <c>IContributionRepository.GetSucceededByCampaignIdAsync</c>
     /// rather than throwing or double-refunding.
     /// </summary>
-    public void Refund(DateTime processedAtUtc)
+    /// <summary>
+    /// Records that the provider answered a refund attempt with a failure. The next attempt is a new one
+    /// (the number goes up, so it gets a new key); a timeout is not recorded here, because a timeout is not an answer.
+    /// </summary>
+    public void RecordRefundFailure(string failureCode)
+    {
+        if (Status != ContributionStatus.Succeeded)
+        {
+            throw new InvalidOperationException($"Cannot record a refund failure for a contribution with status '{Status}'.");
+        }
+
+        RefundFailures++;
+        LastRefundFailure = failureCode;
+    }
+
+    public void Refund(DateTime processedAtUtc, string? refundReference = null)
     {
         if (Status != ContributionStatus.Succeeded)
         {
@@ -201,6 +225,7 @@ public sealed class Contribution : BaseEntity
 
         Status = ContributionStatus.Refunded;
         ProcessedAtUtc = processedAtUtc;
+        RefundReference = refundReference;
         AddDomainEvent(new ContributionRefundedDomainEvent(
             Id, CampaignId, ContributorId, Money.Amount, Money.Currency, RewardTierReservationId));
     }

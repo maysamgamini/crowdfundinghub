@@ -37,7 +37,7 @@ sequenceDiagram
 ## Capabilities
 - **Commands:** `MakeContribution`, `ConfirmContributionPayment`, `FailContributionPayment`, `ReconcilePaymentWebhook`.
 - **Queries:** `GetContributionById`, `ListContributionsByCampaign`.
-- **Event handlers:** `PledgeConfirmedMeteringEventHandler` (platform fee and CloudEvent to OpenMeter), `CampaignTerminationRefundHandler` (marks `Succeeded` pledges `Refunded` in batches of 100; state only, no gateway call), and replicated campaign read-model handlers.
+- **Event handlers:** `PledgeConfirmedMeteringEventHandler` (platform fee and CloudEvent to OpenMeter), `CampaignTerminationRefundHandler` (refunds `Succeeded` pledges, 100 at a time, each through the payment provider), and replicated campaign read-model handlers.
 - **Webhook guard:** signature check, stale-timestamp rejection and dedupe by event id in `processed_payment_webhooks`.
 - **Concurrency:** `xmin` token on `Contribution`, plus a unique key on `(ContributorId, IdempotencyKey)` for retried pledges. The advisory lock that serialises crediting a campaign sits in Campaigns.
 
@@ -89,7 +89,9 @@ A retention task clears a pledge's idempotency key after `Retention:IdempotencyK
 
 **Late confirmations are refunded.** A payment confirmed after its campaign ended is refused by Campaigns inside the campaign lock (`LateContributionRejected`), and `LateContributionRefundHandler` refunds the pledge.
 
-**Not built:** charge-once settlement, real payouts and a real payment provider. See `educational/03-engineering-spec-and-roadmap/design-to-code-mapping-round1.md`.
+**Refunds go through the payment provider.** `ContributionRefunder` calls `IPaymentProvider.RefundAsync` outside the database transaction, then marks the pledge `Refunded` and keeps the provider's reference. The idempotency key is per refund attempt (`contribution:<id>:refund:<n>`): a retry reuses it, so a crash between the provider call and the status change cannot refund twice, and the number goes up only after the provider answered "no". The provider is `FakePaymentProvider`, which replays the stored answer for a repeated key like a real one.
+
+**Not built:** saving a card at pledge time, charge-once settlement at the deadline, creator payouts and a real payment provider. See `educational/03-engineering-spec-and-roadmap/design-to-code-mapping-round1.md`.
 
 ## Data and messaging
 

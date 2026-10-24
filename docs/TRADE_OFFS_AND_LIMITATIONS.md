@@ -417,7 +417,7 @@ Eventual consistency has a price, and this is the window in which it shows:
 2. **T1 (00:00, a moment later)**: Backer submits a $1,000 pledge for Campaign X before the `CampaignCancelled` event has reached `Contributions`.
 3. **T2**: `Contributions` checks its replicated read model. The local replica still shows `IsActive = true`, so the pledge is accepted.
 4. **T3**: The event arrives and `Contributions` flips the replica to inactive. Further pledges and payment confirmations are rejected.
-5. **Result**: The pledge that slipped in is not lost track of. `CampaignTerminationRefundHandler` refunds every contribution of the campaign that has already succeeded, and `ConfirmContributionPaymentCommandHandler` refuses to confirm a payment once the replica says the campaign is no longer published. The window is milliseconds with the wake-up signal, not the several seconds a fixed polling timer would leave. Refunds are state-only today (see Known Gaps).
+5. **Result**: The pledge that slipped in is not lost track of. `CampaignTerminationRefundHandler` refunds every contribution of the campaign that has already succeeded, and `ConfirmContributionPaymentCommandHandler` refuses to confirm a payment once the replica says the campaign is no longer published. The window is milliseconds with the wake-up signal, not the several seconds a fixed polling timer would leave. Refunds go through a fake payment provider today (see Known Gaps).
 
 > [!NOTE]
 > **Conclusion:** The replicated read model costs a short stale window and a refund path for the pledge that lands inside it. In return, `Contributions` no longer depends on `Campaigns` at runtime, which is what makes extracting it into its own service possible.
@@ -747,7 +747,7 @@ graph TB
 #### 2. Asynchronous Replicated Read Models
 - Already in place inside the monolith: `Contributions` keeps `active_campaigns_cache` in its own database and updates it from `CampaignCreated`, `CampaignPublished`, `CampaignCancelled`, `CampaignSucceeded` and `CampaignFailed` events (section 2.5).
 - Remaining step: feed the same handlers from Kafka stream consumers instead of the in-process bus.
-- Extend the existing refund handler (`CampaignTerminationRefundHandler`, state-only today) into a full compensation saga that also moves money, for a contribution that slips in during the eventual consistency window of a campaign cancellation.
+- Extend the existing refund handler (`CampaignTerminationRefundHandler`) into a compensation saga for a contribution that slips in during the eventual consistency window of a campaign cancellation. Done: a late confirmation is refused under the campaign lock and refunded through the payment provider.
 
 #### 3. Lock-Free Partitioned Event Sourcing
 - Route all events for a given `CampaignId` to the same Kafka partition key.
@@ -796,6 +796,6 @@ Prior to promoting CrowdFunding Hub to high-traffic production environments, the
 The detailed lists live in [`TESTS_THAT_TEACH.md`](TESTS_THAT_TEACH.md) ("Gaps") and `educational/03-engineering-spec-and-roadmap/design-to-code-mapping-round1.md` (section 6). In short:
 
 - The ledger lacks an entry kind, a sign check and a trigger.
-- Refunds are state-only: no gateway money movement and no ledger reversal.
+- Refunds go through a fake payment provider; there is no real provider, no card saving and no creator payout.
 - Success and failure emails are not built.
 - The campaign scavenger is untested, and the inbox crash window has only a note. Outbox crash recovery is covered by `OutboxReclaimE2ETests`.

@@ -1,8 +1,6 @@
 using CrowdFunding.BuildingBlocks.Application.Events;
 using CrowdFunding.Modules.Campaigns.Contracts.Events.LateContributionRejected;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
-using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
-using CrowdFunding.Modules.Contributions.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Contributions.Domain.Enums;
 
 namespace CrowdFunding.Modules.Contributions.Application.Features.Contributions.Events;
@@ -14,17 +12,12 @@ namespace CrowdFunding.Modules.Contributions.Application.Features.Contributions.
 public sealed class LateContributionRefundHandler : IEventHandler<LateContributionRejectedApplicationEvent>
 {
     private readonly IContributionRepository _contributionRepository;
-    private readonly IContributionTransactionExecutor _transactionExecutor;
-    private readonly IContributionDateTimeProvider _dateTimeProvider;
+    private readonly ContributionRefunder _refunder;
 
-    public LateContributionRefundHandler(
-        IContributionRepository contributionRepository,
-        IContributionTransactionExecutor transactionExecutor,
-        IContributionDateTimeProvider dateTimeProvider)
+    public LateContributionRefundHandler(IContributionRepository contributionRepository, ContributionRefunder refunder)
     {
         _contributionRepository = contributionRepository;
-        _transactionExecutor = transactionExecutor;
-        _dateTimeProvider = dateTimeProvider;
+        _refunder = refunder;
     }
 
     public async Task Handle(LateContributionRejectedApplicationEvent notification, CancellationToken cancellationToken)
@@ -36,10 +29,6 @@ public sealed class LateContributionRefundHandler : IEventHandler<LateContributi
             return;
         }
 
-        await _transactionExecutor.ExecuteAsync(async ct =>
-        {
-            contribution.Refund(_dateTimeProvider.UtcNow);
-            await _contributionRepository.UpdateAsync(contribution, ct);
-        }, cancellationToken);
+        await _refunder.RefundAsync(contribution, cancellationToken);
     }
 }

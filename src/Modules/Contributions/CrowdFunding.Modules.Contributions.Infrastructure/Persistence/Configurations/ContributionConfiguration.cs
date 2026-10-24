@@ -44,6 +44,15 @@ public sealed class ContributionConfiguration : IEntityTypeConfiguration<Contrib
         builder.Property(x => x.ExternalPaymentIntentId)
             .HasMaxLength(100);
 
+        builder.Property(x => x.RefundReference)
+            .HasMaxLength(100);
+
+        builder.Property(x => x.RefundFailures)
+            .HasDefaultValue(0);
+
+        builder.Property(x => x.LastRefundFailure)
+            .HasMaxLength(200);
+
         builder.Property(x => x.PaymentGateway)
             .HasMaxLength(50);
 

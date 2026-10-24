@@ -167,6 +167,10 @@ namespace CrowdFunding.Modules.Contributions.Infrastructure.Persistence.Migratio
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("LastRefundFailure")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<string>("PaymentGateway")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
@@ -177,6 +181,15 @@ namespace CrowdFunding.Modules.Contributions.Infrastructure.Persistence.Migratio
 
                     b.Property<DateTime?>("ProcessedAtUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("RefundFailures")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<string>("RefundReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<Guid?>("RewardTierReservationId")
                         .HasColumnType("uuid");

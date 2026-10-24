@@ -3,7 +3,9 @@ using CrowdFunding.Modules.Campaigns.Contracts.Commands.AddContributionToCampaig
 using CrowdFunding.Modules.Campaigns.Contracts.Events.LateContributionRejected;
 using CrowdFunding.Modules.Campaigns.Domain.Aggregates;
 using CrowdFunding.Modules.Campaigns.Domain.Events;
+using CrowdFunding.Modules.Contributions.Application.Features.Contributions;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Events;
+using CrowdFunding.Modules.Contributions.Infrastructure.Payments;
 using CrowdFunding.Modules.Contributions.Domain.Aggregates;
 using CrowdFunding.Modules.Contributions.Domain.Enums;
 using AddContributionHandler = CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.AddContributionToCampaign.AddContributionToCampaignCommandHandler;
@@ -93,7 +95,7 @@ public sealed class LateContributionTests
     }
 
     private static LateContributionRefundHandler RefundHandler(FakeContributionRepository repository)
-        => new(repository, new FakeContributionTransactionExecutor(), new FakeContributionDateTimeProvider(Now));
+        => new(repository, new ContributionRefunder(repository, new FakeContributionTransactionExecutor(), new FakeContributionDateTimeProvider(Now), new FakePaymentProvider()));
 
     [Fact]
     public async Task ARejectedContribution_IsRefunded()

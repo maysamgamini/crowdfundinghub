@@ -153,7 +153,7 @@ flowchart LR
         B7["Outbox wake-up signal and crash reclaim"]
         B8["One live pledge per backer; late confirmations refunded"]
         B9["Append-only ledger with refund entries"]
-        B4["Reward tier reservations, expiry, state-only refunds"]
+        B4["Reward tier reservations, expiry, refunds through a fake payment provider"]
         B5["Replicated profile with quorum witness"]
     end
     subgraph Open["Open gaps"]
@@ -230,9 +230,9 @@ dotnet test CrowdFunding.slnx
 
 | Test Project | Purpose & Scope | Count | Needs Docker |
 | :--- | :--- | :---: | :---: |
-| **`CrowdFunding.UnitTests`** | Domain aggregate invariants, command handlers, value objects. | 349 | no |
+| **`CrowdFunding.UnitTests`** | Domain aggregate invariants, command handlers, value objects. | 357 | no |
 | **`CrowdFunding.ArchitectureTests`** | Assembly-reference rules that keep module boundaries intact, plus checks that the documents link to things that exist. | 28 | no |
-| **`CrowdFunding.IntegrationTests`** | HTTP flows, concurrency races, outbox, inbox and schema rules against real PostgreSQL (Testcontainers). | 130 | yes |
+| **`CrowdFunding.IntegrationTests`** | HTTP flows, concurrency races, outbox, inbox and schema rules against real PostgreSQL (Testcontainers). | 132 | yes |
 
 The counts are the test cases that `dotnet test --list-tests` reports for each project, and they are the single source for the other pages. A fourth project, `CrowdFunding.ModerationService.IntegrationTests` (2 tests), covers the extracted Moderation service. It is not part of `CrowdFunding.slnx`; run it on its own with `dotnet test tests/IntegrationTests/CrowdFunding.ModerationService.IntegrationTests`.
 

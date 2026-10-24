@@ -16,7 +16,7 @@ Paths are relative to the repo root. `CAMP` = `src/Modules/Campaigns/CrowdFundin
 | 1.3 The total on the page vs the pledges | Campaigns | SIMPLER VARIANT (idempotency table plus a locked counter) | `CampaignContributionConcurrencyTests` |
 | 1.4 Limited tier oversold | Campaigns | MATCHES (lock, invariant, 15-minute hold, and a database CHECK constraint) | `RewardTierConcurrencyE2ETests`, `RewardTierDatabaseGuardTests` |
 | 1.5 Pledge after the deadline | Contributions, Campaigns | SIMPLER VARIANT (lock and status check inside Campaigns, plus a refund for a late confirmation; no ENDED state) | `LateContributionTests`, `LateConfirmationRefundE2ETests` |
-| 1.6 Settlement at the deadline | Campaigns, Contributions | SIMPLER VARIANT (decision and state-only refunds); charge-once settlement NOT BUILT; webhook inbox MATCHES | `CampaignExpirationE2ETests`, `RefundSagaE2ETests`, webhook tests |
+| 1.6 Settlement at the deadline | Campaigns, Contributions | SIMPLER VARIANT (decision; refunds go through a fake payment provider); charge-once settlement NOT BUILT; webhook inbox MATCHES | `CampaignExpirationE2ETests`, `RefundSagaE2ETests`, webhook tests |
 | Outbox, event registry, dead letter | BuildingBlocks | MATCHES | `EventTypeRegistryTests`, `OutboxMessageTests`, `OutboxLeanTableE2ETests` |
 | Consumer inbox | all consumers | MATCHES in part (per-module inbox; written after the handler, so a crash window remains) | `InboxRetryTests` |
 | "Tell people" | Notifications | SIMPLER VARIANT | `EmailNotificationOutboxE2ETests` |
@@ -120,7 +120,7 @@ flowchart TD
 ```
 
 - **Decider:** compares the stored counter with the goal (`CampaignExpirationBackgroundService.cs:76`). The read happens before the lock; the handlers re-validate under it.
-- **Refund saga:** state only. It marks contributions Refunded and never calls a payment provider (`CONT.Application/Features/Contributions/Events/CampaignTerminationRefundHandler.cs`).
+- **Refund saga:** each refund asks the payment provider to return the money (`ContributionRefunder`), then marks the contribution Refunded and keeps the provider's reference. The provider is a fake (`FakePaymentProvider`) that replays the stored answer for a repeated idempotency key. The key is per refund attempt: a retry after a timeout or a crash reuses it, so no refund is issued twice; a new attempt gets a new key only after the provider has answered "no" (a real provider replays a failed answer for a repeated key). The provider call is outside the database transaction. Tests: `PaymentProviderRefundTests`, `RefundThroughProviderE2ETests`, `RefundSagaE2ETests`.
 - **NOT BUILT:** charging each pledge exactly once at settlement (no settlement jobs, no charge attempts, no payment-provider idempotency keys, no charge states).
 - **Webhook inbox: MATCHES.** Signature check, stale-timestamp rejection and dedupe by event ID (`PaymentWebhooksController.cs`, `StripeWebhookSignatureVerifier.cs`, `PaymentWebhookIdempotencyStore.cs`, table `processed_payment_webhooks`). The check and insert are a SELECT then an INSERT in one transaction, with the primary key as the backstop.
 - **Tests:** `CampaignExpirationE2ETests`, `RefundSagaE2ETests`, `CampaignTerminationRefundHandlerTests` (idempotent on redelivery, batches), the webhook reconciliation tests.

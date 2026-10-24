@@ -137,7 +137,7 @@ Campaigns never complete or fail, and backer pledges cannot be refunded, leaving
 > [!NOTE]
 > Fully implemented with `CampaignExpirationBackgroundService`, `CampaignCompletedSuccessfulDomainEvent`, `CampaignExpiredFailedDomainEvent`, and `RefundContributionCommandHandler`.
 >
-> Limits: refunds are state-only (the contribution moves to `Refunded`; no money is moved) and the ledger has no kind, sign or trigger to tell a refund from a pledge.
+> Limits: the payment provider is a fake, so no real money moves, and there is no card saving or creator payout.
 
 ---
 

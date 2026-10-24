@@ -2,8 +2,6 @@ using CrowdFunding.BuildingBlocks.Application.Events;
 using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignCancelled;
 using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignFailed;
 using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
-using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
-using CrowdFunding.Modules.Contributions.Application.Abstractions.Transactions;
 
 namespace CrowdFunding.Modules.Contributions.Application.Features.Contributions.Events;
 
@@ -23,17 +21,14 @@ public sealed class CampaignTerminationRefundHandler :
     IEventHandler<CampaignCancelledApplicationEvent>
 {
     private readonly IContributionRepository _contributionRepository;
-    private readonly IContributionTransactionExecutor _transactionExecutor;
-    private readonly IContributionDateTimeProvider _dateTimeProvider;
+    private readonly ContributionRefunder _refunder;
 
     public CampaignTerminationRefundHandler(
         IContributionRepository contributionRepository,
-        IContributionTransactionExecutor transactionExecutor,
-        IContributionDateTimeProvider dateTimeProvider)
+        ContributionRefunder refunder)
     {
         _contributionRepository = contributionRepository;
-        _transactionExecutor = transactionExecutor;
-        _dateTimeProvider = dateTimeProvider;
+        _refunder = refunder;
     }
 
     public Task Handle(CampaignFailedApplicationEvent notification, CancellationToken cancellationToken)
@@ -54,14 +49,13 @@ public sealed class CampaignTerminationRefundHandler :
                 break;
             }
 
-            await _transactionExecutor.ExecuteAsync(async ct =>
+            // One refund at a time: each is a call to the payment provider followed by a short transaction.
+            // If one fails the event is retried, and the contributions already refunded no longer show up as
+            // Succeeded, so the retry carries on with the rest.
+            foreach (var contribution in batch)
             {
-                foreach (var contribution in batch)
-                {
-                    contribution.Refund(_dateTimeProvider.UtcNow);
-                    await _contributionRepository.UpdateAsync(contribution, ct);
-                }
-            }, cancellationToken);
+                await _refunder.RefundAsync(contribution, cancellationToken);
+            }
         }
     }
 }

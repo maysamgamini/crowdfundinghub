@@ -9,7 +9,9 @@ using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.ConfirmContributionPayment;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.FailContributionPayment;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.MakeContribution;
+using CrowdFunding.Modules.Contributions.Application.Features.Contributions;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Events;
+using CrowdFunding.Modules.Contributions.Infrastructure.Payments;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Queries.GetContributionById;
 using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Queries.ListContributionsByCampaign;
 using CrowdFunding.Modules.Contributions.Domain.Aggregates;
@@ -798,8 +800,11 @@ public sealed class CampaignTerminationRefundHandlerTests
         var transactionExecutor = new FakeContributionTransactionExecutor();
         var handler = new CampaignTerminationRefundHandler(
             repository,
-            transactionExecutor,
-            new FakeContributionDateTimeProvider(new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc)));
+            new ContributionRefunder(
+                repository,
+                transactionExecutor,
+                new FakeContributionDateTimeProvider(new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc)),
+                new FakePaymentProvider()));
 
         await handler.Handle(
             new CampaignFailedApplicationEvent(campaignId, Guid.NewGuid(), 300m, 1000m, "USD", DateTime.UtcNow),
@@ -807,7 +812,7 @@ public sealed class CampaignTerminationRefundHandlerTests
 
         Assert.Equal(ContributionStatus.Refunded, contributionOne.Status);
         Assert.Equal(ContributionStatus.Refunded, contributionTwo.Status);
-        Assert.Equal(1, transactionExecutor.InvocationCount);
+        Assert.Equal(2, transactionExecutor.InvocationCount);
     }
 
     [Fact]
@@ -820,8 +825,11 @@ public sealed class CampaignTerminationRefundHandlerTests
         var transactionExecutor = new FakeContributionTransactionExecutor();
         var handler = new CampaignTerminationRefundHandler(
             repository,
-            transactionExecutor,
-            new FakeContributionDateTimeProvider(new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc)));
+            new ContributionRefunder(
+                repository,
+                transactionExecutor,
+                new FakeContributionDateTimeProvider(new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc)),
+                new FakePaymentProvider()));
 
         await handler.Handle(new CampaignCancelledApplicationEvent(campaignId, Guid.NewGuid()), CancellationToken.None);
 
@@ -838,8 +846,11 @@ public sealed class CampaignTerminationRefundHandlerTests
         var transactionExecutor = new FakeContributionTransactionExecutor();
         var handler = new CampaignTerminationRefundHandler(
             repository,
-            transactionExecutor,
-            new FakeContributionDateTimeProvider(new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc)));
+            new ContributionRefunder(
+                repository,
+                transactionExecutor,
+                new FakeContributionDateTimeProvider(new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc)),
+                new FakePaymentProvider()));
         var @event = new CampaignFailedApplicationEvent(campaignId, Guid.NewGuid(), 150m, 1000m, "USD", DateTime.UtcNow);
 
         await handler.Handle(@event, CancellationToken.None);
@@ -867,16 +878,19 @@ public sealed class CampaignTerminationRefundHandlerTests
         var transactionExecutor = new FakeContributionTransactionExecutor();
         var handler = new CampaignTerminationRefundHandler(
             repository,
-            transactionExecutor,
-            new FakeContributionDateTimeProvider(new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc)));
+            new ContributionRefunder(
+                repository,
+                transactionExecutor,
+                new FakeContributionDateTimeProvider(new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc)),
+                new FakePaymentProvider()));
 
         await handler.Handle(
             new CampaignFailedApplicationEvent(campaignId, Guid.NewGuid(), 2500m, 5000m, "USD", DateTime.UtcNow),
             CancellationToken.None);
 
         Assert.All(contributions, c => Assert.Equal(ContributionStatus.Refunded, c.Status));
-        // 250 contributions at batch size 100 = 3 separate transactions
-        Assert.Equal(3, transactionExecutor.InvocationCount);
+        // Each refund is a provider call followed by its own short transaction: 250 contributions, 250 transactions.
+        Assert.Equal(250, transactionExecutor.InvocationCount);
     }
 }
 

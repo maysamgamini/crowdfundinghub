@@ -1,3 +1,4 @@
+using CrowdFunding.Modules.Contributions.Infrastructure.Payments;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using CrowdFunding.Modules.Contributions.Infrastructure.Retention;
 using CrowdFunding.BuildingBlocks.Infrastructure.Retention;
@@ -41,6 +42,8 @@ public static class ContributionsInfrastructureDependencyInjection
         services.AddScoped<IActiveCampaignCacheRepository, ActiveCampaignCacheRepository>();
         services.AddScoped<IContributionReadService, ContributionReadService>();
         services.AddScoped<IContributionTransactionExecutor, ContributionTransactionExecutor>();
+        services.AddSingleton<FakePaymentProvider>();
+        services.AddSingleton<IPaymentProvider>(sp => sp.GetRequiredService<FakePaymentProvider>());
         services.AddSingleton<IContributionDateTimeProvider, SystemDateTimeProvider>();
         services.AddRetention();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IRetentionTask, IdempotencyKeyExpiryTask>());
