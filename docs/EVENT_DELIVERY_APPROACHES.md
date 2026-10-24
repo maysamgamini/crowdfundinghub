@@ -70,8 +70,9 @@ sequenceDiagram
 The database itself wakes listeners. A trigger or the writer runs `NOTIFY outbox`, and workers in any process that did `LISTEN outbox` are woken.
 
 - **Good:** works across processes and across instances; no broker.
-- **Bad:** notifications are not durable (a listener that is down misses them), payloads are small, each listener holds a dedicated connection, and it does not pass through a transaction-mode connection pooler such as PgBouncer. You still need the poll as a safety net.
-- **Choose it when:** several processes write to the same outbox and you want all their workers woken, and you control the connections.
+- **Bad:** notifications are not durable (a listener that is down misses them), payloads are small (about 8,000 bytes), each listener holds a dedicated connection, and it does not pass through a transaction-mode connection pooler such as PgBouncer. You still need the poll as a safety net.
+- **A ceiling on busy writers:** PostgreSQL takes a global lock while committing any transaction that ran `NOTIFY`, which makes those commits queue one behind another. The system-design course's outbox loop cites a published measurement of about 2,900 writes a second as the ceiling; we have not measured it here. So avoid it when the writer commits thousands of times a second.
+- **Choose it when:** several processes write to the same outbox, you want all their workers woken, you control the connections, and the write rate is modest.
 
 ### D. Log-based change data capture (Debezium and friends)
 
@@ -110,7 +111,7 @@ The same idea as E with an in-process event bus: raise the event after `SaveChan
 
 | | A. Timer poll | B. Poll + signal | C. LISTEN/NOTIFY | D. CDC | E/F. Direct, no outbox |
 |---|---|---|---|---|---|
-| Typical delay | up to the interval | milliseconds | milliseconds | milliseconds to seconds | milliseconds |
+| Typical delay | up to the interval | milliseconds | milliseconds | tens to hundreds of milliseconds, longer when the connector falls behind | milliseconds |
 | Survives a crash after commit | yes | yes | yes (poll fallback) | yes | **no** |
 | Extra infrastructure | none | none | none | connector, Connect, broker | broker (E) |
 | Database load while idle | one query per tick | one query per tick (rare, safety net) | one connection per listener | none from polling | none |
