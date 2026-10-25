@@ -22,7 +22,7 @@ public sealed class RewardTierReservationConfiguration : IEntityTypeConfiguratio
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(20).IsRequired();
         builder.Property(x => x.CreatedAtUtc).IsRequired();
         builder.Property(x => x.ExpiresAtUtc).IsRequired();
-        builder.Property(x => x.ContributionId);
+        builder.Property(x => x.PledgeId);
 
         builder.HasIndex(x => x.RewardTierId);
 

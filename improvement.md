@@ -58,8 +58,8 @@
 | # | Severity | Finding | Full write-up | Resolved by |
 | :---: | :--- | :--- | :--- | :--- |
 | 1 | 🔴 P0 Financial | Lost updates on `Campaign.RaisedAmount` — no concurrency token, concurrent pledges silently overwrite each other | [§2.4 Defect A](#24-critical-financial-concurrency--race-conditions) | [§3.4 #1 `xmin` token](#34-concurrency-hardening-optimistic-locking-advisory-locks--ledger-pattern) |
-| 2 | 🔴 P0 Financial | Double-pledge inflation — `AddContributionToCampaignCommand` has no `ContributionId`, so redelivery double-credits | [§2.4 Defect B](#24-critical-financial-concurrency--race-conditions) | [§3.4 #2 ledger unique constraint](#34-concurrency-hardening-optimistic-locking-advisory-locks--ledger-pattern) |
-| 3 | 🔴 P0 Financial | TOCTOU on campaign cancellation — availability checked before the transaction, and `ApplyConfirmedContribution` only blocks `Draft`, not `Cancelled` | [§2.4 Defect C](#24-critical-financial-concurrency--race-conditions) | [§3.4 #3 advisory lock](#34-concurrency-hardening-optimistic-locking-advisory-locks--ledger-pattern) + [§3.4 #4 tightened invariant](#34-concurrency-hardening-optimistic-locking-advisory-locks--ledger-pattern) |
+| 2 | 🔴 P0 Financial | Double-pledge inflation — `AddPledgeToCampaignCommand` has no `PledgeId`, so redelivery double-credits | [§2.4 Defect B](#24-critical-financial-concurrency--race-conditions) | [§3.4 #2 ledger unique constraint](#34-concurrency-hardening-optimistic-locking-advisory-locks--ledger-pattern) |
+| 3 | 🔴 P0 Financial | TOCTOU on campaign cancellation — availability checked before the transaction, and `ApplyConfirmedPledge` only blocks `Draft`, not `Cancelled` | [§2.4 Defect C](#24-critical-financial-concurrency--race-conditions) | [§3.4 #3 advisory lock](#34-concurrency-hardening-optimistic-locking-advisory-locks--ledger-pattern) + [§3.4 #4 tightened invariant](#34-concurrency-hardening-optimistic-locking-advisory-locks--ledger-pattern) |
 | 4 | 🔴 P0 Reliability | Outbox head-of-line blocking — one poison message (`break;`, no max-retry cutoff) permanently freezes a module's entire outbox queue | [§2.1](#21-outbox-processing-poison-messages--head-of-line-blocking) | [§3.1](#31-append-only-outbox--debezium-change-data-capture-cdc) or [§3.3 `SKIP LOCKED`](#33-high-performance-postgresql-native-alternative-option-a-skip-locked) + [§3.2 dead-letter handler](#32-stable-schema-envelopes--durable-dead-letter-handling) |
 | 5 | 🔴 P0 Reliability | Multi-instance duplicate dispatch — outbox polling has no row claiming (`FOR UPDATE SKIP LOCKED`), so 2+ replicas process the same batch | [§2.2](#22-multi-instance-concurrency--scaling-vulnerabilities) | [§3.3 Step 2 atomic claim](#33-high-performance-postgresql-native-alternative-option-a-skip-locked) or [§3.1 CDC](#31-append-only-outbox--debezium-change-data-capture-cdc) |
 | 6 | 🔴 P0 Reliability | Silent event drop — `CampaignTransactionExecutor.MapApplicationEvent`'s `_ => null` branch drops any domain event a developer forgets to map, with no log or error | [§2.3](#23-serialization-fragility--silent-event-dropping) | [§3.2 `EventTypeRegistry` / dead-letter](#32-stable-schema-envelopes--durable-dead-letter-handling) |
@@ -67,7 +67,7 @@
 | 8 | 🔴 P0 Security | 500 errors leak `exception.Message` verbatim (SQL/connection internals) to untrusted callers, in a non-standard `{ StatusCode, Message }` shape | [§2.6](#26-error-handling-security-hazards--rfc-non-compliance) | [§3.6 RFC 9457 `IExceptionHandler`](#36-rfc-9457-problem-details--sanitized-error-pipeline) |
 | 9 | 🔴 P0 Security | Login timing attack / email enumeration — PBKDF2 is skipped entirely when `user is null`, and the "inactive account" error confirms the account exists | [§2.8 Timing Attack](#28-security-vulnerabilities-timing-attacks--key-distribution) | [§3.8 #1 constant-time login](#38-security-modernization-asymmetric-jwks-timing-safe-pbkdf2--rate-limiting) |
 | 10 | 🟠 P1 Security | Symmetric HMAC JWT signing key (`Jwt:SigningKey`) must be shared with every verifier (gateways, proxies), so any compromised verifier can forge tokens | [§2.8 Symmetric JWT](#28-security-vulnerabilities-timing-attacks--key-distribution) | [§3.8 #2 asymmetric ES256 JWKS](#38-security-modernization-asymmetric-jwks-timing-safe-pbkdf2--rate-limiting) |
-| 11 | 🟠 P1 Security | No rate limiting anywhere — login, registration, and contribution endpoints are open to brute-force/credential-stuffing/card-testing | [§2.8 Rate Limiting](#28-security-vulnerabilities-timing-attacks--key-distribution) | [§3.8 #3 partitioned rate limiting](#38-security-modernization-asymmetric-jwks-timing-safe-pbkdf2--rate-limiting) |
+| 11 | 🟠 P1 Security | No rate limiting anywhere — login, registration, and pledge endpoints are open to brute-force/credential-stuffing/card-testing | [§2.8 Rate Limiting](#28-security-vulnerabilities-timing-attacks--key-distribution) | [§3.8 #3 partitioned rate limiting](#38-security-modernization-asymmetric-jwks-timing-safe-pbkdf2--rate-limiting) |
 | 12 | 🟠 P1 Reliability | Migrations only auto-run under `IsDevelopment()`; no CI/CD or container-init migration path, and all DbContexts share the unqualified `public.__EFMigrationsHistory` table | [§2.7](#27-database-migration-hazards-in-production-clusters) | [§3.7 #1–2 CLI `MigrationRunner` + schema-isolated history tables](#37-hardened-container-operations--cli-migration-runner) |
 | 13 | 🟠 P1 Reliability | No `/health/live` or `/health/ready` endpoints — load balancers can route to unready pods | [§2.7](#27-database-migration-hazards-in-production-clusters) | [§3.7 #3 split health probes](#37-hardened-container-operations--cli-migration-runner) |
 | 14 | 🟡 P1 Observability | Near-zero structured logging (`ILogger` used in exactly one class), no correlation IDs, no OpenTelemetry tracing/metrics | [§2.5](#25-complete-observability-logging--tracing-deficiencies) | [§3.5 Serilog + correlation middleware + OTel](#35-modern-observability-architecture-serilog-json-w3c-traces-opentelemetry) |
@@ -93,7 +93,7 @@ The table below outlines the core architectural dimensions and highlights the cr
 | **Serialization Safety** | Stores and resolves CLR `Type.GetType(AssemblyQualifiedName)`. | Decoupled `EventEnvelope` (`EventType`, `Version`) resolved via `EventTypeRegistry`. | 🔴 **High Vulnerability**: Class renames, namespace changes, or runtime version bumps break existing persisted events. |
 | **Domain Event Mapping** | Switch expression in transaction executors terminates in `_ => null` silent drop. | Fail-safe routing; unmapped events are either routed to dead-letter handler or raise audited warnings. | 🔴 **Data Loss Hazard**: New domain events added without explicit mappings are silently discarded without logging or errors. |
 | **Campaign Goal & Pledge Concurrency** | Unprotected read-modify-write in EF Core. No concurrency token (`xmin`/rowversion). | PostgreSQL `pg_advisory_xact_lock` + append-only ledger entries (`EfEconomyStore`). | 🔴 **Financial Data Corruption**: Rapid concurrent pledges cause lost updates, permanently losing funds from `RaisedAmount`. |
-| **Double-Pledge Protection** | `AddContributionToCampaignCommand` omits `ContributionId`. Blind balance addition. | Built-in idempotency: `IdempotentConsumer` (`ProcessedEvent`; this repo's equivalent is `EfInbox` with `<module>_inbox_messages`) and unique index on `SourceEventId`. | 🔴 **Financial Data Corruption**: At-least-once message redelivery results in double-crediting campaign totals. |
+| **Double-Pledge Protection** | `AddPledgeToCampaignCommand` omits `PledgeId`. Blind balance addition. | Built-in idempotency: `IdempotentConsumer` (`ProcessedEvent`; this repo's equivalent is `EfInbox` with `<module>_inbox_messages`) and unique index on `SourceEventId`. | 🔴 **Financial Data Corruption**: At-least-once message redelivery results in double-crediting campaign totals. |
 | **Structured Logging & Tracing** | Zero structured logging. Only 1 file (`GlobalExceptionMiddleware`) references `ILogger`. No correlation IDs. | Serilog Compact JSON sink (`logs/hitechies-.json`), `CorrelationIdMiddleware`, W3C trace propagation. | 🔴 **Operational Blindness**: Financial pledges, background jobs, and payment states execute in near-complete silence. |
 | **HTTP Error Specification** | Legacy middleware returning proprietary `{ StatusCode, Message }`. Leaks SQL syntax on 500. | ASP.NET Core `IExceptionHandler` returning RFC 9457 `ProblemDetails` with sanitized 500 and `traceId`. | 🔴 **Security Hazard**: Leaks internal database table names and connection parameters to untrusted clients. |
 | **Database Migrations** | `ApplyMigrationsAsync()` hardcoded to `IsDevelopment()`. Colliding `public.__EFMigrationsHistory`. | CLI runner `dotnet run -- migrate` + schema-isolated `__EFMigrationsHistory` + divergence check (`42P07`). | 🔴 **Deployment Failure**: No automated migration runner for CI/CD or staging/production container init jobs. |
@@ -149,7 +149,7 @@ if (messages.Count > 0)
 
 Resolved by → [§3.1 Append-Only Outbox & Debezium CDC](#31-append-only-outbox--debezium-change-data-capture-cdc) or [§3.3 `SKIP LOCKED` alternative](#33-high-performance-postgresql-native-alternative-option-a-skip-locked), combined with [§3.2's `DeadLetterHandler`](#32-stable-schema-envelopes--durable-dead-letter-handling) to remove poison messages from the queue instead of blocking it.
 
-> **Fixed.** The worker is now `BuildingBlocks.Infrastructure/Outbox/ModuleOutboxProcessor.cs`, one per module outbox (for example `contributions_outbox_messages`). A failing message is retried up to `MaxAttempts` (5) and then moved to `DeadLetterEvent`, and the loop continues (`continue`, not `break`), so there is no head-of-line blocking.
+> **Fixed.** The worker is now `BuildingBlocks.Infrastructure/Outbox/ModuleOutboxProcessor.cs`, one per module outbox (for example `pledges_outbox_messages`). A failing message is retried up to `MaxAttempts` (5) and then moved to `DeadLetterEvent`, and the loop continues (`continue`, not `break`), so there is no head-of-line blocking.
 
 ---
 
@@ -218,7 +218,7 @@ private static OutboxMessage? MapApplicationEvent(BaseEvent domainEvent)
 }
 ```
 
-The executor filters out nulls (`Where(message => message is not null)`). If a developer creates a new domain event (e.g., `CampaignGoalReachedDomainEvent`, `CampaignRefundTriggeredDomainEvent`, or `ContributionRefundedDomainEvent`) but forgets to add a branch to this switch statement:
+The executor filters out nulls (`Where(message => message is not null)`). If a developer creates a new domain event (e.g., `CampaignGoalReachedDomainEvent`, `CampaignRefundTriggeredDomainEvent`, or `PledgeRefundedDomainEvent`) but forgets to add a branch to this switch statement:
 * **The event is silently dropped.**
 * No exception is thrown, no compiler error is produced, and no warning is logged. Subsequent dependent processes (such as email alerts, ledger reconciliation, and analytics) never execute.
 
@@ -231,13 +231,13 @@ Both defects above are resolved by → [§3.2 `EventEnvelope` + `EventTypeRegist
 Crowdfunding platforms frequently experience severe traffic spikes (e.g., viral campaigns, celebrity backing drives, and final-countdown hours). `crowdfundinghub-main` contains three high-impact financial concurrency flaws:
 
 #### Defect A: Lost Updates on Campaign Raised Amount
-When payment is confirmed for a contribution, [`AddContributionToCampaignCommandHandler`](src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Application/Features/Campaigns/Commands/AddContributionToCampaign/AddContributionToCampaignCommandHandler.cs#L29-L42) is executed:
+When payment is confirmed for a pledge, [`AddPledgeToCampaignCommandHandler`](src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Application/Features/Campaigns/Commands/AddPledgeToCampaign/AddPledgeToCampaignCommandHandler.cs#L29-L42) is executed:
 
 ```csharp
 var campaign = await _campaignRepository.GetByIdAsync(command.CampaignId, cancellationToken);
 await _transactionExecutor.ExecuteAsync(async ct =>
 {
-    campaign.ApplyConfirmedContribution(new Money(command.Amount, command.Currency));
+    campaign.ApplyConfirmedPledge(new Money(command.Amount, command.Currency));
     await _campaignRepository.UpdateAsync(campaign, ct);
     return 0;
 }, cancellationToken);
@@ -258,37 +258,37 @@ builder.OwnsOne(x => x.RaisedAmount, money =>
   2. Thread 1 reads `RaisedAmount = $10,000`. Thread 2 reads `RaisedAmount = $10,000`.
   3. Thread 1 computes `$10,050` and issues `UPDATE campaigns SET raised_amount = 10050 WHERE id = C;`.
   4. Thread 2 computes `$10,100` and issues `UPDATE campaigns SET raised_amount = 10100 WHERE id = C;`.
-  5. **Result:** Thread 2 overwrites Thread 1. The campaign balance shows `$10,100` instead of `$10,150`. **The $50 pledge is permanently lost from the campaign balance**, causing an irreversible accounting discrepancy between confirmed contributions and aggregate campaign totals.
+  5. **Result:** Thread 2 overwrites Thread 1. The campaign balance shows `$10,100` instead of `$10,150`. **The $50 pledge is permanently lost from the campaign balance**, causing an irreversible accounting discrepancy between confirmed pledges and aggregate campaign totals.
 
 Resolved by → [§3.4 #1 PostgreSQL `xmin` optimistic concurrency token](#34-concurrency-hardening-optimistic-locking-advisory-locks--ledger-pattern).
 
-> **Fixed.** `xmin` concurrency tokens are mapped for `Campaign`, `Contribution`, reward tiers, webhook subscriptions and refresh tokens.
+> **Fixed.** `xmin` concurrency tokens are mapped for `Campaign`, `Pledge`, reward tiers, webhook subscriptions and refresh tokens.
 
 #### Defect B: Double-Pledge Inflation Under At-Least-Once Delivery
-In `crowdfundinghub-main`, `AddContributionToCampaignCommand` is defined as:
+In `crowdfundinghub-main`, `AddPledgeToCampaignCommand` is defined as:
 
 ```csharp
-public sealed record AddContributionToCampaignCommand(Guid CampaignId, decimal Amount, string Currency);
+public sealed record AddPledgeToCampaignCommand(Guid CampaignId, decimal Amount, string Currency);
 ```
 
-* **The Problem:** **`ContributionId` is omitted from the command entirely!**
-* **Failure Mode:** If an outbox message is redelivered (due to a transient network timeout, process restart before commit, or dual-instance polling), `AddContributionToCampaignCommandHandler` cannot check whether this specific contribution has already been counted.
-* **Impact:** It executes `campaign.ApplyConfirmedContribution(...)` a second time, inflating `RaisedAmount` with phantom funds.
+* **The Problem:** **`PledgeId` is omitted from the command entirely!**
+* **Failure Mode:** If an outbox message is redelivered (due to a transient network timeout, process restart before commit, or dual-instance polling), `AddPledgeToCampaignCommandHandler` cannot check whether this specific pledge has already been counted.
+* **Impact:** It executes `campaign.ApplyConfirmedPledge(...)` a second time, inflating `RaisedAmount` with phantom funds.
 
-Resolved by → [§3.4 #2 append-only contribution ledger with a `UNIQUE` constraint on `contribution_id`](#34-concurrency-hardening-optimistic-locking-advisory-locks--ledger-pattern).
+Resolved by → [§3.4 #2 append-only pledge ledger with a `UNIQUE` constraint on `pledge_id`](#34-concurrency-hardening-optimistic-locking-advisory-locks--ledger-pattern).
 
-> **Fixed.** `ContributionLedgerEntry` and its configuration exist in the Campaigns module.
+> **Fixed.** `PledgeLedgerEntry` and its configuration exist in the Campaigns module.
 
 #### Defect C: Time-of-Check to Time-of-Use (TOCTOU) on Campaign Cancellation
-In [`ConfirmContributionPaymentCommandHandler.cs`](src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/ConfirmContributionPayment/ConfirmContributionPaymentCommandHandler.cs#L46-L58):
+In [`ConfirmPledgePaymentCommandHandler.cs`](src/Modules/Pledges/CrowdFunding.Modules.Pledges.Application/Features/Pledges/Commands/ConfirmPledgePayment/ConfirmPledgePaymentCommandHandler.cs#L46-L58):
 
 ```csharp
-var campaignAvailability = await _campaignContributionAvailabilityReader.GetCampaignContributionAvailabilityAsync(
-    new GetCampaignContributionAvailabilityQuery(command.CampaignId), cancellationToken);
+var campaignAvailability = await _campaignPledgeAvailabilityReader.GetCampaignPledgeAvailabilityAsync(
+    new GetCampaignPledgeAvailabilityQuery(command.CampaignId), cancellationToken);
 
 if (!string.Equals(campaignAvailability.Status, "Published", StringComparison.OrdinalIgnoreCase))
 {
-    throw new InvalidOperationException("Contribution payments can only be confirmed while the campaign is published.");
+    throw new InvalidOperationException("Pledge payments can only be confirmed while the campaign is published.");
 }
 ```
 
@@ -296,19 +296,19 @@ if (!string.Equals(campaignAvailability.Status, "Published", StringComparison.Or
 * **The Race:** If a campaign creator or moderator cancels the campaign concurrently (`CancelCampaignCommandHandler`):
   1. Thread 1 checks status: `"Published"`.
   2. Thread 2 cancels campaign: status becomes `"Cancelled"` and commits.
-  3. Thread 1 confirms contribution payment and publishes the event.
-  4. In [`Campaign.cs`](src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs#L110-L113), `ApplyConfirmedContribution` checks:
+  3. Thread 1 confirms pledge payment and publishes the event.
+  4. In [`Campaign.cs`](src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs#L110-L113), `ApplyConfirmedPledge` checks:
      ```csharp
      if (Status == CampaignStatus.Draft)
      {
-         throw new InvalidOperationException("Draft campaigns cannot receive confirmed contributions.");
+         throw new InvalidOperationException("Draft campaigns cannot receive confirmed pledges.");
      }
      ```
   5. Because `Status == CampaignStatus.Cancelled` is **not blocked**, payments are confirmed and credited to a cancelled campaign!
 
-  *(Verification note: `ConfirmContributionPaymentCommandHandler` itself only confirms the `Contribution` aggregate — it does not call `Campaign.ApplyConfirmedContribution` directly. That call happens downstream, via the outbox-published `ContributionPaymentConfirmedApplicationEvent` being handled by `ContributionPaymentConfirmedApplicationEventHandler.cs` in the Campaigns module, which dispatches the `AddContributionToCampaignCommand` audited in Defect A/B above. Confirmed present in source; the race window described is real, just spans this cross-module event hop rather than a single method call.)*
+  *(Verification note: `ConfirmPledgePaymentCommandHandler` itself only confirms the `Pledge` aggregate — it does not call `Campaign.ApplyConfirmedPledge` directly. That call happens downstream, via the outbox-published `PledgePaymentConfirmedApplicationEvent` being handled by `PledgePaymentConfirmedApplicationEventHandler.cs` in the Campaigns module, which dispatches the `AddPledgeToCampaignCommand` audited in Defect A/B above. Confirmed present in source; the race window described is real, just spans this cross-module event hop rather than a single method call.)*
 
-Resolved by → [§3.4 #3 `pg_advisory_xact_lock`](#34-concurrency-hardening-optimistic-locking-advisory-locks--ledger-pattern) to serialize balance mutations per campaign, and [§3.4 #4](#34-concurrency-hardening-optimistic-locking-advisory-locks--ledger-pattern), which tightens `ApplyConfirmedContribution` to require `Status == Published` (rejecting `Cancelled`, not just `Draft`).
+Resolved by → [§3.4 #3 `pg_advisory_xact_lock`](#34-concurrency-hardening-optimistic-locking-advisory-locks--ledger-pattern) to serialize balance mutations per campaign, and [§3.4 #4](#34-concurrency-hardening-optimistic-locking-advisory-locks--ledger-pattern), which tightens `ApplyConfirmedPledge` to require `Status == Published` (rejecting `Cancelled`, not just `Draft`).
 
 > **Fixed.** `pg_advisory_xact_lock` (via `AdvisoryLockKey`) is used in `CampaignTransactionExecutor` and `RewardTier`.
 
@@ -316,7 +316,7 @@ Resolved by → [§3.4 #3 `pg_advisory_xact_lock`](#34-concurrency-hardening-opt
 
 ### 2.5 Complete Observability, Logging & Tracing Deficiencies
 
-1. **Near-Zero Logging Across All Modules:** In the entire repository, `ILogger` is injected into only one class: `GlobalExceptionMiddleware.cs`. Financial transactions, contribution lifecycle changes, authentication attempts, and campaign status transitions emit zero logs.
+1. **Near-Zero Logging Across All Modules:** In the entire repository, `ILogger` is injected into only one class: `GlobalExceptionMiddleware.cs`. Financial transactions, pledge lifecycle changes, authentication attempts, and campaign status transitions emit zero logs.
 2. **Silent Background Failures:** In `OutboxProcessorBackgroundService.cs`, message deserialization and dispatch exceptions are caught and written to the database column `Error`, but **no error log is emitted and no metric is incremented**.
 3. **No Correlation IDs or Distributed Tracing:** Requests execute without a Correlation ID or W3C `traceparent` header. When an error occurs downstream during outbox processing, operators cannot trace it back to the original user request that triggered it.
 4. **No OpenTelemetry Instrumentation:** There is no integration with OpenTelemetry. Tracing of incoming HTTP requests, outgoing HTTP calls, and Entity Framework database queries is completely missing.
@@ -361,7 +361,7 @@ if (app.Environment.IsDevelopment())
 
 1. **No Staging / Production Execution Mechanism:** Migrations only execute when `app.Environment.IsDevelopment()` is true. There is no CLI mechanism (`dotnet run -- migrate`) to run migrations during deployment pipelines or container init-jobs.
 2. **Multi-Replica Deadlocks:** If `ApplyMigrationsAsync()` is enabled in production across multiple container replicas, multiple Kestrel instances boot concurrently and attempt simultaneous DDL operations on PostgreSQL, risking migration table corruption or lock timeouts.
-3. **Migration History Table Collisions:** All four module DbContexts (`CampaignsDbContext`, `ContributionsDbContext`, `IdentityDbContext`, `ModerationDbContext`) use the default `public.__EFMigrationsHistory` table without schema qualification. Migration version entries collide and risk breaking schema tracking.
+3. **Migration History Table Collisions:** All four module DbContexts (`CampaignsDbContext`, `PledgesDbContext`, `IdentityDbContext`, `ModerationDbContext`) use the default `public.__EFMigrationsHistory` table without schema qualification. Migration version entries collide and risk breaking schema tracking.
 
 *(Verified: `Program.cs` gates `ApplyMigrationsAsync()` strictly behind `app.Environment.IsDevelopment()` — confirmed at the current line location. No health-check registration (`AddHealthChecks`/`MapHealthChecks`) or rate-limiter registration exists anywhere in `Program.cs` — confirmed absent by full-file search.)*
 
@@ -407,7 +407,7 @@ Resolved by → [§3.8 #2 asymmetric ES256 JWKS endpoint](#38-security-moderniza
 
 #### Complete Absence of Rate Limiting
 * No rate limiting is configured in [`Program.cs`](src/API/CrowdFunding.API/Program.cs) — confirmed by full-file search; no `AddRateLimiter` call exists anywhere in the codebase.
-* Endpoints like `/api/identity/users/login`, `/api/identity/users/register`, and `/api/campaigns/{campaignId}/contributions` are exposed to brute-force credential attacks, Sybil account creation, and card testing fraud.
+* Endpoints like `/api/identity/users/login`, `/api/identity/users/register`, and `/api/campaigns/{campaignId}/pledges` are exposed to brute-force credential attacks, Sybil account creation, and card testing fraud.
 
 Resolved by → [§3.8 #3 partitioned `System.Threading.RateLimiting` policies](#38-security-modernization-asymmetric-jwks-timing-safe-pbkdf2--rate-limiting).
 
@@ -417,8 +417,8 @@ Resolved by → [§3.8 #3 partitioned `System.Threading.RateLimiting` policies](
 
 ### 2.9 Architecture Boundary Gaps & Test Suite Deficiencies
 
-1. **"Ghost" Modules — Wired But Behaviorally No-Op:** *(corrected 2026-09-08: the original claim that these projects are "empty" is not quite accurate — verified against source.)* `CrowdFunding.Modules.Notifications` and `CrowdFunding.Modules.CampaignUpdates` are not empty project shells; each has an `Application` layer with real `IEventHandler<T>` classes (`NotificationEventHandlers.cs`, `CampaignActivityEventHandlers.cs`) subscribed to `CampaignPublished`, `CampaignCancelled`, `ContributionPaymentConfirmed`, `CampaignReviewApproved`, and `CampaignReviewRejected` application events. However, every handler body is a no-op — literally `=> Task.CompletedTask` — so the audit's underlying conclusion still holds in substance: **neither module contains a domain aggregate, entity, repository, or any actual business rule.** They exist to demonstrate the event-subscription wiring pattern, not to deliver notification or campaign-update functionality yet.
-2. **Missing Architecture Tests:** In [`CrowdFunding.ArchitectureTests`](tests/ArchitectureTests/CrowdFunding.ArchitectureTests), tests exist only for `Campaigns` (`CampaignsModuleDependencyTests.cs`), `Contributions` (`ContributionsModuleDependencyTests.cs`), `Identity` (`IdentityModuleDependencyTests.cs`), and `Moderation` (`ModerationModuleDependencyTests.cs`) — confirmed present on disk. `Notifications` and `CampaignUpdates` are untested, and cross-module boundary isolation is not validated for those two. Resolved by → [§6.1](#61-full-netarchtest-modular-architecture-enforcement).
+1. **"Ghost" Modules — Wired But Behaviorally No-Op:** *(corrected 2026-09-08: the original claim that these projects are "empty" is not quite accurate — verified against source.)* `CrowdFunding.Modules.Notifications` and `CrowdFunding.Modules.CampaignUpdates` are not empty project shells; each has an `Application` layer with real `IEventHandler<T>` classes (`NotificationEventHandlers.cs`, `CampaignActivityEventHandlers.cs`) subscribed to `CampaignPublished`, `CampaignCancelled`, `PledgePaymentConfirmed`, `CampaignReviewApproved`, and `CampaignReviewRejected` application events. However, every handler body is a no-op — literally `=> Task.CompletedTask` — so the audit's underlying conclusion still holds in substance: **neither module contains a domain aggregate, entity, repository, or any actual business rule.** They exist to demonstrate the event-subscription wiring pattern, not to deliver notification or campaign-update functionality yet.
+2. **Missing Architecture Tests:** In [`CrowdFunding.ArchitectureTests`](tests/ArchitectureTests/CrowdFunding.ArchitectureTests), tests exist only for `Campaigns` (`CampaignsModuleDependencyTests.cs`), `Pledges` (`PledgesModuleDependencyTests.cs`), `Identity` (`IdentityModuleDependencyTests.cs`), and `Moderation` (`ModerationModuleDependencyTests.cs`) — confirmed present on disk. `Notifications` and `CampaignUpdates` are untested, and cross-module boundary isolation is not validated for those two. Resolved by → [§6.1](#61-full-netarchtest-modular-architecture-enforcement).
 3. **Empty Integration Test Suite:** In [`CrowdFunding.IntegrationTests`](tests/IntegrationTests/CrowdFunding.IntegrationTests), the test file `UnitTest1.cs` is a 10-line placeholder stub:
    ```csharp
    public class UnitTest1
@@ -657,25 +657,25 @@ builder.Property<uint>("xmin")
 
 When concurrent updates occur, EF Core issues `WHERE id = @p0 AND xmin = @p1`. If another transaction committed first, PostgreSQL rejects the update and EF Core throws `DbUpdateConcurrencyException`. The command handler catches this and retries using exponential backoff with jitter.
 
-#### 2. Append-Only Contribution Ledger (`ContributionLedgerEntry`):
+#### 2. Append-Only Pledge Ledger (`PledgeLedgerEntry`):
 Instead of directly mutating a single aggregate balance column, introduce an append-only ledger pattern:
 
 ```sql
-CREATE TABLE campaign_contributions_ledger (
+CREATE TABLE campaign_pledges_ledger (
     id UUID PRIMARY KEY,
     campaign_id UUID NOT NULL REFERENCES campaigns(id),
-    contribution_id UUID NOT NULL,
+    pledge_id UUID NOT NULL,
     amount NUMERIC(18, 2) NOT NULL,
     currency VARCHAR(3) NOT NULL,
     recorded_at_utc TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_campaign_contributions_ledger_contribution_id UNIQUE (contribution_id)
+    CONSTRAINT uq_campaign_pledges_ledger_pledge_id UNIQUE (pledge_id)
 );
 ```
 
-* **Idempotency Guarantee:** The unique constraint on `contribution_id` guarantees that even if a payment confirmed event is delivered multiple times, duplicate inserts fail cleanly with a unique constraint violation (`23505`), which the handler catches as an idempotent no-op.
+* **Idempotency Guarantee:** The unique constraint on `pledge_id` guarantees that even if a payment confirmed event is delivered multiple times, duplicate inserts fail cleanly with a unique constraint violation (`23505`), which the handler catches as an idempotent no-op.
 
 #### 3. PostgreSQL Transactional Advisory Locking:
-In `ConfirmContributionPaymentCommandHandler`:
+In `ConfirmPledgePaymentCommandHandler`:
 
 ```csharp
 await using var tx = await _dbContext.Database.BeginTransactionAsync(ct);
@@ -685,7 +685,7 @@ long lockKey = unchecked((long)campaignId.GetHashCode());
 await _dbContext.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock({0})", lockKey);
 
 // Inside this critical section, concurrent balance modifications on this campaign are serialized
-await ApplyConfirmedContributionInternalAsync(campaignId, contributionId, amount, ct);
+await ApplyConfirmedPledgeInternalAsync(campaignId, pledgeId, amount, ct);
 
 await tx.CommitAsync(ct);
 ```
@@ -694,14 +694,14 @@ await tx.CommitAsync(ct);
 In [`Campaign.cs`](src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs#L110):
 
 ```csharp
-public void ApplyConfirmedContribution(Money contribution)
+public void ApplyConfirmedPledge(Money pledge)
 {
     if (Status != CampaignStatus.Published)
     {
-        throw new InvalidOperationException($"Cannot apply contributions to campaign in status '{Status}'. Only Published campaigns can accept funds.");
+        throw new InvalidOperationException($"Cannot apply pledges to campaign in status '{Status}'. Only Published campaigns can accept funds.");
     }
 
-    RaisedAmount = RaisedAmount.Add(contribution);
+    RaisedAmount = RaisedAmount.Add(pledge);
 }
 ```
 
@@ -850,7 +850,7 @@ public static class MigrationRunner
         var contexts = new DbContext[]
         {
             scope.ServiceProvider.GetRequiredService<CampaignsDbContext>(),
-            scope.ServiceProvider.GetRequiredService<ContributionsDbContext>(),
+            scope.ServiceProvider.GetRequiredService<PledgesDbContext>(),
             scope.ServiceProvider.GetRequiredService<IdentityDbContext>(),
             scope.ServiceProvider.GetRequiredService<ModerationDbContext>()
         };
@@ -982,13 +982,13 @@ All crowdfunding metering events must be projected into **CloudEvents v1.0 JSON 
 {
   "specversion": "1.0",
   "id": "pledge_evt_a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "source": "/modules/contributions",
+  "source": "/modules/pledges",
   "type": "crowdfunding.pledge.confirmed",
   "subject": "creator_98765432-abcd-ef01-2345-67890abcdef0",
   "time": "2026-09-08T12:00:00Z",
   "datacontenttype": "application/json",
   "data": {
-    "contribution_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "pledge_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "campaign_id": "c1d2e3f4-0123-4567-89ab-cdef01234567",
     "backer_id": "b1c2d3e4-5678-90ab-cdef-1234567890ab",
     "gross_amount_cents": 10000,
@@ -1069,7 +1069,7 @@ meters:
 
   # 3. Transaction Count Meter (COUNT aggregation)
   - slug: pledge_transaction_count
-    description: "Count of confirmed contribution transactions"
+    description: "Count of confirmed pledge transactions"
     aggregation: COUNT
     eventType: crowdfunding.pledge.confirmed
     groupBy:
@@ -1115,7 +1115,7 @@ flowchart LR
 ```
 
 * **Batching & Resiliency:** The consumer host batches up to 100 CloudEvents or flushes every 250ms, submitting them via `POST /api/v1/events` with Polly exponential backoff retries.
-* **Exact-Once Guarantee:** CloudEvent `id` is mapped deterministically to `pledge_evt_{ContributionId}`. OpenMeter's deduplication engine automatically detects duplicate event IDs within its ingestion window, guaranteeing that retried events are never counted twice.
+* **Exact-Once Guarantee:** CloudEvent `id` is mapped deterministically to `pledge_evt_{PledgeId}`. OpenMeter's deduplication engine automatically detects duplicate event IDs within its ingestion window, guaranteeing that retried events are never counted twice.
 
 ---
 
@@ -1127,7 +1127,7 @@ In modern crowdfunding, real-time feedback is critical for backer engagement:
 * **The Pattern:** Adapt `apps/backend`'s SignalR infrastructure (`CoachingHub.cs`).
 * **Implementation:** Create `CampaignHub` exposing real-time channels:
   - Backers join group `campaign_{CampaignId}` on page load.
-  - When `ContributionPaymentConfirmedApplicationEvent` is processed, `CampaignHub` broadcasts `PledgeReceived(PledgeUpdateDto)` to the group.
+  - When `PledgePaymentConfirmedApplicationEvent` is processed, `CampaignHub` broadcasts `PledgeReceived(PledgeUpdateDto)` to the group.
   - Live progress bars, current raised totals, backer counters, and milestone celebration animations update instantly across all connected browsers without polling.
 
 ---
@@ -1170,8 +1170,8 @@ public void CampaignsModule_ShouldNotReference_OtherModuleInternals()
     var result = Types.InAssembly(typeof(CampaignsApplicationDependencyInjection).Assembly)
         .ShouldNot()
         .HaveDependencyOnAny(
-            "CrowdFunding.Modules.Contributions.Domain",
-            "CrowdFunding.Modules.Contributions.Infrastructure",
+            "CrowdFunding.Modules.Pledges.Domain",
+            "CrowdFunding.Modules.Pledges.Infrastructure",
             "CrowdFunding.Modules.Identity.Domain",
             "CrowdFunding.Modules.Identity.Infrastructure",
             "CrowdFunding.Modules.Moderation.Domain",
@@ -1182,7 +1182,7 @@ public void CampaignsModule_ShouldNotReference_OtherModuleInternals()
 }
 ```
 
-Add architecture test classes for all 6 modules: `CampaignsModuleDependencyTests`, `ContributionsModuleDependencyTests`, `IdentityModuleDependencyTests`, `ModerationModuleDependencyTests`, `NotificationsModuleDependencyTests`, and `CampaignUpdatesModuleDependencyTests` (all six now exist).
+Add architecture test classes for all 6 modules: `CampaignsModuleDependencyTests`, `PledgesModuleDependencyTests`, `IdentityModuleDependencyTests`, `ModerationModuleDependencyTests`, `NotificationsModuleDependencyTests`, and `CampaignUpdatesModuleDependencyTests` (all six now exist).
 
 ---
 
@@ -1235,7 +1235,7 @@ public async Task ConcurrentPledges_ShouldNotLoseUpdates()
 
     // Act: Fire 20 concurrent $10 pledges
     var tasks = Enumerable.Range(0, 20).Select(_ =>
-        client.PostAsJsonAsync($"/api/contributions", new MakeContributionRequest(campaignId, 10m, "USD")));
+        client.PostAsJsonAsync($"/api/pledges", new MakePledgeRequest(campaignId, 10m, "USD")));
 
     await Task.WhenAll(tasks);
 
@@ -1255,8 +1255,8 @@ gantt
     dateFormat  YYYY-MM-DD
     section Phase 1: Concurrency & Financial Safety
     Add xmin Concurrency Token to Campaign       :active, p1_1, 2026-09-09, 3d
-    Contribution Ledger Table & Advisory Locks  :active, p1_2, after p1_1, 3d
-    Add ContributionId to Commands & Idempotency:p1_3, after p1_2, 2d
+    Pledge Ledger Table & Advisory Locks  :active, p1_2, after p1_1, 3d
+    Add PledgeId to Commands & Idempotency:p1_3, after p1_2, 2d
     Tighten Campaign Status Domain Invariants   :p1_4, after p1_3, 2d
     section Phase 2: Observability & Health
     Serilog Compact JSON & Rolling File Sink    :p2_1, 2026-09-18, 2d
@@ -1284,7 +1284,7 @@ gantt
 
 | Phase | Milestone | Priority | Effort Estimate | Key Deliverables |
 | :--- | :--- | :---: | :---: | :--- |
-| **Phase 1** | **Financial Concurrency & Integrity** | **P0 (Critical)** | 1.5 Sprints | `xmin` concurrency token; `campaign_contributions_ledger` unique constraint; `pg_advisory_xact_lock`; `ContributionId` in commands. |
+| **Phase 1** | **Financial Concurrency & Integrity** | **P0 (Critical)** | 1.5 Sprints | `xmin` concurrency token; `campaign_pledges_ledger` unique constraint; `pg_advisory_xact_lock`; `PledgeId` in commands. |
 | **Phase 2** | **Observability, Health & Operations** | **P0 (Critical)** | 1.5 Sprints | Serilog JSON; `CorrelationIdMiddleware`; RFC 9457 `IExceptionHandler`; `/health/live` & `/health/ready`; CLI `MigrationRunner`. |
 | **Phase 3** | **Outbox Messaging Modernization** | **P0 (Critical)** | 2 Sprints | Append-only outbox table or `SKIP LOCKED` worker; `EventEnvelope` & `EventTypeRegistry`; `DeadLetterHandler` with persistent DLQ table. |
 | **Phase 4** | **OpenMeter Metering Integration** | **P1 (High)** | 1.5 Sprints | CloudEvents v1.0 schemas; OpenMeter meters (gross volume, fees, views, API units); resilient batch ingestion pipeline. |

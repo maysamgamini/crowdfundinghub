@@ -15,20 +15,20 @@ public sealed class FailCampaignCommandHandler : ICommandHandler<FailCampaignCom
     private readonly ICampaignRepository _campaignRepository;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly ICampaignTransactionExecutor _transactionExecutor;
-    private readonly IContributionLedger _contributionLedger;
+    private readonly IPledgeLedger _pledgeLedger;
     private readonly ILogger<FailCampaignCommandHandler> _logger;
 
     public FailCampaignCommandHandler(
         ICampaignRepository campaignRepository,
         IDateTimeProvider dateTimeProvider,
         ICampaignTransactionExecutor transactionExecutor,
-        IContributionLedger contributionLedger,
+        IPledgeLedger pledgeLedger,
         ILogger<FailCampaignCommandHandler> logger)
     {
         _campaignRepository = campaignRepository;
         _dateTimeProvider = dateTimeProvider;
         _transactionExecutor = transactionExecutor;
-        _contributionLedger = contributionLedger;
+        _pledgeLedger = pledgeLedger;
         _logger = logger;
     }
 
@@ -43,7 +43,7 @@ public sealed class FailCampaignCommandHandler : ICommandHandler<FailCampaignCom
                            ?? throw new KeyNotFoundException($"Campaign with id '{command.CampaignId}' was not found.");
 
             // Decide on the ledger's exact total, not on the stored counter (see CampaignLedgerReconciliation).
-            await CampaignLedgerReconciliation.ReconcileAsync(campaign, _contributionLedger, _logger, ct);
+            await CampaignLedgerReconciliation.ReconcileAsync(campaign, _pledgeLedger, _logger, ct);
 
             campaign.MarkFailed(_dateTimeProvider.UtcNow);
             await _campaignRepository.UpdateAsync(campaign, ct);

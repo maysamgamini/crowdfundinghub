@@ -144,7 +144,7 @@ What makes each step cheap is what was decided earlier:
 |---|---|---|
 | Events are plain contract types in each module's `Contracts` assembly | One small assembly per module | A consumer in another process can read the same type without sharing internals |
 | The worker publishes through an `IMessageBus` interface | A tiny in-process implementation | Swapping to RabbitMQ changes configuration, not the worker |
-| One outbox table and one worker for each module that publishes events (Campaigns, Contributions, Moderation), in the module's own schema | Slightly more tables | A module extracted into a service takes its outbox with it |
+| One outbox table and one worker for each module that publishes events (Campaigns, Pledges, Moderation), in the module's own schema | Slightly more tables | A module extracted into a service takes its outbox with it |
 | The outbox row carries an id and the consumer records handled ids (the inbox) | One small table per consumer | At-least-once delivery from any transport is safe |
 | The signal is behind an interface and is only an optimisation | One channel per module | Replacing it with LISTEN/NOTIFY or CDC changes nothing for callers |
 | Delivery is **not** coupled to a broker | No broker to run today | The broker arrives when a second consumer process exists, not before |

@@ -19,8 +19,8 @@ The platform is organized as a **modular monolith** divided into six distinct bo
 | Module | Owns | Database / schema | Tier | Outbox | Inbox |
 |---|---|---|---|---|---|
 | Identity | users, roles, refresh tokens, signing keys | `identity_db` / `identity` | 3 | no | no |
-| Campaigns | campaigns, reward tiers, contribution ledger | `campaigns_db` / `campaigns` | 3 | yes | yes |
-| Contributions | pledges, payment webhooks, metering | `contributions_db` / `contributions` | 3 | yes | yes |
+| Campaigns | campaigns, reward tiers, pledge ledger | `campaigns_db` / `campaigns` | 3 | yes | yes |
+| Pledges | pledges, payment webhooks, metering | `pledges_db` / `pledges` | 3 | yes | yes |
 | Moderation | campaign reviews, media analysis | `moderation_db` / `moderation` | 3 | yes | yes |
 | Notifications | preferences, receipts, alerts | `notifications_db` / `notifications` | 2 for preferences | no | yes |
 | CampaignUpdates | webhook subscriptions and delivery | `campaignupdates_db` / `campaignupdates` | 3 | no | yes |
@@ -35,7 +35,7 @@ flowchart LR
     Mo -- "ReviewApproved / Rejected" --> No["Notifications"]
     Ca -- "Published / Cancelled" --> No
     Ca -- "Published / Cancelled" --> Up["CampaignUpdates"]
-    Co["Contributions"] -- "PaymentConfirmed" --> Ca
+    Co["Pledges"] -- "PaymentConfirmed" --> Ca
     Co -- "PaymentConfirmed / Refunded" --> No
     Co -- "PaymentConfirmed" --> Up
     Ca -- "CampaignFailed" --> Co

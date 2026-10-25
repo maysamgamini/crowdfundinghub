@@ -15,7 +15,7 @@ internal static class CampaignLedgerReconciliation
 {
     public static async Task ReconcileAsync(
         Campaign campaign,
-        IContributionLedger ledger,
+        IPledgeLedger ledger,
         ILogger logger,
         CancellationToken cancellationToken)
     {

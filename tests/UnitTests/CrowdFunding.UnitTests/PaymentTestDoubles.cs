@@ -1,4 +1,4 @@
-using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
+using CrowdFunding.Modules.Pledges.Application.Abstractions.Services;
 
 namespace CrowdFunding.UnitTests;
 

@@ -15,7 +15,7 @@ namespace CrowdFunding.IntegrationTests;
 /// authentication, authorization policies, rate limiting, <see cref="Program"/>'s
 /// <c>GlobalExceptionHandler</c>) against real PostgreSQL and Redis Testcontainers, so HTTP-level
 /// behavior can be exercised end-to-end instead of only the module-internal concurrency tests in
-/// <see cref="CampaignsPostgresFixture"/>/<see cref="ContributionsPostgresFixture"/>.
+/// <see cref="CampaignsPostgresFixture"/>/<see cref="PledgesPostgresFixture"/>.
 ///
 /// All four module DbContexts share one Postgres database (each with its own
 /// <c>__EFMigrationsHistory</c> schema — see the module DependencyInjection classes), so a single
@@ -117,9 +117,15 @@ public sealed class CrowdFundingApiFactory : WebApplicationFactory<Program>, IAs
             .GetServices<IHostedService>()
             .OfType<IOutboxDispatcher>();
 
-        foreach (var dispatcher in dispatchers)
+        // One pass claims one batch per module. Every test shares the same databases, so a backlog left by earlier
+        // tests could keep this test's own events (a published campaign reaching the pledge cache, say) out of the
+        // first batch; a few passes drain it.
+        for (var pass = 0; pass < 5; pass++)
         {
-            await dispatcher.ProcessBatchAsync(cancellationToken);
+            foreach (var dispatcher in dispatchers)
+            {
+                await dispatcher.ProcessBatchAsync(cancellationToken);
+            }
         }
     }
 }

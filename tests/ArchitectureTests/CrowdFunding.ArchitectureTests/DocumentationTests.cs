@@ -11,7 +11,7 @@ public sealed partial class DocumentationTests
 {
     private static readonly string Root = FindRepositoryRoot();
 
-    // Notes that are working files for contributors, not learner text.
+    // Notes that are working files for backers, not learner text.
     private static readonly string[] NotLearnerText = ["last_state.md", ".agents/", "qa-tickets/"];
 
     // Path abbreviations that design-to-code-mapping-round1.md defines in its second paragraph
@@ -22,7 +22,7 @@ public sealed partial class DocumentationTests
     private static readonly (string Prefix, string Expansion)[] PathAbbreviations =
     [
         ("CAMP.", "src/Modules/Campaigns/CrowdFunding.Modules.Campaigns."),
-        ("CONT.", "src/Modules/Contributions/CrowdFunding.Modules.Contributions."),
+        ("CONT.", "src/Modules/Pledges/CrowdFunding.Modules.Pledges."),
         ("NOTIF.", "src/Modules/Notifications/CrowdFunding.Modules.Notifications."),
         ("BB.", "src/BuildingBlocks/CrowdFunding.BuildingBlocks."),
     ];

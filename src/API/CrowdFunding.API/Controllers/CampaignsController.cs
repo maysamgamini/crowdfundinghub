@@ -120,7 +120,7 @@ public sealed class CampaignsController : ControllerBase
     }
 
     /// <summary>
-    /// Publishes an approved campaign, making it active for contributions.
+    /// Publishes an approved campaign, making it active for pledges.
     /// </summary>
     /// <param name="id">The unique identifier of the campaign to publish.</param>
     /// <param name="cancellationToken">Cancellation token for asynchronous operation.</param>

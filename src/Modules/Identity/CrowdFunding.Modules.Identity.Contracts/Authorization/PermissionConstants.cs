@@ -8,8 +8,8 @@ public static class PermissionConstants
     public const string CampaignsCreate = "campaigns.create";
     public const string CampaignsPublish = "campaigns.publish";
     public const string CampaignsCancel = "campaigns.cancel";
-    public const string CampaignsContribute = "campaigns.contribute";
-    public const string ContributionsPaymentsManage = "contributions.payments.manage";
+    public const string CampaignsPledge = "campaigns.pledge";
+    public const string PledgesPaymentsManage = "pledges.payments.manage";
     public const string CampaignsManageAny = "campaigns.manage.any";
     public const string ModerationReview = "moderation.review";
     public const string IdentityRolesAssign = "identity.roles.assign";
@@ -21,8 +21,8 @@ public static class PermissionConstants
         CampaignsCreate,
         CampaignsPublish,
         CampaignsCancel,
-        CampaignsContribute,
-        ContributionsPaymentsManage,
+        CampaignsPledge,
+        PledgesPaymentsManage,
         CampaignsManageAny,
         ModerationReview,
         IdentityRolesAssign,

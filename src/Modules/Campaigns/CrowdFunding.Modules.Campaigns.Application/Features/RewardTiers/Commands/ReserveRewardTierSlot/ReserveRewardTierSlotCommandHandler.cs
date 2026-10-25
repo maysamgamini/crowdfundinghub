@@ -17,7 +17,7 @@ namespace CrowdFunding.Modules.Campaigns.Application.Features.RewardTiers.Comman
 /// Also creates the <see cref="RewardTierReservation"/> row that correlates this specific hold
 /// to the backer and gives it an expiry — TICKET-043's fix for the reservation counter having no
 /// way to identify or reclaim an individual abandoned hold. The reservation id returned here is
-/// what the client threads through <c>MakeContributionCommand.RewardTierReservationId</c> at
+/// what the client threads through <c>MakePledgeCommand.RewardTierReservationId</c> at
 /// checkout.
 /// </para>
 /// </summary>

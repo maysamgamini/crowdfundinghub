@@ -16,19 +16,19 @@ This skill guides the QA engineer/agent in conducting deep manual and automated 
 - **Entity Creation**: Validate that all aggregate factories enforce non-empty GUIDs, trimmed non-empty strings, positive financial amounts, and valid future dates.
 - **State Machine Integrity**:
   - `CampaignStatus`: Ensure valid transitions only (`Draft` -> `PendingReview` -> `Published` -> `Successful`/`Failed`/`Cancelled`). Check that terminal states cannot be re-transitioned.
-  - `ContributionStatus`: Ensure valid transitions only (`Pending` -> `Succeeded` / `Failed`). Verify that completed or failed contributions cannot be altered.
+  - `PledgeStatus`: Ensure valid transitions only (`Pending` -> `Succeeded` / `Failed`). Verify that completed or failed pledges cannot be altered.
   - `CampaignReviewStatus`: Ensure review can only be approved/rejected once from `Pending`.
 - **Validation Symmetry**: Verify that every business invariant checked in Domain constructors/methods is also checked in the corresponding FluentValidation command validator (e.g. string min/max lengths, regex formats, currency matches).
 
 ### 2. Multi-Currency & Financial Rules
-- Verify that contributions enforce currency matching against the target campaign's currency.
+- Verify that pledges enforce currency matching against the target campaign's currency.
 - Test decimal precision and rounding rules (`MidpointRounding.AwayFromZero`, 2 decimal places).
 - Check zero, negative, fractional, and overflow pledge amounts.
 
 ### 3. Cross-Module Domain Event Triggers
 - When `Campaign.Create()` is invoked, verify `CampaignCreatedDomainEvent` is emitted.
 - When `CampaignReview.Approve()` is called, verify `CampaignReviewApprovedDomainEvent` is emitted.
-- When `Contribution.ConfirmPayment()` is called, verify `ContributionPaymentConfirmedDomainEvent` is emitted.
+- When `Pledge.ConfirmPayment()` is called, verify `PledgePaymentConfirmedDomainEvent` is emitted.
 - Ensure handlers across modules consume these events and trigger expected state updates.
 
 ## Issue Reporting

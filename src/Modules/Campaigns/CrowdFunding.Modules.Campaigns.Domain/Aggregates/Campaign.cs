@@ -121,7 +121,7 @@ public sealed class Campaign : BaseEntity
     /// <summary>
     /// Transitions a published campaign whose deadline has passed and whose goal was reached to
     /// <see cref="CampaignStatus.Successful"/>. Called by <c>CampaignExpirationBackgroundService</c>;
-    /// never opens a transaction against Contributions' database — the campaign only emits
+    /// never opens a transaction against Pledges' database — the campaign only emits
     /// <see cref="CampaignSucceededDomainEvent"/> via its own outbox.
     /// </summary>
     public void CompleteSuccessfully(DateTime nowUtc)
@@ -149,9 +149,9 @@ public sealed class Campaign : BaseEntity
     /// <summary>
     /// Transitions a published campaign whose deadline has passed without reaching its goal to
     /// <see cref="CampaignStatus.Failed"/>. Emits <see cref="CampaignFailedDomainEvent"/> so
-    /// Contributions can asynchronously refund every backer — see
+    /// Pledges can asynchronously refund every backer — see
     /// <c>CampaignTerminationRefundHandler</c> — rather than this aggregate reaching into
-    /// Contributions' database directly.
+    /// Pledges' database directly.
     /// </summary>
     public void MarkFailed(DateTime nowUtc)
     {
@@ -176,36 +176,36 @@ public sealed class Campaign : BaseEntity
     }
 
     /// <summary>
-    /// Applies a confirmed monetary contribution to the raised balance.
+    /// Applies a confirmed monetary pledge to the raised balance.
     /// </summary>
-    /// <param name="contribution">The monetary contribution to apply.</param>
-    public void ApplyConfirmedContribution(Money contribution)
+    /// <param name="pledge">The monetary pledge to apply.</param>
+    public void ApplyConfirmedPledge(Money pledge)
     {
         if (Status != CampaignStatus.Published)
         {
             throw new InvalidOperationException(
-                $"Cannot apply contributions to campaign in status '{Status}'. Only Published campaigns can accept funds.");
+                $"Cannot apply pledges to campaign in status '{Status}'. Only Published campaigns can accept funds.");
         }
 
-        ArgumentNullException.ThrowIfNull(contribution);
+        ArgumentNullException.ThrowIfNull(pledge);
 
-        if (contribution.Amount <= 0)
+        if (pledge.Amount <= 0)
         {
-            throw new InvalidOperationException("Contribution amount must be greater than zero.");
+            throw new InvalidOperationException("Pledge amount must be greater than zero.");
         }
 
-        RaisedAmount = RaisedAmount.Add(contribution);
+        RaisedAmount = RaisedAmount.Add(pledge);
     }
 
     /// <summary>
-    /// Takes a refunded contribution back out of the raised balance. Allowed in any status: a campaign that
+    /// Takes a refunded pledge back out of the raised balance. Allowed in any status: a campaign that
     /// failed or was cancelled still refunds its backers, and its balance follows.
     /// </summary>
-    public void ReverseConfirmedContribution(Money contribution)
+    public void ReverseConfirmedPledge(Money pledge)
     {
-        ArgumentNullException.ThrowIfNull(contribution);
+        ArgumentNullException.ThrowIfNull(pledge);
 
-        RaisedAmount = RaisedAmount.Subtract(contribution);
+        RaisedAmount = RaisedAmount.Subtract(pledge);
     }
 
     /// <summary>
@@ -226,20 +226,20 @@ public sealed class Campaign : BaseEntity
     }
 
     /// <summary>
-    /// Refuses a confirmed contribution that arrived after the campaign stopped accepting funds, and
-    /// records that so the contributor can be refunded. A campaign that is still published never calls this.
+    /// Refuses a confirmed pledge that arrived after the campaign stopped accepting funds, and
+    /// records that so the backer can be refunded. A campaign that is still published never calls this.
     /// </summary>
-    public void RejectLateContribution(Guid contributionId, Money contribution, DateTime nowUtc)
+    public void RejectLatePledge(Guid pledgeId, Money pledge, DateTime nowUtc)
     {
         if (Status == CampaignStatus.Published)
         {
-            throw new InvalidOperationException("A published campaign accepts contributions; it does not reject them.");
+            throw new InvalidOperationException("A published campaign accepts pledges; it does not reject them.");
         }
 
-        ArgumentNullException.ThrowIfNull(contribution);
+        ArgumentNullException.ThrowIfNull(pledge);
 
-        AddDomainEvent(new LateContributionRejectedDomainEvent(
-            Id, contributionId, contribution.Amount, contribution.Currency, Status.ToString(), nowUtc));
+        AddDomainEvent(new LatePledgeRejectedDomainEvent(
+            Id, pledgeId, pledge.Amount, pledge.Currency, Status.ToString(), nowUtc));
     }
 
     private static void ValidateOwner(Guid ownerId)

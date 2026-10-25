@@ -29,7 +29,7 @@ public sealed class CancelCampaignCommandHandler : ICommandHandler<CancelCampaig
     /// <inheritdoc/>
     public async Task<CancelCampaignResult> Handle(CancelCampaignCommand command, CancellationToken cancellationToken)
     {
-        // Same advisory lock as AddContributionToCampaignCommandHandler, and the campaign is
+        // Same advisory lock as AddPledgeToCampaignCommandHandler, and the campaign is
         // (re-)loaded inside it. Previously this loaded the campaign and ran Cancel() outside
         // any lock, so a confirmed pledge being applied concurrently could interleave with a
         // cancellation instead of being serialized against it.

@@ -6,12 +6,12 @@ Result of the doc tests, grouped: broken links = F9, F10; missing backtick files
 
 ---
 
-### F1: Removed `ICampaignContributionAvailabilityReader` is taught as the live design
+### F1: Removed `ICampaignPledgeAvailabilityReader` is taught as the live design
 - Severity: P1
 - Where: docs/TRADE_OFFS_AND_LIMITATIONS.md:84, 360-385 (section 2.5 says "The architecture solves this via Synchronous In-Process Read Delegation", with three links to files that do not exist), 774; docs/PLATFORM_SHORTCOMINGS.md:396, 429; docs/educational-evaluation.md:539-555, 617, 665; educational/README.md:69; README.md:131; educational/01-architecture-paradigms/monolith-to-microservices-blueprint.md:50
-- Evidence: `grep -rn ContributionAvailability src` finds nothing in production code. Only `tests/ArchitectureTests/.../ReplicatedReadModelBoundaryTests.cs:15` says "The anti-pattern this ticket eliminated". `under-engineering-audit.md:55` and `transformation-spec.md:100` say it was eliminated. `MakeContributionCommandHandler` reads the replicated cache (design-to-code-mapping-round1.md:79).
-- Fix: In TRADE_OFFS 2.5, rewrite the "Current" text to describe the replicated read model (`contributions.campaign_read_models`) and keep the reader only as "the earlier design". Add a "removed" note to the other places; drop the three dead links. README.md:131 and educational/README.md:69 should say "was" not "is".
-- Acceptance: `grep -rn "ICampaignContributionAvailabilityReader" docs educational README.md` hits only sentences that say it was removed; DocumentationTests link test no longer lists the three `.cs` paths.
+- Evidence: `grep -rn PledgeAvailability src` finds nothing in production code. Only `tests/ArchitectureTests/.../ReplicatedReadModelBoundaryTests.cs:15` says "The anti-pattern this ticket eliminated". `under-engineering-audit.md:55` and `transformation-spec.md:100` say it was eliminated. `MakePledgeCommandHandler` reads the replicated cache (design-to-code-mapping-round1.md:79).
+- Fix: In TRADE_OFFS 2.5, rewrite the "Current" text to describe the replicated read model (`pledges.campaign_read_models`) and keep the reader only as "the earlier design". Add a "removed" note to the other places; drop the three dead links. README.md:131 and educational/README.md:69 should say "was" not "is".
+- Acceptance: `grep -rn "ICampaignPledgeAvailabilityReader" docs educational README.md` hits only sentences that say it was removed; DocumentationTests link test no longer lists the three `.cs` paths.
 
 ### F2: Unclosed code fence in ARCHITECTURE_AND_LIBRARIES leaks a NetArchTest snippet that contradicts the line above it
 - Severity: P1
@@ -37,15 +37,15 @@ Result of the doc tests, grouped: broken links = F9, F10; missing backtick files
 ### F5: Retry/backoff numbers do not match the code
 - Severity: P2
 - Where: docs/ARCHITECTURE_AND_LIBRARIES.md:307, 323 ("Exponential Backoff"), 369 ("Exponential Backoff + Jitter (Max 5 Attempts)"); contradicts educational/.../design-to-code-mapping-round1.md ("three retries")
-- Evidence: Outbox: `ModuleOutboxProcessor.RetryDelay = TimeSpan.FromSeconds(10)` fixed, `MarkFailed` does `ScheduledAtUtc = nowUtc.Add(retryDelay)`. Campaign credit handler: `AddContributionToCampaignCommandHandler.MaxConcurrencyRetries = 3`, delays 20/50 ms + up to 25 ms jitter.
+- Evidence: Outbox: `ModuleOutboxProcessor.RetryDelay = TimeSpan.FromSeconds(10)` fixed, `MarkFailed` does `ScheduledAtUtc = nowUtc.Add(retryDelay)`. Campaign credit handler: `AddPledgeToCampaignCommandHandler.MaxConcurrencyRetries = 3`, delays 20/50 ms + up to 25 ms jitter.
 - Fix: Say "fixed 10 s delay, five attempts" for the outbox and "three attempts with short jittered delays" for the xmin retry.
 - Acceptance: `grep -n "Exponential" docs/ARCHITECTURE_AND_LIBRARIES.md` empty or only describing alternatives.
 
 ### F6: "Every module has its own outbox/worker/inbox" is false; only 3 of 6 have an outbox and 5 of 6 an inbox
 - Severity: P2
 - Where: docs/LOCAL_DISTRIBUTION_AND_HA_PLAN.md:24 ("Each module has its own outbox and inbox"); docs/EVENT_DELIVERY_APPROACHES.md:146 ("One outbox table and one worker per module"); docs/TRADE_OFFS_AND_LIMITATIONS.md:296 ("Each module keeps a `<module>_inbox_messages` table"); README.md:150-157 diagram B2 "Per-module schema, inbox"; design-to-code-mapping-round1.md ("one worker per module")
-- Evidence: Outbox tables/workers exist only for Campaigns, Contributions, Moderation (`ConfigureOutbox` and `ModuleOutboxProcessor<>` subclasses). `ConfigureInbox` is in Campaigns, Contributions, Moderation, Notifications, CampaignUpdates, not Identity. src/Modules/README.md:19-26 and the module READMEs are correct ("Outbox: none", "Inbox: none" for Identity).
-- Fix: Say "each module that publishes events (Campaigns, Contributions, Moderation) has its own outbox and worker; every module except Identity has an inbox".
+- Evidence: Outbox tables/workers exist only for Campaigns, Pledges, Moderation (`ConfigureOutbox` and `ModuleOutboxProcessor<>` subclasses). `ConfigureInbox` is in Campaigns, Pledges, Moderation, Notifications, CampaignUpdates, not Identity. src/Modules/README.md:19-26 and the module READMEs are correct ("Outbox: none", "Inbox: none" for Identity).
+- Fix: Say "each module that publishes events (Campaigns, Pledges, Moderation) has its own outbox and worker; every module except Identity has an inbox".
 - Acceptance: grep of the four phrases above shows the qualified wording; consistent with src/Modules/README.md table.
 
 ### F7: Project counts and "each module has Contracts" are wrong
@@ -78,8 +78,8 @@ Result of the doc tests, grouped: broken links = F9, F10; missing backtick files
 
 ### F11: Wrong file paths and test names in backticks
 - Severity: P2
-- Where: src/Samples/RosettaStone/README.md (`tests/IntegrationTests/CrowdFunding.IntegrationTests/RosettaStone/RosettaStoneParityTests.cs`); educational/03-engineering-spec-and-roadmap/deconstruction-walkthrough.md (`src/Services/CrowdFunding.Moderation.Service/Program.cs`); educational/03-engineering-spec-and-roadmap/design-to-code-mapping-round1.md (`OutboxTests` x2); improvement.md (`CampaignsArchitectureTests`, `ContributionsArchitectureTests`, `IdentityArchitectureTests`, `ModerationArchitectureTests`, `NotificationsArchitectureTests`, `CampaignUpdatesArchitectureTests`); src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Services/README.md (`CampaignContributionAvailabilityReader.cs`)
-- Evidence: the parity tests live at `tests/IntegrationTests/CrowdFunding.IntegrationTests/RosettaStoneParityTests.cs` (no `RosettaStone/` subfolder); the service is under `services/`, not `src/Services/`; `OutboxTests.cs` contains classes `AdvisoryLockKeyTests` and `EventTypeRegistryTests` only, so no class `OutboxTests` exists; the real classes are `CampaignsModuleDependencyTests`, `ContributionsModuleDependencyTests`, etc. (DEV_GUIDELINES.md:30 already uses that pattern); the reader file was deleted (F1).
+- Where: src/Samples/RosettaStone/README.md (`tests/IntegrationTests/CrowdFunding.IntegrationTests/RosettaStone/RosettaStoneParityTests.cs`); educational/03-engineering-spec-and-roadmap/deconstruction-walkthrough.md (`src/Services/CrowdFunding.Moderation.Service/Program.cs`); educational/03-engineering-spec-and-roadmap/design-to-code-mapping-round1.md (`OutboxTests` x2); improvement.md (`CampaignsArchitectureTests`, `PledgesArchitectureTests`, `IdentityArchitectureTests`, `ModerationArchitectureTests`, `NotificationsArchitectureTests`, `CampaignUpdatesArchitectureTests`); src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Services/README.md (`CampaignPledgeAvailabilityReader.cs`)
+- Evidence: the parity tests live at `tests/IntegrationTests/CrowdFunding.IntegrationTests/RosettaStoneParityTests.cs` (no `RosettaStone/` subfolder); the service is under `services/`, not `src/Services/`; `OutboxTests.cs` contains classes `AdvisoryLockKeyTests` and `EventTypeRegistryTests` only, so no class `OutboxTests` exists; the real classes are `CampaignsModuleDependencyTests`, `PledgesModuleDependencyTests`, etc. (DEV_GUIDELINES.md:30 already uses that pattern); the reader file was deleted (F1).
 - Fix: Correct each path or name; in the mapping doc cite `EventTypeRegistryTests` and `OutboxMessage` serialization tests by their real class names.
 - Acceptance: DocumentationTests `EveryFileNamedInBackticks_ExistsInTheRepository` and `EveryTestClassNamedInBackticks_ExistsInTheTestProjects` list none of these.
 
@@ -107,14 +107,14 @@ Result of the doc tests, grouped: broken links = F9, F10; missing backtick files
 ### F15: POLY_PATTERN_TIER_ASSIGNMENT says three xmin tokens, then contradicts itself
 - Severity: P2
 - Where: docs/POLY_PATTERN_TIER_ASSIGNMENT.md:29-30 vs :40 (CampaignUpdates row: "It now has an `xmin` token")
-- Evidence: xmin concurrency tokens exist on Campaign, Contribution, RefreshToken, WebhookSubscription, RewardTier and RewardTierReservation (`grep -rn '"xmin"' src` in *Configuration.cs; six files). Events: only Campaign, Contribution and CampaignReview call `AddDomainEvent` (this part is correct).
+- Evidence: xmin concurrency tokens exist on Campaign, Pledge, RefreshToken, WebhookSubscription, RewardTier and RewardTierReservation (`grep -rn '"xmin"' src` in *Configuration.cs; six files). Events: only Campaign, Pledge and CampaignReview call `AddDomainEvent` (this part is correct).
 - Fix: "Six entities carry an `xmin` token: ..." (list all six).
 - Acceptance: line 30 lists six; no sentence says "Three ... carry".
 
-### F16: Poly-pattern Tier 3 sample puts the campaign advisory lock in Contributions
+### F16: Poly-pattern Tier 3 sample puts the campaign advisory lock in Pledges
 - Severity: P2
-- Where: educational/01-architecture-paradigms/poly-pattern-architecture.md:139-150 ("// Inside Contributions Application & Domain" ... `pg_advisory_xact_lock` on the campaign id)
-- Evidence: `grep -rn pg_advisory src` finds the lock only in Campaigns (`CampaignTransactionExecutor.cs:88`, reward tier handler). Contributions confirm uses an xmin token and a unique webhook key; the campaign balance is credited by the Campaigns handler after the outbox publishes (README.md sequence diagram).
+- Where: educational/01-architecture-paradigms/poly-pattern-architecture.md:139-150 ("// Inside Pledges Application & Domain" ... `pg_advisory_xact_lock` on the campaign id)
+- Evidence: `grep -rn pg_advisory src` finds the lock only in Campaigns (`CampaignTransactionExecutor.cs:88`, reward tier handler). Pledges confirm uses an xmin token and a unique webhook key; the campaign balance is credited by the Campaigns handler after the outbox publishes (README.md sequence diagram).
 - Fix: Retitle the snippet "Inside Campaigns, crediting a confirmed pledge" or split into the two real steps.
 - Acceptance: the snippet's comment names the module that really holds the lock.
 
@@ -127,15 +127,15 @@ Result of the doc tests, grouped: broken links = F9, F10; missing backtick files
 
 ### F18: Route and endpoint claims that do not match the controllers
 - Severity: P2
-- Where: docs/ARCHITECTURE_AND_LIBRARIES.md:731 (`POST /api/contributions/{id}/confirm-payment`); src/Modules/Contributions/README.md:28 (`POST /api/contributions`, while :46 has the right route); src/API/CrowdFunding.API/RateLimiting/README.md:11-17; educational/01-architecture-paradigms/justifying-the-outbox-and-complex-crud.md:57, 87, 105, 115; src/API/CrowdFunding.API/Controllers/README.md (correct, use as reference)
-- Evidence: `ContributionsController` is `[Route("api/campaigns/{campaignId:guid}/[controller]")]`, so pledge = `POST /api/campaigns/{campaignId}/contributions` and confirm = `POST /api/campaigns/{campaignId}/contributions/{contributionId}/confirm-payment`. `[EnableRateLimiting(PaymentPolicy)]` is on the pledge POST only (ContributionsController.cs:106); confirm-payment is not limited; RateLimiting README omits the third policy `WebhookPolicy` (200/min, applied to both webhook controllers). Webhook routes are `/api/webhooks/payments/stripe` and `/api/webhooks/moderation/media-analysis`; justifying-the-outbox.md uses `/api/contributions/stripe-webhook`, `/api/webhooks/media-analysis-result` (:87) and `/api/webhooks/media-analysis` (:105), two different paths for one call in the same file, plus statuses `PendingMediaAnalysis` and `PendingPayment` that do not exist (real: `CampaignStatus` Draft/Published/Successful/Failed/Cancelled, `ContributionStatus` Pending/Succeeded/Failed/Refunded).
+- Where: docs/ARCHITECTURE_AND_LIBRARIES.md:731 (`POST /api/pledges/{id}/confirm-payment`); src/Modules/Pledges/README.md:28 (`POST /api/pledges`, while :46 has the right route); src/API/CrowdFunding.API/RateLimiting/README.md:11-17; educational/01-architecture-paradigms/justifying-the-outbox-and-complex-crud.md:57, 87, 105, 115; src/API/CrowdFunding.API/Controllers/README.md (correct, use as reference)
+- Evidence: `PledgesController` is `[Route("api/campaigns/{campaignId:guid}/[controller]")]`, so pledge = `POST /api/campaigns/{campaignId}/pledges` and confirm = `POST /api/campaigns/{campaignId}/pledges/{pledgeId}/confirm-payment`. `[EnableRateLimiting(PaymentPolicy)]` is on the pledge POST only (PledgesController.cs:106); confirm-payment is not limited; RateLimiting README omits the third policy `WebhookPolicy` (200/min, applied to both webhook controllers). Webhook routes are `/api/webhooks/payments/stripe` and `/api/webhooks/moderation/media-analysis`; justifying-the-outbox.md uses `/api/pledges/stripe-webhook`, `/api/webhooks/media-analysis-result` (:87) and `/api/webhooks/media-analysis` (:105), two different paths for one call in the same file, plus statuses `PendingMediaAnalysis` and `PendingPayment` that do not exist (real: `CampaignStatus` Draft/Published/Successful/Failed/Cancelled, `PledgeStatus` Pending/Succeeded/Failed/Refunded).
 - Fix: Correct the routes; document the webhook policy; remove the claim that confirm-payment is rate limited (or add the attribute); mark the invented statuses as illustrative.
-- Acceptance: `grep -rn "/api/contributions" docs educational src --include=*.md` finds none.
+- Acceptance: `grep -rn "/api/pledges" docs educational src --include=*.md` finds none.
 
 ### F19: Status names that do not exist
 - Severity: P2
 - Where: docs/ARCHITECTURE_AND_LIBRARIES.md:159 (`Pending`, `Confirmed`, `Failed`), :736 ("Update Status = Confirmed"); docs/TRADE_OFFS_AND_LIMITATIONS.md:362, 380, 405 ("`Active`")
-- Evidence: `ContributionStatus` = Pending, Succeeded, Failed, Refunded; `CampaignStatus` = Draft, Published, Successful, Failed, Cancelled (src/Modules/*/Domain/Enums). design-to-code-mapping-round1.md uses the right names.
+- Evidence: `PledgeStatus` = Pending, Succeeded, Failed, Refunded; `CampaignStatus` = Draft, Published, Successful, Failed, Cancelled (src/Modules/*/Domain/Enums). design-to-code-mapping-round1.md uses the right names.
 - Fix: `Confirmed` -> `Succeeded`, `Active` -> `Published`.
 - Acceptance: `grep -n "Status = Confirmed\|\`Confirmed\`\|\`Active\`" docs/ARCHITECTURE_AND_LIBRARIES.md docs/TRADE_OFFS_AND_LIMITATIONS.md` empty.
 
@@ -155,7 +155,7 @@ Result of the doc tests, grouped: broken links = F9, F10; missing backtick files
 
 ### F22: Module READMEs list files and folders that were deleted
 - Severity: P3
-- Where: src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Services/README.md (`CampaignContributionAvailabilityReader.cs`); src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Contracts/Queries/README.md and src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Application/Features/Campaigns/Queries/README.md (child folder `GetCampaignContributionAvailability`)
+- Where: src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Services/README.md (`CampaignPledgeAvailabilityReader.cs`); src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Contracts/Queries/README.md and src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Application/Features/Campaigns/Queries/README.md (child folder `GetCampaignPledgeAvailability`)
 - Evidence: a script that checks every "Files"/"Child Folders" bullet against disk found exactly these three misses; `Contracts/Queries` now contains only README.md.
 - Fix: Remove the three entries (and the now-empty Contracts/Queries folder README if the folder goes).
 - Acceptance: re-running the bullet-vs-disk check prints nothing.

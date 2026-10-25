@@ -72,7 +72,7 @@ public sealed class SwaggerDocumentationTests
     [Fact]
     public void SwaggerDocument_ShouldContainModuleTagsWithDescriptions()
     {
-        var expectedTags = new[] { "Identity", "Campaigns", "Contributions", "Moderation", "System" };
+        var expectedTags = new[] { "Identity", "Campaigns", "Pledges", "Moderation", "System" };
 
         Assert.NotNull(_document.Tags);
         foreach (var expectedTag in expectedTags)
@@ -100,9 +100,9 @@ public sealed class SwaggerDocumentationTests
         Assert.True(paths.ContainsKey("/api/Campaigns/{id}/publish"));
         Assert.True(paths.ContainsKey("/api/Campaigns/{id}/cancel"));
 
-        Assert.True(paths.ContainsKey("/api/campaigns/{campaignId}/Contributions"));
-        Assert.True(paths.ContainsKey("/api/campaigns/{campaignId}/Contributions/{contributionId}/confirm-payment"));
-        Assert.True(paths.ContainsKey("/api/campaigns/{campaignId}/Contributions/{contributionId}/fail-payment"));
+        Assert.True(paths.ContainsKey("/api/campaigns/{campaignId}/Pledges"));
+        Assert.True(paths.ContainsKey("/api/campaigns/{campaignId}/Pledges/{pledgeId}/confirm-payment"));
+        Assert.True(paths.ContainsKey("/api/campaigns/{campaignId}/Pledges/{pledgeId}/fail-payment"));
 
         Assert.True(paths.ContainsKey("/api/moderation/reviews"));
         Assert.True(paths.ContainsKey("/api/moderation/reviews/{campaignId}"));
@@ -132,12 +132,12 @@ public sealed class SwaggerDocumentationTests
         Assert.False(string.IsNullOrWhiteSpace(createCampaignPost.Summary));
         Assert.Contains("campaign", createCampaignPost.Summary, StringComparison.OrdinalIgnoreCase);
 
-        var makeContributionPath = paths["/api/campaigns/{campaignId}/Contributions"];
-        Assert.NotNull(makeContributionPath);
-        Assert.NotNull(makeContributionPath.Operations);
-        var makeContributionPost = makeContributionPath.Operations[HttpMethod.Post];
-        Assert.NotNull(makeContributionPost);
-        Assert.False(string.IsNullOrWhiteSpace(makeContributionPost.Summary));
+        var makePledgePath = paths["/api/campaigns/{campaignId}/Pledges"];
+        Assert.NotNull(makePledgePath);
+        Assert.NotNull(makePledgePath.Operations);
+        var makePledgePost = makePledgePath.Operations[HttpMethod.Post];
+        Assert.NotNull(makePledgePost);
+        Assert.False(string.IsNullOrWhiteSpace(makePledgePost.Summary));
     }
 
     [Fact]
@@ -149,7 +149,7 @@ public sealed class SwaggerDocumentationTests
 
         Assert.True(components.Schemas.ContainsKey("RegisterUserRequest") ||
                     components.Schemas.ContainsKey("CreateCampaignRequest") ||
-                    components.Schemas.ContainsKey("MakeContributionRequest"));
+                    components.Schemas.ContainsKey("MakePledgeRequest"));
     }
 
     private sealed class MockWebHostEnvironment : IWebHostEnvironment

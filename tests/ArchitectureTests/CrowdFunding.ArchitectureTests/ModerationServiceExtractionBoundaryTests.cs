@@ -24,7 +24,7 @@ public sealed class ModerationServiceExtractionBoundaryTests
         "CrowdFunding.Modules.Campaigns.Application",
         "CrowdFunding.Modules.Campaigns.Domain",
         "CrowdFunding.Modules.Campaigns.Infrastructure",
-        "CrowdFunding.Modules.Contributions",
+        "CrowdFunding.Modules.Pledges",
         "CrowdFunding.Modules.Notifications",
         "CrowdFunding.Modules.CampaignUpdates",
     ];

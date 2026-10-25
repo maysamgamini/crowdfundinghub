@@ -3,7 +3,7 @@ using CrowdFunding.API.Contracts.Webhooks;
 using CrowdFunding.API.RateLimiting;
 using CrowdFunding.API.Security;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
-using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.ReconcilePaymentWebhook;
+using CrowdFunding.Modules.Pledges.Application.Features.Pledges.Commands.ReconcilePaymentWebhook;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -13,7 +13,7 @@ namespace CrowdFunding.API.Controllers;
 
 /// <summary>
 /// Receives asynchronous payment-gateway callbacks. Deliberately anonymous — a payment gateway
-/// cannot present a user JWT — and deliberately outside <c>api/campaigns/{campaignId}/contributions</c>:
+/// cannot present a user JWT — and deliberately outside <c>api/campaigns/{campaignId}/pledges</c>:
 /// a webhook is not a resource under a specific campaign, it is a top-level integration surface
 /// authenticated by cryptographic signature instead of a bearer token. See TICKET-033.
 /// </summary>
@@ -39,13 +39,13 @@ public sealed class PaymentWebhooksController : ControllerBase
     }
 
     /// <summary>
-    /// Reconciles a Stripe-style payment webhook against the contribution its payment intent
+    /// Reconciles a Stripe-style payment webhook against the pledge its payment intent
     /// correlates to.
     /// </summary>
     /// <response code="200">Webhook acknowledged — processed, ignored, or a duplicate delivery.</response>
     /// <response code="400">Malformed payload.</response>
     /// <response code="401">Missing or invalid <c>Stripe-Signature</c> header.</response>
-    /// <response code="404">No contribution correlates to the payload's payment intent.</response>
+    /// <response code="404">No pledge correlates to the payload's payment intent.</response>
     [HttpPost("stripe")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]

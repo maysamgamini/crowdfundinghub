@@ -1,6 +1,6 @@
 using System.Net.Http.Json;
 using CrowdFunding.API.Contracts.Campaigns;
-using CrowdFunding.API.Contracts.Contributions;
+using CrowdFunding.API.Contracts.Pledges;
 using CrowdFunding.API.Migrations;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -12,10 +12,10 @@ using Testcontainers.Redis;
 namespace CrowdFunding.IntegrationTests;
 
 /// <summary>
-/// TICKET-023's core claim: once a campaign is replicated into Contributions' own
+/// TICKET-023's core claim: once a campaign is replicated into Pledges' own
 /// <c>active_campaigns_cache</c>, pledging against it never needs Campaigns' database again.
 /// Proven here by pointing Campaigns at its own isolated Postgres container, publishing a
-/// campaign (which replicates it into Contributions — on the shared/default connection), then
+/// campaign (which replicates it into Pledges — on the shared/default connection), then
 /// killing the Campaigns container outright and confirming a pledge still succeeds.
 /// </summary>
 public sealed class ReplicatedReadModelResilienceTests : IAsyncLifetime
@@ -71,7 +71,7 @@ public sealed class ReplicatedReadModelResilienceTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task MakeContribution_ShouldSucceed_AfterCampaignsDatabaseIsCompletelyUnreachable()
+    public async Task MakePledge_ShouldSucceed_AfterCampaignsDatabaseIsCompletelyUnreachable()
     {
         using var client = _factory!.CreateClient();
 
@@ -104,7 +104,7 @@ public sealed class ReplicatedReadModelResilienceTests : IAsyncLifetime
         var publishResponse = await client.PostAsync($"/api/campaigns/{campaignId}/publish", content: null);
         publishResponse.EnsureSuccessStatusCode();
 
-        // Replicates CampaignPublishedApplicationEvent into Contributions' own database (on the
+        // Replicates CampaignPublishedApplicationEvent into Pledges' own database (on the
         // shared connection) while Campaigns' own database is still up.
         await _factory.ProcessOutboxMessagesAsync();
 
@@ -115,12 +115,12 @@ public sealed class ReplicatedReadModelResilienceTests : IAsyncLifetime
         var (_, backerToken) = await client.RegisterAndLoginAsync(backerEmail, "Resilience Backer");
         client.SetBearerToken(backerToken);
 
-        var contributeResponse = await client.PostAsJsonAsync(
-            $"/api/campaigns/{campaignId}/contributions", new MakeContributionRequest(100m, "USD"));
+        var pledgeResponse = await client.PostAsJsonAsync(
+            $"/api/campaigns/{campaignId}/pledges", new MakePledgeRequest(100m, "USD"));
 
-        contributeResponse.EnsureSuccessStatusCode();
-        var contribution = await contributeResponse.Content.ReadFromJsonAsync<MakeContributionResponse>();
-        Assert.Equal("Pending", contribution!.Status);
+        pledgeResponse.EnsureSuccessStatusCode();
+        var pledge = await pledgeResponse.Content.ReadFromJsonAsync<MakePledgeResponse>();
+        Assert.Equal("Pending", pledge!.Status);
     }
 
     private sealed class IsolatedWebApplicationFactory : WebApplicationFactory<Program>

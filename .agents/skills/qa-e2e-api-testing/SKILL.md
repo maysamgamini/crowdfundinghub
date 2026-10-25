@@ -27,9 +27,9 @@ This skill guides the end-to-end verification of HTTP API calls across complete 
 
 ### 3. User Journey 3: Backer Pledging & Outbox Propagation
 1. `POST /api/Identity/register` & `login` (as Backer).
-2. `POST /api/campaigns/{campaignId}/contributions`: Submit pledge. Verify status is `Pending`.
-3. `POST /api/campaigns/{campaignId}/contributions/{contributionId}/confirm-payment`: Confirm payment.
-4. Verify Outbox background worker picks up `ContributionPaymentConfirmedApplicationEvent`.
+2. `POST /api/campaigns/{campaignId}/pledges`: Submit pledge. Verify status is `Pending`.
+3. `POST /api/campaigns/{campaignId}/pledges/{pledgeId}/confirm-payment`: Confirm payment.
+4. Verify Outbox background worker picks up `PledgePaymentConfirmedApplicationEvent`.
 5. Verify `Campaign.RaisedAmount` updates correctly and real-time SignalR notifications emit.
 
 ### 4. End-to-End API Test Suite Evaluation

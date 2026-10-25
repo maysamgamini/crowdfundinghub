@@ -35,7 +35,7 @@ Which tests teach the most, which to skip, and the drill results are in [`docs/T
    - Tests business rules, aggregate state transitions, command validators, CQRS handlers, outbox serialization, and OpenMeter CloudEvent mapping.
 3. **Integration Tests (`tests/IntegrationTests`)**:
    - Database-backed integration tests utilizing real PostgreSQL instances via `Testcontainers`.
-   - Exercises end-to-end database migrations, advisory lock concurrency, race conditions during parallel contributions, and outbox idempotency, the per-module inbox, schema isolation, and webhook concurrency.
+   - Exercises end-to-end database migrations, advisory lock concurrency, race conditions during parallel pledges, and outbox idempotency, the per-module inbox, schema isolation, and webhook concurrency.
 
 ## Running Tests
 - **Run all tests**:

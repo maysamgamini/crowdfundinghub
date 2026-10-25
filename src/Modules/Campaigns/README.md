@@ -27,15 +27,15 @@ flowchart LR
     Ca["Campaigns"] -- "CampaignCreated" --> Mo["Moderation"]
     Ca -- "Published, Cancelled" --> No["Notifications"]
     Ca -- "Published, Cancelled" --> Up["CampaignUpdates"]
-    Ca -- "CampaignFailed" --> Co["Contributions (refund)"]
-    Co -- "ContributionPaymentConfirmed" --> Ca
+    Ca -- "CampaignFailed" --> Co["Pledges (refund)"]
+    Co -- "PledgePaymentConfirmed" --> Ca
 ```
 
 ## Capabilities
 - **Commands:** `CreateCampaign`, `PublishCampaign`, `CancelCampaign`, `CompleteCampaign`, `FailCampaign`, `CreateRewardTier`, `ReserveRewardTierSlot`, `ReleaseExpiredRewardTierReservation`.
 - **Queries:** `GetCampaignById`, `ListCampaigns`, `GetRewardTierById`, `ListRewardTiersByCampaign`.
-- **Event handler:** `ContributionPaymentConfirmedApplicationEventHandler` credits the pledge to the campaign through a ledger with a unique key on `ContributionId` (`INSERT ... ON CONFLICT DO NOTHING`), then adds to `RaisedAmount` under a per-campaign `pg_advisory_xact_lock`, with an `xmin` token as a second guard.
-- **Ledger:** `campaign_contributions_ledger` is append-only (a trigger refuses update and delete). Each entry has a kind: a pledge is positive, a refund is a negative compensating entry, enforced by a CHECK constraint, and each contribution appears once per kind. Refunds reach the campaign through `ContributionRefundedApplicationEvent`; the deadline decision uses the exact ledger sum and logs an error if the stored `RaisedAmount` has drifted from it.
+- **Event handler:** `PledgePaymentConfirmedApplicationEventHandler` credits the pledge to the campaign through a ledger with a unique key on `PledgeId` (`INSERT ... ON CONFLICT DO NOTHING`), then adds to `RaisedAmount` under a per-campaign `pg_advisory_xact_lock`, with an `xmin` token as a second guard.
+- **Ledger:** `campaign_pledges_ledger` is append-only (a trigger refuses update and delete). Each entry has a kind: a pledge is positive, a refund is a negative compensating entry, enforced by a CHECK constraint, and each pledge appears once per kind. Refunds reach the campaign through `PledgeRefundedApplicationEvent`; the deadline decision uses the exact ledger sum and logs an error if the stored `RaisedAmount` has drifted from it.
 - **Reward tiers:** a per-tier advisory lock serialises the read-check-increment, and a reservation lasts 15 minutes unless payment confirms; `RewardTierReservationScavengerBackgroundService` releases expired ones.
 - **Caching:** `CachedCampaignReadService` with invalidation after commit.
 
@@ -50,7 +50,7 @@ flowchart LR
 | Inbox | `campaigns_inbox_messages` |
 
 ## Projects & Layers
-- `Domain`: `Campaign` aggregate root, `RewardTier`, `RewardTierReservation`, `ContributionLedgerEntry`, `CampaignStatus`, domain events.
+- `Domain`: `Campaign` aggregate root, `RewardTier`, `RewardTierReservation`, `PledgeLedgerEntry`, `CampaignStatus`, domain events.
 - `Application`: command, query and event handlers.
 - `Infrastructure`: `CampaignsDbContext`, repositories, transaction executor, caching decorators, outbox worker, background services.
 - `Contracts`: commands, queries and application events shared with other modules.

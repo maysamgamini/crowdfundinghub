@@ -2,8 +2,8 @@ using System.Net;
 using System.Text.Json;
 using CrowdFunding.BuildingBlocks.Application.Metering;
 using CrowdFunding.BuildingBlocks.Infrastructure.Metering;
-using CrowdFunding.Modules.Contributions.Application.Features.Metering;
-using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPaymentConfirmed;
+using CrowdFunding.Modules.Pledges.Application.Features.Metering;
+using CrowdFunding.Modules.Pledges.Contracts.Events.PledgePaymentConfirmed;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace CrowdFunding.UnitTests;
@@ -27,7 +27,7 @@ public sealed class OpenMeterClientTests
         var client = new OpenMeterClient(httpClient, NullLogger<OpenMeterClient>.Instance);
 
         var cloudEvent = new CloudEvent(
-            "pledge_evt_123", "/modules/contributions", "crowdfunding.pledge.confirmed",
+            "pledge_evt_123", "/modules/pledges", "crowdfunding.pledge.confirmed",
             "campaign_abc", DateTimeOffset.UtcNow, new { amount = 100 });
 
         await client.IngestAsync(cloudEvent);
@@ -96,17 +96,17 @@ public sealed class PledgeConfirmedMeteringEventHandlerTests
         };
         var handler = new PledgeConfirmedMeteringEventHandler(recordingClient, feeOptions);
 
-        var contributionId = Guid.NewGuid();
+        var pledgeId = Guid.NewGuid();
         var campaignId = Guid.NewGuid();
 
         await handler.Handle(
-            new ContributionPaymentConfirmedApplicationEvent(contributionId, campaignId, Guid.NewGuid(), 100m, "USD"),
+            new PledgePaymentConfirmedApplicationEvent(pledgeId, campaignId, Guid.NewGuid(), 100m, "USD"),
             CancellationToken.None);
 
         Assert.NotNull(recordingClient.LastCloudEvent);
         var cloudEvent = recordingClient.LastCloudEvent!;
 
-        Assert.Equal($"pledge_evt_{contributionId}", cloudEvent.Id);
+        Assert.Equal($"pledge_evt_{pledgeId}", cloudEvent.Id);
         Assert.Equal("crowdfunding.pledge.confirmed", cloudEvent.Type);
         Assert.Equal($"campaign_{campaignId}", cloudEvent.Subject);
 
@@ -119,12 +119,12 @@ public sealed class PledgeConfirmedMeteringEventHandlerTests
     }
 
     [Fact]
-    public async Task Handle_ShouldProduceTheSameCloudEventId_WhenTheSameContributionIsRedelivered()
+    public async Task Handle_ShouldProduceTheSameCloudEventId_WhenTheSamePledgeIsRedelivered()
     {
         var recordingClient = new RecordingUsageMeteringClient();
         var handler = new PledgeConfirmedMeteringEventHandler(recordingClient, new OpenMeterFeeOptions());
-        var contributionId = Guid.NewGuid();
-        var notification = new ContributionPaymentConfirmedApplicationEvent(contributionId, Guid.NewGuid(), Guid.NewGuid(), 10m, "USD");
+        var pledgeId = Guid.NewGuid();
+        var notification = new PledgePaymentConfirmedApplicationEvent(pledgeId, Guid.NewGuid(), Guid.NewGuid(), 10m, "USD");
 
         await handler.Handle(notification, CancellationToken.None);
         var firstId = recordingClient.LastCloudEvent!.Id;
@@ -132,7 +132,7 @@ public sealed class PledgeConfirmedMeteringEventHandlerTests
         await handler.Handle(notification, CancellationToken.None);
         var secondId = recordingClient.LastCloudEvent!.Id;
 
-        // OpenMeter deduplicates by event id, so redelivery of the same contribution must
+        // OpenMeter deduplicates by event id, so redelivery of the same pledge must
         // produce the same id rather than a fresh Guid each time.
         Assert.Equal(firstId, secondId);
     }

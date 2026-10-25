@@ -1,6 +1,6 @@
 using System.Net.Http.Json;
 using CrowdFunding.API.Contracts.Campaigns;
-using CrowdFunding.API.Contracts.Contributions;
+using CrowdFunding.API.Contracts.Pledges;
 using CrowdFunding.API.Contracts.Moderation;
 using CrowdFunding.API.Migrations;
 using CrowdFunding.Modules.Notifications.Infrastructure.Services;
@@ -11,7 +11,7 @@ namespace CrowdFunding.IntegrationTests;
 /// <summary>
 /// TICKET-031: proves the email notification consumer is driven purely by the outbox — no
 /// in-memory coupling from a command handler straight into <c>IEmailNotificationService</c>.
-/// Confirming a contribution's payment (in Contributions) or cancelling a campaign (fanning out
+/// Confirming a pledge's payment (in Pledges) or cancelling a campaign (fanning out
 /// through the TICKET-027 refund saga) commits a database write and an outbox row in the same
 /// transaction; the actual "send" only happens once <see cref="CrowdFundingApiFactory.ProcessOutboxMessagesAsync"/>
 /// claims and publishes that row, which is what the assertions below are actually exercising.
@@ -61,7 +61,7 @@ public sealed class EmailNotificationOutboxE2ETests
     }
 
     [Fact]
-    public async Task ConfirmingContributionPayment_ShouldDeliverReceiptEmail_ThroughTheOutbox()
+    public async Task ConfirmingPledgePayment_ShouldDeliverReceiptEmail_ThroughTheOutbox()
     {
         using var client = _factory.CreateClient();
         var (campaignId, _, adminToken) = await CreatePublishedCampaignAsync(client, "receipt");
@@ -69,24 +69,24 @@ public sealed class EmailNotificationOutboxE2ETests
         var (backerId, backerToken) = await client.RegisterAndLoginAsync(ApiTestExtensions.UniqueEmail("receipt-backer"));
         client.SetBearerToken(backerToken);
 
-        var contributeResponse = await client.PostAsJsonAsync(
-            $"/api/campaigns/{campaignId}/contributions", new MakeContributionRequest(150m, "USD"));
-        contributeResponse.EnsureSuccessStatusCode();
-        var contributionId = (await contributeResponse.Content.ReadFromJsonAsync<MakeContributionResponse>())!.ContributionId;
+        var pledgeResponse = await client.PostAsJsonAsync(
+            $"/api/campaigns/{campaignId}/pledges", new MakePledgeRequest(150m, "USD"));
+        pledgeResponse.EnsureSuccessStatusCode();
+        var pledgeId = (await pledgeResponse.Content.ReadFromJsonAsync<MakePledgeResponse>())!.PledgeId;
 
         client.SetBearerToken(adminToken);
         var confirmResponse = await client.PostAsJsonAsync(
-            $"/api/campaigns/{campaignId}/contributions/{contributionId}/confirm-payment",
-            new ConfirmContributionPaymentRequest("test-payment-ref-receipt"));
+            $"/api/campaigns/{campaignId}/pledges/{pledgeId}/confirm-payment",
+            new ConfirmPledgePaymentRequest("test-payment-ref-receipt"));
         confirmResponse.EnsureSuccessStatusCode();
 
-        // Nothing has been "sent" yet — the receipt only exists as a row in Contributions'
+        // Nothing has been "sent" yet — the receipt only exists as a row in Pledges'
         // outbox table until a worker claims and publishes it.
         await _factory.ProcessOutboxMessagesAsync();
 
-        var receipt = Sink.SentMessages.FirstOrDefault(m => m.IdempotencyKey == $"contribution-{contributionId}");
+        var receipt = Sink.SentMessages.FirstOrDefault(m => m.IdempotencyKey == $"pledge-{pledgeId}");
         Assert.NotNull(receipt);
-        Assert.Equal("ContributionReceipt", receipt!.Kind);
+        Assert.Equal("PledgeReceipt", receipt!.Kind);
         Assert.Equal(backerId, receipt.RecipientUserId);
         Assert.Equal(campaignId, receipt.CampaignId);
         Assert.Equal(150m, receipt.Amount);
@@ -102,15 +102,15 @@ public sealed class EmailNotificationOutboxE2ETests
         var (backerId, backerToken) = await client.RegisterAndLoginAsync(ApiTestExtensions.UniqueEmail("cancel-alert-backer"));
         client.SetBearerToken(backerToken);
 
-        var contributeResponse = await client.PostAsJsonAsync(
-            $"/api/campaigns/{campaignId}/contributions", new MakeContributionRequest(200m, "USD"));
-        contributeResponse.EnsureSuccessStatusCode();
-        var contributionId = (await contributeResponse.Content.ReadFromJsonAsync<MakeContributionResponse>())!.ContributionId;
+        var pledgeResponse = await client.PostAsJsonAsync(
+            $"/api/campaigns/{campaignId}/pledges", new MakePledgeRequest(200m, "USD"));
+        pledgeResponse.EnsureSuccessStatusCode();
+        var pledgeId = (await pledgeResponse.Content.ReadFromJsonAsync<MakePledgeResponse>())!.PledgeId;
 
         client.SetBearerToken(adminToken);
         var confirmResponse = await client.PostAsJsonAsync(
-            $"/api/campaigns/{campaignId}/contributions/{contributionId}/confirm-payment",
-            new ConfirmContributionPaymentRequest("test-payment-ref-cancel-alert"));
+            $"/api/campaigns/{campaignId}/pledges/{pledgeId}/confirm-payment",
+            new ConfirmPledgePaymentRequest("test-payment-ref-cancel-alert"));
         confirmResponse.EnsureSuccessStatusCode();
         await _factory.ProcessOutboxMessagesAsync();
 
@@ -118,13 +118,13 @@ public sealed class EmailNotificationOutboxE2ETests
         var cancelResponse = await client.PostAsync($"/api/campaigns/{campaignId}/cancel", content: null);
         cancelResponse.EnsureSuccessStatusCode();
 
-        // Drives Campaigns' CampaignCancelledApplicationEvent -> Contributions' refund saga
-        // (TICKET-027) -> ContributionRefundedApplicationEvent -> Notifications' cancellation
+        // Drives Campaigns' CampaignCancelledApplicationEvent -> Pledges' refund saga
+        // (TICKET-027) -> PledgeRefundedApplicationEvent -> Notifications' cancellation
         // alert, each hop only happening because the previous one's outbox row was processed.
         await _factory.ProcessOutboxMessagesAsync();
         await _factory.ProcessOutboxMessagesAsync();
 
-        var alert = Sink.SentMessages.FirstOrDefault(m => m.IdempotencyKey == $"cancellation-{contributionId}");
+        var alert = Sink.SentMessages.FirstOrDefault(m => m.IdempotencyKey == $"cancellation-{pledgeId}");
         Assert.NotNull(alert);
         Assert.Equal("CampaignCancellationAlert", alert!.Kind);
         Assert.Equal(backerId, alert.RecipientUserId);

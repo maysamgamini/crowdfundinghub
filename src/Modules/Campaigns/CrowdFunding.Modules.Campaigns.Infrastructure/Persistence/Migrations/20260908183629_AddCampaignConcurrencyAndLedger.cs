@@ -17,21 +17,21 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Migrations
             // that existing system column, so no DDL is needed here; the auto-generated
             // AddColumn/DropColumn calls for "xmin" have been removed from this migration.
             migrationBuilder.CreateTable(
-                name: "campaign_contributions_ledger",
+                name: "campaign_pledges_ledger",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     CampaignId = table.Column<Guid>(type: "uuid", nullable: false),
-                    ContributionId = table.Column<Guid>(type: "uuid", nullable: false),
+                    PledgeId = table.Column<Guid>(type: "uuid", nullable: false),
                     Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
                     Currency = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
                     RecordedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_campaign_contributions_ledger", x => x.Id);
+                    table.PrimaryKey("PK_campaign_pledges_ledger", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_campaign_contributions_ledger_campaigns_CampaignId",
+                        name: "FK_campaign_pledges_ledger_campaigns_CampaignId",
                         column: x => x.CampaignId,
                         principalTable: "campaigns",
                         principalColumn: "Id",
@@ -39,14 +39,14 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_campaign_contributions_ledger_CampaignId",
-                table: "campaign_contributions_ledger",
+                name: "IX_campaign_pledges_ledger_CampaignId",
+                table: "campaign_pledges_ledger",
                 column: "CampaignId");
 
             migrationBuilder.CreateIndex(
-                name: "uq_campaign_contributions_ledger_contribution_id",
-                table: "campaign_contributions_ledger",
-                column: "ContributionId",
+                name: "uq_campaign_pledges_ledger_pledge_id",
+                table: "campaign_pledges_ledger",
+                column: "PledgeId",
                 unique: true);
         }
 
@@ -54,7 +54,7 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
-                name: "campaign_contributions_ledger");
+                name: "campaign_pledges_ledger");
         }
     }
 }

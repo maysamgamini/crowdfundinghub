@@ -1,11 +1,11 @@
 using System.Net.Http.Json;
 using CrowdFunding.API.Contracts.Campaigns;
-using CrowdFunding.API.Contracts.Contributions;
+using CrowdFunding.API.Contracts.Pledges;
 using CrowdFunding.API.Contracts.Moderation;
 using CrowdFunding.API.Migrations;
-using CrowdFunding.Modules.Contributions.Domain.Enums;
-using CrowdFunding.Modules.Contributions.Infrastructure.Payments;
-using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.DbContexts;
+using CrowdFunding.Modules.Pledges.Domain.Enums;
+using CrowdFunding.Modules.Pledges.Infrastructure.Payments;
+using CrowdFunding.Modules.Pledges.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -54,14 +54,14 @@ public sealed class RefundThroughProviderE2ETests
         {
             var (_, backerToken) = await client.RegisterAndLoginAsync(ApiTestExtensions.UniqueEmail($"{label}-backer-{i}"), $"Backer {i}");
             client.SetBearerToken(backerToken);
-            var pledge = await (await client.PostAsJsonAsync($"/api/campaigns/{campaignId}/contributions", new MakeContributionRequest(100m, "USD")))
-                .Content.ReadFromJsonAsync<MakeContributionResponse>();
-            pledges.Add(pledge!.ContributionId);
+            var pledge = await (await client.PostAsJsonAsync($"/api/campaigns/{campaignId}/pledges", new MakePledgeRequest(100m, "USD")))
+                .Content.ReadFromJsonAsync<MakePledgeResponse>();
+            pledges.Add(pledge!.PledgeId);
 
             client.SetBearerToken(adminToken);
             (await client.PostAsJsonAsync(
-                $"/api/campaigns/{campaignId}/contributions/{pledge.ContributionId}/confirm-payment",
-                new ConfirmContributionPaymentRequest($"payment-ref-{label}-{i}"))).EnsureSuccessStatusCode();
+                $"/api/campaigns/{campaignId}/pledges/{pledge.PledgeId}/confirm-payment",
+                new ConfirmPledgePaymentRequest($"payment-ref-{label}-{i}"))).EnsureSuccessStatusCode();
         }
 
         await _factory.ProcessOutboxMessagesAsync();
@@ -75,11 +75,11 @@ public sealed class RefundThroughProviderE2ETests
         (await client.PostAsync($"/api/campaigns/{funded.CampaignId}/cancel", content: null)).EnsureSuccessStatusCode();
     }
 
-    private async Task<List<(ContributionStatus Status, string? RefundReference, int RefundFailures)>> StatesAsync(Funded funded)
+    private async Task<List<(PledgeStatus Status, string? RefundReference, int RefundFailures)>> StatesAsync(Funded funded)
     {
         await using var scope = _factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<ContributionsDbContext>();
-        var rows = await db.Contributions.AsNoTracking().Where(c => funded.PledgeIds.Contains(c.Id)).ToListAsync();
+        var db = scope.ServiceProvider.GetRequiredService<PledgesDbContext>();
+        var rows = await db.Pledges.AsNoTracking().Where(c => funded.PledgeIds.Contains(c.Id)).ToListAsync();
         return rows.Select(c => (c.Status, c.RefundReference, c.RefundFailures)).ToList();
     }
 
@@ -96,7 +96,7 @@ public sealed class RefundThroughProviderE2ETests
         var states = await StatesAsync(funded);
         Assert.All(states, state =>
         {
-            Assert.Equal(ContributionStatus.Refunded, state.Status);
+            Assert.Equal(PledgeStatus.Refunded, state.Status);
             Assert.StartsWith("re_mock_", state.RefundReference);
             Assert.Equal(0, state.RefundFailures);
         });
@@ -118,7 +118,7 @@ public sealed class RefundThroughProviderE2ETests
             await _factory.ProcessOutboxMessagesAsync();
 
             var afterRefusal = Assert.Single(await StatesAsync(funded));
-            Assert.Equal(ContributionStatus.Succeeded, afterRefusal.Status);
+            Assert.Equal(PledgeStatus.Succeeded, afterRefusal.Status);
             Assert.Equal(1, afterRefusal.RefundFailures);
         }
         finally
@@ -138,7 +138,7 @@ public sealed class RefundThroughProviderE2ETests
         await _factory.ProcessOutboxMessagesAsync();
 
         var afterRetry = Assert.Single(await StatesAsync(funded));
-        Assert.Equal(ContributionStatus.Refunded, afterRetry.Status);
+        Assert.Equal(PledgeStatus.Refunded, afterRetry.Status);
         Assert.Equal(1, afterRetry.RefundFailures);
         Assert.StartsWith("re_mock_", afterRetry.RefundReference);
         Assert.Equal(1, provider.RefundsPerformed - before);

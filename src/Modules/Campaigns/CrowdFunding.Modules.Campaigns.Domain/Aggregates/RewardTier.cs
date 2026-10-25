@@ -12,7 +12,7 @@ namespace CrowdFunding.Modules.Campaigns.Domain.Aggregates;
 /// Deliberately does not raise domain events: reservation is a same-process, same-transaction
 /// concern (see <c>ReserveRewardTierSlotCommandHandler</c>) with no other module needing to react
 /// to it durably today — the sold-out real-time broadcast follows the same inline,
-/// best-effort-not-durable pattern <c>AddContributionToCampaignCommandHandler</c> already uses
+/// best-effort-not-durable pattern <c>AddPledgeToCampaignCommandHandler</c> already uses
 /// for pledge updates via <c>ICampaignRealtimeNotifier</c>, rather than round-tripping through
 /// the outbox for a UI-only notification.
 /// </para>
@@ -116,7 +116,7 @@ public sealed class RewardTier
     }
 
     /// <summary>
-    /// Reverses a confirmed claim when a contribution is refunded during campaign failure or cancellation (TICKET-051).
+    /// Reverses a confirmed claim when a pledge is refunded during campaign failure or cancellation (TICKET-051).
     /// </summary>
     public void ReleaseClaim()
     {

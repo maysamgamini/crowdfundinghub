@@ -1,5 +1,5 @@
 using System.Net;
-using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPaymentConfirmed;
+using CrowdFunding.Modules.Pledges.Contracts.Events.PledgePaymentConfirmed;
 using CrowdFunding.Modules.Notifications.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Notifications.Application.Abstractions.Services;
 using CrowdFunding.Modules.Notifications.Application.Events;
@@ -17,12 +17,12 @@ public sealed class NotificationsTests
 {
     private sealed class ThrowingEmailNotificationService : IEmailNotificationService
     {
-        public Task SendContributionReceiptAsync(
-            Guid recipientUserId, Guid campaignId, Guid contributionId, decimal amount, string currency, CancellationToken cancellationToken = default)
+        public Task SendPledgeReceiptAsync(
+            Guid recipientUserId, Guid campaignId, Guid pledgeId, decimal amount, string currency, CancellationToken cancellationToken = default)
             => throw new HttpRequestException("Simulated 503 from the email provider.");
 
         public Task SendCampaignCancellationAlertAsync(
-            Guid recipientUserId, Guid campaignId, Guid contributionId, decimal refundedAmount, string currency, CancellationToken cancellationToken = default)
+            Guid recipientUserId, Guid campaignId, Guid pledgeId, decimal refundedAmount, string currency, CancellationToken cancellationToken = default)
             => throw new HttpRequestException("Simulated 503 from the email provider.");
 
         public Task SendCampaignUpdateAlertAsync(
@@ -31,15 +31,15 @@ public sealed class NotificationsTests
     }
 
     [Fact]
-    public async Task ContributionPaymentConfirmedNotificationHandler_ShouldPropagate_EmailProviderFailure()
+    public async Task PledgePaymentConfirmedNotificationHandler_ShouldPropagate_EmailProviderFailure()
     {
         // A propagating exception is what lets ModuleOutboxProcessor's existing MarkFailed
-        // backoff/dead-letter machinery (TICKET-038) engage — the underlying contribution/payment
+        // backoff/dead-letter machinery (TICKET-038) engage — the underlying pledge/payment
         // database write is already committed by this point and is never rolled back by this
         // failure, since the email send happens strictly after that transaction, driven by the
         // outbox worker reading the already-committed row.
-        var handler = new ContributionPaymentConfirmedNotificationHandler(new ThrowingEmailNotificationService());
-        var notification = new ContributionPaymentConfirmedApplicationEvent(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 100m, "USD");
+        var handler = new PledgePaymentConfirmedNotificationHandler(new ThrowingEmailNotificationService());
+        var notification = new PledgePaymentConfirmedApplicationEvent(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 100m, "USD");
 
         await Assert.ThrowsAsync<HttpRequestException>(() => handler.Handle(notification, CancellationToken.None));
     }
@@ -87,18 +87,18 @@ public sealed class NotificationsTests
     }
 
     [Fact]
-    public async Task HttpEmailNotificationService_ShouldSendXMessageIdIdempotencyHeader_DerivedFromContributionId()
+    public async Task HttpEmailNotificationService_ShouldSendXMessageIdIdempotencyHeader_DerivedFromPledgeId()
     {
         var recordingHandler = new RecordingHttpMessageHandler();
         using var httpClient = new HttpClient(recordingHandler) { BaseAddress = new Uri("https://email-provider.test") };
         var service = new HttpEmailNotificationService(httpClient, new NullCampaignTitleCacheRepository(), new NullNotificationPreferenceRepository());
 
-        var contributionId = Guid.NewGuid();
-        await service.SendContributionReceiptAsync(Guid.NewGuid(), Guid.NewGuid(), contributionId, 100m, "USD");
+        var pledgeId = Guid.NewGuid();
+        await service.SendPledgeReceiptAsync(Guid.NewGuid(), Guid.NewGuid(), pledgeId, 100m, "USD");
 
         Assert.NotNull(recordingHandler.LastRequest);
         var header = Assert.Single(recordingHandler.LastRequest!.Headers.GetValues("X-Message-Id"));
-        Assert.Equal($"contribution-{contributionId}", header);
+        Assert.Equal($"pledge-{pledgeId}", header);
     }
 
     [Fact]
@@ -108,7 +108,7 @@ public sealed class NotificationsTests
         var service = new HttpEmailNotificationService(failingHandlerHttpClient, new NullCampaignTitleCacheRepository(), new NullNotificationPreferenceRepository());
 
         await Assert.ThrowsAsync<HttpRequestException>(
-            () => service.SendContributionReceiptAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 100m, "USD"));
+            () => service.SendPledgeReceiptAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 100m, "USD"));
     }
 
     [Fact]

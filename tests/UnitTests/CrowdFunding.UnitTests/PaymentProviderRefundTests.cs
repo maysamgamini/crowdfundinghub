@@ -1,8 +1,8 @@
-using CrowdFunding.Modules.Contributions.Application.Abstractions.Services;
-using CrowdFunding.Modules.Contributions.Application.Features.Contributions;
-using CrowdFunding.Modules.Contributions.Domain.Aggregates;
-using CrowdFunding.Modules.Contributions.Domain.Enums;
-using CrowdFunding.Modules.Contributions.Infrastructure.Payments;
+using CrowdFunding.Modules.Pledges.Application.Abstractions.Services;
+using CrowdFunding.Modules.Pledges.Application.Features.Pledges;
+using CrowdFunding.Modules.Pledges.Domain.Aggregates;
+using CrowdFunding.Modules.Pledges.Domain.Enums;
+using CrowdFunding.Modules.Pledges.Infrastructure.Payments;
 
 namespace CrowdFunding.UnitTests;
 
@@ -16,21 +16,21 @@ public sealed class PaymentProviderRefundTests
 {
     private static readonly DateTime Now = new(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc);
 
-    private static Contribution SucceededPledge(decimal amount = 100m)
+    private static Pledge SucceededPledge(decimal amount = 100m)
     {
-        var pledge = Contribution.Create(Guid.NewGuid(), Guid.NewGuid(), amount, "USD", Now);
+        var pledge = Pledge.Create(Guid.NewGuid(), Guid.NewGuid(), amount, "USD", Now);
         pledge.AttachPaymentIntent($"pi_mock_{pledge.Id:N}", "Mock");
         pledge.ConfirmPayment("ref", Now);
         pledge.ClearDomainEvents();
         return pledge;
     }
 
-    private static (ContributionRefunder Refunder, FakePaymentProvider Provider, FakeContributionTransactionExecutor Executor, FakeContributionRepository Repository) Build(Contribution pledge)
+    private static (PledgeRefunder Refunder, FakePaymentProvider Provider, FakePledgeTransactionExecutor Executor, FakePledgeRepository Repository) Build(Pledge pledge)
     {
         var provider = new FakePaymentProvider();
-        var executor = new FakeContributionTransactionExecutor();
-        var repository = new FakeContributionRepository(pledge);
-        return (new ContributionRefunder(repository, executor, new FakeContributionDateTimeProvider(Now), provider), provider, executor, repository);
+        var executor = new FakePledgeTransactionExecutor();
+        var repository = new FakePledgeRepository(pledge);
+        return (new PledgeRefunder(repository, executor, new FakePledgeDateTimeProvider(Now), provider), provider, executor, repository);
     }
 
     [Fact]
@@ -83,7 +83,7 @@ public sealed class PaymentProviderRefundTests
 
         await refunder.RefundAsync(pledge, CancellationToken.None);
 
-        Assert.Equal(ContributionStatus.Refunded, pledge.Status);
+        Assert.Equal(PledgeStatus.Refunded, pledge.Status);
         Assert.StartsWith("re_mock_", pledge.RefundReference);
         Assert.Equal(1, provider.RefundsPerformed);
         Assert.Equal(1, executor.InvocationCount);
@@ -98,7 +98,7 @@ public sealed class PaymentProviderRefundTests
 
         await Assert.ThrowsAsync<PaymentProviderException>(() => refunder.RefundAsync(pledge, CancellationToken.None));
 
-        Assert.Equal(ContributionStatus.Succeeded, pledge.Status);
+        Assert.Equal(PledgeStatus.Succeeded, pledge.Status);
         Assert.Equal(1, pledge.RefundFailures);
         Assert.Equal("insufficient_funds", pledge.LastRefundFailure);
         Assert.Null(pledge.RefundReference);
@@ -115,7 +115,7 @@ public sealed class PaymentProviderRefundTests
         provider.FailRefundsWith(null);
         await refunder.RefundAsync(pledge, CancellationToken.None);
 
-        Assert.Equal(ContributionStatus.Refunded, pledge.Status);
+        Assert.Equal(PledgeStatus.Refunded, pledge.Status);
         Assert.Equal(1, pledge.RefundFailures);
         Assert.Equal(1, provider.RefundsPerformed);
     }
@@ -127,15 +127,15 @@ public sealed class PaymentProviderRefundTests
         var provider = new FakePaymentProvider();
 
         // The first run: the provider refunds, then the process dies before the pledge is marked.
-        await provider.RefundAsync($"pi_mock_{pledge.Id:N}", 100m, "USD", ContributionRefunder.RefundKey(pledge.Id, 1), CancellationToken.None);
-        Assert.Equal(ContributionStatus.Succeeded, pledge.Status);
+        await provider.RefundAsync($"pi_mock_{pledge.Id:N}", 100m, "USD", PledgeRefunder.RefundKey(pledge.Id, 1), CancellationToken.None);
+        Assert.Equal(PledgeStatus.Succeeded, pledge.Status);
 
         // The retry runs the whole refund again, with the same key.
-        var repository = new FakeContributionRepository(pledge);
-        var refunder = new ContributionRefunder(repository, new FakeContributionTransactionExecutor(), new FakeContributionDateTimeProvider(Now), provider);
+        var repository = new FakePledgeRepository(pledge);
+        var refunder = new PledgeRefunder(repository, new FakePledgeTransactionExecutor(), new FakePledgeDateTimeProvider(Now), provider);
         await refunder.RefundAsync(pledge, CancellationToken.None);
 
-        Assert.Equal(ContributionStatus.Refunded, pledge.Status);
+        Assert.Equal(PledgeStatus.Refunded, pledge.Status);
         Assert.Equal(2, provider.RefundCalls);
         Assert.Equal(1, provider.RefundsPerformed);
     }
@@ -145,8 +145,8 @@ public sealed class PaymentProviderRefundTests
     {
         var id = Guid.NewGuid();
 
-        Assert.Equal(ContributionRefunder.RefundKey(id, 1), ContributionRefunder.RefundKey(id, 1));
-        Assert.NotEqual(ContributionRefunder.RefundKey(id, 1), ContributionRefunder.RefundKey(id, 2));
-        Assert.NotEqual(ContributionRefunder.RefundKey(id, 1), ContributionRefunder.RefundKey(Guid.NewGuid(), 1));
+        Assert.Equal(PledgeRefunder.RefundKey(id, 1), PledgeRefunder.RefundKey(id, 1));
+        Assert.NotEqual(PledgeRefunder.RefundKey(id, 1), PledgeRefunder.RefundKey(id, 2));
+        Assert.NotEqual(PledgeRefunder.RefundKey(id, 1), PledgeRefunder.RefundKey(Guid.NewGuid(), 1));
     }
 }

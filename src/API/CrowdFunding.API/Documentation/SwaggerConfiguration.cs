@@ -58,7 +58,7 @@ public static class SwaggerConfiguration
                 The platform is structured into distinct bounded contexts:
                 - **Identity**: User registration, credential authentication, asymmetric ES256 cryptographic signing, role-based access control, and granular permissions.
                 - **Campaigns**: Campaign lifecycle management (Draft, Published, Completed, Cancelled), funding goals, discovery, and search.
-                - **Contributions**: Backer pledge processing, external payment gateway integration, and contribution status tracking.
+                - **Pledges**: Backer pledge processing, external payment gateway integration, and pledge status tracking.
                 - **Moderation**: Administrative compliance reviews, campaign approvals, rejection workflows, and audit history.
                 - **CampaignUpdates**: Creator updates and backer communications.
                 - **Notifications**: Cross-module notification delivery driven by domain events.
@@ -99,7 +99,7 @@ public static class SwaggerConfiguration
         {
             $"{typeof(SwaggerConfiguration).Assembly.GetName().Name}.xml",
             "CrowdFunding.Modules.Campaigns.Contracts.xml",
-            "CrowdFunding.Modules.Contributions.Contracts.xml",
+            "CrowdFunding.Modules.Pledges.Contracts.xml",
             "CrowdFunding.Modules.Identity.Contracts.xml",
             "CrowdFunding.Modules.Moderation.Contracts.xml",
             "CrowdFunding.BuildingBlocks.Application.xml"
@@ -136,7 +136,7 @@ public static class SwaggerConfiguration
         // Document filter for module tag descriptions
         options.DocumentFilter<SwaggerTagDescriptionsDocumentFilter>();
 
-        // Group endpoints by module tags (Identity, Campaigns, Contributions, Moderation, System)
+        // Group endpoints by module tags (Identity, Campaigns, Pledges, Moderation, System)
         options.TagActionsBy(apiDesc =>
         {
             var tagMetadata = apiDesc.ActionDescriptor.EndpointMetadata.OfType<ITagsMetadata>().FirstOrDefault();
@@ -152,8 +152,8 @@ public static class SwaggerConfiguration
                     return ["Identity"];
                 if (controllerName.Equals("Campaigns", StringComparison.OrdinalIgnoreCase))
                     return ["Campaigns"];
-                if (controllerName.Equals("Contributions", StringComparison.OrdinalIgnoreCase))
-                    return ["Contributions"];
+                if (controllerName.Equals("Pledges", StringComparison.OrdinalIgnoreCase))
+                    return ["Pledges"];
                 if (controllerName.Equals("Moderation", StringComparison.OrdinalIgnoreCase))
                     return ["Moderation"];
                 if (controllerName.Equals("WeatherForecast", StringComparison.OrdinalIgnoreCase))

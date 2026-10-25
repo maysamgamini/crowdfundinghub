@@ -11,12 +11,12 @@ using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.Pub
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Events;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.GetCampaignById;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Queries.ListCampaigns;
-using CrowdFunding.Modules.Campaigns.Contracts.Commands.AddContributionToCampaign;
+using CrowdFunding.Modules.Campaigns.Contracts.Commands.AddPledgeToCampaign;
 using CrowdFunding.Modules.Campaigns.Contracts.Enums;
 using CrowdFunding.Modules.Campaigns.Domain.Aggregates;
 using CrowdFunding.Modules.Campaigns.Domain.Enums;
 using CrowdFunding.Modules.Campaigns.Domain.Events;
-using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPaymentConfirmed;
+using CrowdFunding.Modules.Pledges.Contracts.Events.PledgePaymentConfirmed;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
 using CrowdFunding.Modules.Moderation.Contracts.Enums;
 using CrowdFunding.Modules.Moderation.Contracts.Queries.GetCampaignReviewStatusByCampaignId;
@@ -252,61 +252,61 @@ public sealed class CampaignDomainTests
     }
 
     [Fact]
-    public void ApplyConfirmedContribution_ShouldIncreaseRaisedAmount_WhenCampaignIsPublished()
+    public void ApplyConfirmedPledge_ShouldIncreaseRaisedAmount_WhenCampaignIsPublished()
     {
         var createdAtUtc = new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc);
         var campaign = CreateDraftCampaign(createdAtUtc, createdAtUtc.AddDays(14));
         campaign.Publish(createdAtUtc.AddDays(1));
 
-        campaign.ApplyConfirmedContribution(new Money(125m, "usd"));
+        campaign.ApplyConfirmedPledge(new Money(125m, "usd"));
 
         Assert.Equal(new Money(125m, "USD"), campaign.RaisedAmount);
     }
 
     [Fact]
-    public void ApplyConfirmedContribution_ShouldThrow_WhenCampaignIsDraft()
+    public void ApplyConfirmedPledge_ShouldThrow_WhenCampaignIsDraft()
     {
         var createdAtUtc = new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc);
         var campaign = CreateDraftCampaign(createdAtUtc, createdAtUtc.AddDays(14));
 
-        var action = () => campaign.ApplyConfirmedContribution(new Money(125m, "USD"));
+        var action = () => campaign.ApplyConfirmedPledge(new Money(125m, "USD"));
 
         var exception = Assert.Throws<InvalidOperationException>(action);
 
         Assert.Equal(
-            "Cannot apply contributions to campaign in status 'Draft'. Only Published campaigns can accept funds.",
+            "Cannot apply pledges to campaign in status 'Draft'. Only Published campaigns can accept funds.",
             exception.Message);
     }
 
     [Fact]
-    public void ApplyConfirmedContribution_ShouldThrow_WhenCampaignIsCancelled()
+    public void ApplyConfirmedPledge_ShouldThrow_WhenCampaignIsCancelled()
     {
         var createdAtUtc = new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc);
         var campaign = CreateDraftCampaign(createdAtUtc, createdAtUtc.AddDays(14));
         campaign.Publish(createdAtUtc.AddDays(1));
         campaign.Cancel();
 
-        var action = () => campaign.ApplyConfirmedContribution(new Money(125m, "USD"));
+        var action = () => campaign.ApplyConfirmedPledge(new Money(125m, "USD"));
 
         var exception = Assert.Throws<InvalidOperationException>(action);
 
         Assert.Equal(
-            "Cannot apply contributions to campaign in status 'Cancelled'. Only Published campaigns can accept funds.",
+            "Cannot apply pledges to campaign in status 'Cancelled'. Only Published campaigns can accept funds.",
             exception.Message);
     }
 
     [Fact]
-    public void ApplyConfirmedContribution_ShouldThrow_WhenAmountIsNotPositive()
+    public void ApplyConfirmedPledge_ShouldThrow_WhenAmountIsNotPositive()
     {
         var createdAtUtc = new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc);
         var campaign = CreateDraftCampaign(createdAtUtc, createdAtUtc.AddDays(14));
         campaign.Publish(createdAtUtc.AddDays(1));
 
-        var action = () => campaign.ApplyConfirmedContribution(new Money(0m, "USD"));
+        var action = () => campaign.ApplyConfirmedPledge(new Money(0m, "USD"));
 
         var exception = Assert.Throws<InvalidOperationException>(action);
 
-        Assert.Equal("Contribution amount must be greater than zero.", exception.Message);
+        Assert.Equal("Pledge amount must be greater than zero.", exception.Message);
     }
 
     [Fact]
@@ -315,7 +315,7 @@ public sealed class CampaignDomainTests
         var createdAtUtc = new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc);
         var campaign = CreateDraftCampaign(createdAtUtc, createdAtUtc.AddDays(14));
         campaign.Publish(createdAtUtc.AddDays(1));
-        campaign.ApplyConfirmedContribution(new Money(10000m, "USD"));
+        campaign.ApplyConfirmedPledge(new Money(10000m, "USD"));
 
         campaign.CompleteSuccessfully(createdAtUtc.AddDays(15));
 
@@ -329,7 +329,7 @@ public sealed class CampaignDomainTests
         var createdAtUtc = new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc);
         var campaign = CreateDraftCampaign(createdAtUtc, createdAtUtc.AddDays(14));
         campaign.Publish(createdAtUtc.AddDays(1));
-        campaign.ApplyConfirmedContribution(new Money(500m, "USD"));
+        campaign.ApplyConfirmedPledge(new Money(500m, "USD"));
 
         var action = () => campaign.CompleteSuccessfully(createdAtUtc.AddDays(15));
 
@@ -354,7 +354,7 @@ public sealed class CampaignDomainTests
         var createdAtUtc = new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc);
         var campaign = CreateDraftCampaign(createdAtUtc, createdAtUtc.AddDays(14));
         campaign.Publish(createdAtUtc.AddDays(1));
-        campaign.ApplyConfirmedContribution(new Money(500m, "USD"));
+        campaign.ApplyConfirmedPledge(new Money(500m, "USD"));
 
         campaign.MarkFailed(createdAtUtc.AddDays(15));
 
@@ -368,7 +368,7 @@ public sealed class CampaignDomainTests
         var createdAtUtc = new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc);
         var campaign = CreateDraftCampaign(createdAtUtc, createdAtUtc.AddDays(14));
         campaign.Publish(createdAtUtc.AddDays(1));
-        campaign.ApplyConfirmedContribution(new Money(10000m, "USD"));
+        campaign.ApplyConfirmedPledge(new Money(10000m, "USD"));
 
         var action = () => campaign.MarkFailed(createdAtUtc.AddDays(15));
 
@@ -653,10 +653,10 @@ public sealed class PublishCampaignCommandHandlerTests
     }
 }
 
-public sealed class AddContributionToCampaignCommandHandlerTests
+public sealed class AddPledgeToCampaignCommandHandlerTests
 {
     [Fact]
-    public async Task Handle_ShouldAddContributionAndPersistChanges()
+    public async Task Handle_ShouldAddPledgeAndPersistChanges()
     {
         var campaign = Campaign.Create(
             Guid.NewGuid(),
@@ -671,8 +671,8 @@ public sealed class AddContributionToCampaignCommandHandlerTests
 
         var repository = new FakeCampaignRepository(campaign);
         var transactionExecutor = new FakeCampaignTransactionExecutor();
-        var ledger = new FakeContributionLedger();
-        var handler = new CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.AddContributionToCampaign.AddContributionToCampaignCommandHandler(
+        var ledger = new FakePledgeLedger();
+        var handler = new CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.AddPledgeToCampaign.AddPledgeToCampaignCommandHandler(
             repository,
             ledger,
             new FakeRewardTierRepository(),
@@ -682,7 +682,7 @@ public sealed class AddContributionToCampaignCommandHandlerTests
             new FakeDateTimeProvider(new DateTime(2026, 4, 8, 12, 0, 0, DateTimeKind.Utc)));
 
         var result = await handler.Handle(
-            new AddContributionToCampaignCommand(campaign.Id, Guid.NewGuid(), 125m, "usd"),
+            new AddPledgeToCampaignCommand(campaign.Id, Guid.NewGuid(), 125m, "usd"),
             CancellationToken.None);
 
         Assert.Equal(campaign.Id, result.CampaignId);
@@ -705,8 +705,8 @@ public sealed class AddContributionToCampaignCommandHandlerTests
             new DateTime(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc));
         campaign.Publish(new DateTime(2026, 4, 7, 12, 0, 0, DateTimeKind.Utc));
 
-        var ledger = new FakeContributionLedger();
-        var handler = new CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.AddContributionToCampaign.AddContributionToCampaignCommandHandler(
+        var ledger = new FakePledgeLedger();
+        var handler = new CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.AddPledgeToCampaign.AddPledgeToCampaignCommandHandler(
             new FakeCampaignRepository(campaign),
             ledger,
             new FakeRewardTierRepository(),
@@ -715,8 +715,8 @@ public sealed class AddContributionToCampaignCommandHandlerTests
             new FakeCampaignRealtimeNotifier(),
             new FakeDateTimeProvider(new DateTime(2026, 4, 8, 12, 0, 0, DateTimeKind.Utc)));
 
-        var contributionId = Guid.NewGuid();
-        var command = new AddContributionToCampaignCommand(campaign.Id, contributionId, 100m, "usd");
+        var pledgeId = Guid.NewGuid();
+        var command = new AddPledgeToCampaignCommand(campaign.Id, pledgeId, 100m, "usd");
 
         await handler.Handle(command, CancellationToken.None);
         campaign.CompleteSuccessfully(new DateTime(2026, 6, 2, 0, 0, 0, DateTimeKind.Utc));
@@ -731,7 +731,7 @@ public sealed class AddContributionToCampaignCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_ShouldBeIdempotent_WhenSameContributionIsAppliedTwice()
+    public async Task Handle_ShouldBeIdempotent_WhenSamePledgeIsAppliedTwice()
     {
         var campaign = Campaign.Create(
             Guid.NewGuid(),
@@ -746,8 +746,8 @@ public sealed class AddContributionToCampaignCommandHandlerTests
 
         var repository = new FakeCampaignRepository(campaign);
         var transactionExecutor = new FakeCampaignTransactionExecutor();
-        var ledger = new FakeContributionLedger();
-        var handler = new CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.AddContributionToCampaign.AddContributionToCampaignCommandHandler(
+        var ledger = new FakePledgeLedger();
+        var handler = new CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.AddPledgeToCampaign.AddPledgeToCampaignCommandHandler(
             repository,
             ledger,
             new FakeRewardTierRepository(),
@@ -756,14 +756,14 @@ public sealed class AddContributionToCampaignCommandHandlerTests
             new FakeCampaignRealtimeNotifier(),
             new FakeDateTimeProvider(new DateTime(2026, 4, 8, 12, 0, 0, DateTimeKind.Utc)));
 
-        var contributionId = Guid.NewGuid();
+        var pledgeId = Guid.NewGuid();
 
         var firstResult = await handler.Handle(
-            new AddContributionToCampaignCommand(campaign.Id, contributionId, 125m, "usd"),
+            new AddPledgeToCampaignCommand(campaign.Id, pledgeId, 125m, "usd"),
             CancellationToken.None);
 
         var secondResult = await handler.Handle(
-            new AddContributionToCampaignCommand(campaign.Id, contributionId, 125m, "usd"),
+            new AddPledgeToCampaignCommand(campaign.Id, pledgeId, 125m, "usd"),
             CancellationToken.None);
 
         Assert.Equal(125m, firstResult.RaisedAmount);
@@ -777,9 +777,9 @@ public sealed class AddContributionToCampaignCommandHandlerTests
     public async Task Handle_ShouldThrow_WhenCampaignDoesNotExist()
     {
         var transactionExecutor = new FakeCampaignTransactionExecutor();
-        var handler = new CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.AddContributionToCampaign.AddContributionToCampaignCommandHandler(
+        var handler = new CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.AddPledgeToCampaign.AddPledgeToCampaignCommandHandler(
             new FakeCampaignRepository(),
-            new FakeContributionLedger(),
+            new FakePledgeLedger(),
             new FakeRewardTierRepository(),
             new FakeRewardTierReservationRepository(),
             transactionExecutor,
@@ -787,7 +787,7 @@ public sealed class AddContributionToCampaignCommandHandlerTests
             new FakeDateTimeProvider(new DateTime(2026, 4, 8, 12, 0, 0, DateTimeKind.Utc)));
 
         var action = async () => await handler.Handle(
-            new AddContributionToCampaignCommand(Guid.NewGuid(), Guid.NewGuid(), 125m, "usd"),
+            new AddPledgeToCampaignCommand(Guid.NewGuid(), Guid.NewGuid(), 125m, "usd"),
             CancellationToken.None);
 
         await Assert.ThrowsAsync<KeyNotFoundException>(action);
@@ -973,26 +973,26 @@ public sealed class GetCampaignByIdQueryHandlerTests
     }
 }
 
-public sealed class ContributionPaymentConfirmedApplicationEventHandlerTests
+public sealed class PledgePaymentConfirmedApplicationEventHandlerTests
 {
     [Fact]
-    public async Task Handle_ShouldDispatchAddContributionCommand()
+    public async Task Handle_ShouldDispatchAddPledgeCommand()
     {
-        var expectedResult = new AddContributionToCampaignResult(Guid.NewGuid(), 100m, "USD");
+        var expectedResult = new AddPledgeToCampaignResult(Guid.NewGuid(), 100m, "USD");
         var commandDispatcher = new RecordingCommandDispatcher(expectedResult);
-        var handler = new ContributionPaymentConfirmedApplicationEventHandler(commandDispatcher);
+        var handler = new PledgePaymentConfirmedApplicationEventHandler(commandDispatcher);
         var campaignId = Guid.NewGuid();
 
-        var contributionId = Guid.NewGuid();
+        var pledgeId = Guid.NewGuid();
 
         await handler.Handle(
-            new ContributionPaymentConfirmedApplicationEvent(contributionId, campaignId, Guid.NewGuid(), 100m, "usd"),
+            new PledgePaymentConfirmedApplicationEvent(pledgeId, campaignId, Guid.NewGuid(), 100m, "usd"),
             CancellationToken.None);
 
-        var command = Assert.IsType<AddContributionToCampaignCommand>(commandDispatcher.LastCommand);
+        var command = Assert.IsType<AddPledgeToCampaignCommand>(commandDispatcher.LastCommand);
         Assert.Equal(1, commandDispatcher.InvocationCount);
         Assert.Equal(campaignId, command.CampaignId);
-        Assert.Equal(contributionId, command.ContributionId);
+        Assert.Equal(pledgeId, command.PledgeId);
         Assert.Equal(100m, command.Amount);
         Assert.Equal("usd", command.Currency);
     }
@@ -1164,50 +1164,50 @@ internal sealed class FakeRewardTierReservationRepository : IRewardTierReservati
     }
 }
 
-internal sealed class FakeContributionLedger : IContributionLedger
+internal sealed class FakePledgeLedger : IPledgeLedger
 {
-    private readonly List<(Guid CampaignId, Guid ContributionId, string Kind, decimal Amount)> _entries = [];
+    private readonly List<(Guid CampaignId, Guid PledgeId, string Kind, decimal Amount)> _entries = [];
 
     public int RecordAttemptCount { get; private set; }
 
-    public IReadOnlyList<(Guid CampaignId, Guid ContributionId, string Kind, decimal Amount)> Entries => _entries;
+    public IReadOnlyList<(Guid CampaignId, Guid PledgeId, string Kind, decimal Amount)> Entries => _entries;
 
     public Task<bool> TryRecordAsync(
         Guid campaignId,
-        Guid contributionId,
+        Guid pledgeId,
         decimal amount,
         string currency,
         CancellationToken cancellationToken)
     {
         RecordAttemptCount++;
-        return Task.FromResult(Add(campaignId, contributionId, "Pledge", amount));
+        return Task.FromResult(Add(campaignId, pledgeId, "Pledge", amount));
     }
 
     public Task<bool> TryRecordRefundAsync(
         Guid campaignId,
-        Guid contributionId,
+        Guid pledgeId,
         decimal amount,
         string currency,
         CancellationToken cancellationToken)
-        => Task.FromResult(Add(campaignId, contributionId, "Refund", -Math.Abs(amount)));
+        => Task.FromResult(Add(campaignId, pledgeId, "Refund", -Math.Abs(amount)));
 
-    public Task<bool> HasPledgeAsync(Guid contributionId, CancellationToken cancellationToken)
-        => Task.FromResult(_entries.Any(e => e.ContributionId == contributionId && e.Kind == "Pledge"));
+    public Task<bool> HasPledgeAsync(Guid pledgeId, CancellationToken cancellationToken)
+        => Task.FromResult(_entries.Any(e => e.PledgeId == pledgeId && e.Kind == "Pledge"));
 
-    public Task<bool> HasRefundAsync(Guid contributionId, CancellationToken cancellationToken)
-        => Task.FromResult(_entries.Any(e => e.ContributionId == contributionId && e.Kind == "Refund"));
+    public Task<bool> HasRefundAsync(Guid pledgeId, CancellationToken cancellationToken)
+        => Task.FromResult(_entries.Any(e => e.PledgeId == pledgeId && e.Kind == "Refund"));
 
     public Task<decimal> SumAsync(Guid campaignId, CancellationToken cancellationToken)
         => Task.FromResult(_entries.Where(e => e.CampaignId == campaignId).Sum(e => e.Amount));
 
-    private bool Add(Guid campaignId, Guid contributionId, string kind, decimal amount)
+    private bool Add(Guid campaignId, Guid pledgeId, string kind, decimal amount)
     {
-        if (_entries.Any(e => e.ContributionId == contributionId && e.Kind == kind))
+        if (_entries.Any(e => e.PledgeId == pledgeId && e.Kind == kind))
         {
             return false;
         }
 
-        _entries.Add((campaignId, contributionId, kind, amount));
+        _entries.Add((campaignId, pledgeId, kind, amount));
         return true;
     }
 }

@@ -23,7 +23,7 @@ graph TD
         subgraph ModLayer["Isolated In-Process Modules"]
             IdM["Identity Module"]
             CampM["Campaigns Module"]
-            ContM["Contributions Module"]
+            ContM["Pledges Module"]
             ModM["Moderation Module"]
             NotM["Notifications Module"]
             UpdM["CampaignUpdates Module"]
@@ -34,12 +34,12 @@ graph TD
     subgraph Phase2["Phase 2: Frictionless Microservice Extraction"]
         IdSvc["Identity Service (Container)"]
         CampSvc["Campaigns Service (Container)"]
-        ContSvc["Contributions Service (Container)"]
+        ContSvc["Pledges Service (Container)"]
         ModSvc["Moderation Service (Container)"]
         Broker["Distributed Message Bus (Kafka / RabbitMQ)"]
         PG1[("Identity DB")]
         PG2[("Campaigns DB")]
-        PG3[("Contributions DB")]
+        PG3[("Pledges DB")]
     end
 
     IdM -. "1. Move to New Host" .-> IdSvc
@@ -66,7 +66,7 @@ This directory is organized into four thematic areas serving both as **teaching 
 - **[`over-engineering-audit.md`](./02-gap-analysis-and-tradeoffs/over-engineering-audit.md)**:  
   *Where Did We Go Too Far?* An unsparing critique of accidental complexity: 30 projects, the "14-file pipeline" for simple inserts, triple-mapping ceremony, and hand-rolled cryptographic key stores.
 - **[`under-engineering-audit.md`](./02-gap-analysis-and-tradeoffs/under-engineering-audit.md)**:  
-  *Where Didn't We Go Far Enough?* The hidden microservice decomposition roadblocks: synchronous cross-module query coupling (the removed `ICampaignContributionAvailabilityReader`, since replaced by a replicated read model), in-memory outbox poller coupling, physical database connection pool contention, and incomplete crowdfunding lifecycle rules (missing refunds and expiration workers).
+  *Where Didn't We Go Far Enough?* The hidden microservice decomposition roadblocks: synchronous cross-module query coupling (the removed `ICampaignPledgeAvailabilityReader`, since replaced by a replicated read model), in-memory outbox poller coupling, physical database connection pool contention, and incomplete crowdfunding lifecycle rules (missing refunds and expiration workers).
 
 ### [03. Engineering Specifications & Roadmap](./03-engineering-spec-and-roadmap/)
 - **[`transformation-spec.md`](./03-engineering-spec-and-roadmap/transformation-spec.md)**:  

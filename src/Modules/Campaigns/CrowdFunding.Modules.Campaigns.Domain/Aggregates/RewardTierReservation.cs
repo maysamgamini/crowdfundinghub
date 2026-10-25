@@ -5,7 +5,7 @@ public enum RewardTierReservationStatus
     /// <summary>Slot held, awaiting checkout to complete within the reservation window.</summary>
     Reserved = 1,
 
-    /// <summary>Checkout completed — payment was confirmed for the contribution this
+    /// <summary>Checkout completed — payment was confirmed for the pledge this
     /// reservation was checked out against.</summary>
     Confirmed = 2,
 
@@ -23,9 +23,9 @@ public enum RewardTierReservationStatus
 /// nor when an unconfirmed hold should expire. See TICKET-043.
 /// <para>
 /// A reservation's id is the correlation key threaded through
-/// <c>Contribution.RewardTierReservationId</c> -&gt;
-/// <c>ContributionPaymentConfirmedApplicationEvent.RewardTierReservationId</c> so
-/// <c>AddContributionToCampaignCommandHandler</c> can find and confirm the exact reservation a
+/// <c>Pledge.RewardTierReservationId</c> -&gt;
+/// <c>PledgePaymentConfirmedApplicationEvent.RewardTierReservationId</c> so
+/// <c>AddPledgeToCampaignCommandHandler</c> can find and confirm the exact reservation a
 /// confirmed pledge was checked out against, and it is what
 /// <c>RewardTierReservationScavengerBackgroundService</c> queries by <see cref="ExpiresAtUtc"/>
 /// to release abandoned holds back into <see cref="RewardTier.AvailableCount"/>.
@@ -40,7 +40,7 @@ public sealed class RewardTierReservation
     public RewardTierReservationStatus Status { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
     public DateTime ExpiresAtUtc { get; private set; }
-    public Guid? ContributionId { get; private set; }
+    public Guid? PledgeId { get; private set; }
 
     private RewardTierReservation()
     {
@@ -85,7 +85,7 @@ public sealed class RewardTierReservation
     /// <summary>Converts the hold into a permanent claim once the pledge checked out against it
     /// is confirmed. Callers are expected to call <see cref="RewardTier.ConfirmClaim"/> on the
     /// matching tier in the same transaction.</summary>
-    public void Confirm(Guid contributionId)
+    public void Confirm(Guid pledgeId)
     {
         if (Status != RewardTierReservationStatus.Reserved)
         {
@@ -93,7 +93,7 @@ public sealed class RewardTierReservation
         }
 
         Status = RewardTierReservationStatus.Confirmed;
-        ContributionId = contributionId;
+        PledgeId = pledgeId;
     }
 
     /// <summary>Releases the hold — an abandoned checkout reclaimed by the scavenger, or a
@@ -111,7 +111,7 @@ public sealed class RewardTierReservation
     }
 
     /// <summary>
-    /// Reclaims a confirmed reservation when the backing contribution is refunded (TICKET-051).
+    /// Reclaims a confirmed reservation when the backing pledge is refunded (TICKET-051).
     /// Callers are expected to call <see cref="RewardTier.ReleaseClaim"/> on the matching tier in the same transaction.
     /// Transitions status from Confirmed to Released.
     /// </summary>

@@ -1,12 +1,12 @@
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
-using CrowdFunding.Modules.Campaigns.Contracts.Commands.AddContributionToCampaign;
-using CrowdFunding.Modules.Campaigns.Contracts.Commands.ReverseContributionOnCampaign;
+using CrowdFunding.Modules.Campaigns.Contracts.Commands.AddPledgeToCampaign;
+using CrowdFunding.Modules.Campaigns.Contracts.Commands.ReversePledgeOnCampaign;
 using CrowdFunding.Modules.Campaigns.Domain.Aggregates;
 using Microsoft.Extensions.Logging.Abstractions;
-using AddContributionHandler = CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.AddContributionToCampaign.AddContributionToCampaignCommandHandler;
+using AddPledgeHandler = CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.AddPledgeToCampaign.AddPledgeToCampaignCommandHandler;
 using FailHandler = CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.FailCampaign.FailCampaignCommandHandler;
 using CompleteHandler = CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.CompleteCampaign.CompleteCampaignCommandHandler;
-using ReverseHandler = CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.ReverseContributionOnCampaign.ReverseContributionOnCampaignCommandHandler;
+using ReverseHandler = CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.ReversePledgeOnCampaign.ReversePledgeOnCampaignCommandHandler;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.CompleteCampaign;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.FailCampaign;
 
@@ -32,11 +32,11 @@ public sealed class CampaignLedgerTests
         return campaign;
     }
 
-    private static AddContributionHandler Credit(FakeCampaignRepository repository, FakeContributionLedger ledger)
+    private static AddPledgeHandler Credit(FakeCampaignRepository repository, FakePledgeLedger ledger)
         => new(repository, ledger, new FakeRewardTierRepository(), new FakeRewardTierReservationRepository(),
             new FakeCampaignTransactionExecutor(), new FakeCampaignRealtimeNotifier(), new FakeDateTimeProvider(new DateTime(2026, 4, 8, 0, 0, 0, DateTimeKind.Utc)));
 
-    private static ReverseHandler Reverse(FakeCampaignRepository repository, FakeContributionLedger ledger)
+    private static ReverseHandler Reverse(FakeCampaignRepository repository, FakePledgeLedger ledger)
         => new(repository, ledger, new FakeCampaignTransactionExecutor());
 
     [Fact]
@@ -44,11 +44,11 @@ public sealed class CampaignLedgerTests
     {
         var campaign = PublishedCampaign();
         var repository = new FakeCampaignRepository(campaign);
-        var ledger = new FakeContributionLedger();
-        var contributionId = Guid.NewGuid();
+        var ledger = new FakePledgeLedger();
+        var pledgeId = Guid.NewGuid();
 
-        await Credit(repository, ledger).Handle(new AddContributionToCampaignCommand(campaign.Id, contributionId, 125m, "USD"), CancellationToken.None);
-        var reversed = await Reverse(repository, ledger).Handle(new ReverseContributionOnCampaignCommand(campaign.Id, contributionId, 125m, "USD"), CancellationToken.None);
+        await Credit(repository, ledger).Handle(new AddPledgeToCampaignCommand(campaign.Id, pledgeId, 125m, "USD"), CancellationToken.None);
+        var reversed = await Reverse(repository, ledger).Handle(new ReversePledgeOnCampaignCommand(campaign.Id, pledgeId, 125m, "USD"), CancellationToken.None);
 
         Assert.True(reversed.Reversed);
         Assert.Equal(0m, campaign.RaisedAmount.Amount);
@@ -61,16 +61,16 @@ public sealed class CampaignLedgerTests
     {
         var campaign = PublishedCampaign();
         var repository = new FakeCampaignRepository(campaign);
-        var ledger = new FakeContributionLedger();
-        var contributionId = Guid.NewGuid();
+        var ledger = new FakePledgeLedger();
+        var pledgeId = Guid.NewGuid();
 
         // The refund event is processed first: nothing was counted yet, so the balance does not move.
-        var reversed = await Reverse(repository, ledger).Handle(new ReverseContributionOnCampaignCommand(campaign.Id, contributionId, 125m, "USD"), CancellationToken.None);
+        var reversed = await Reverse(repository, ledger).Handle(new ReversePledgeOnCampaignCommand(campaign.Id, pledgeId, 125m, "USD"), CancellationToken.None);
         Assert.False(reversed.Reversed);
         Assert.Equal(0m, campaign.RaisedAmount.Amount);
 
         // The credit arrives later and finds its refund already booked, so it counts nothing.
-        await Credit(repository, ledger).Handle(new AddContributionToCampaignCommand(campaign.Id, contributionId, 125m, "USD"), CancellationToken.None);
+        await Credit(repository, ledger).Handle(new AddPledgeToCampaignCommand(campaign.Id, pledgeId, 125m, "USD"), CancellationToken.None);
 
         Assert.Equal(0m, campaign.RaisedAmount.Amount);
         Assert.Equal(0m, await ledger.SumAsync(campaign.Id, CancellationToken.None));
@@ -81,11 +81,11 @@ public sealed class CampaignLedgerTests
     {
         var campaign = PublishedCampaign();
         var repository = new FakeCampaignRepository(campaign);
-        var ledger = new FakeContributionLedger();
-        var contributionId = Guid.NewGuid();
-        await Credit(repository, ledger).Handle(new AddContributionToCampaignCommand(campaign.Id, contributionId, 300m, "USD"), CancellationToken.None);
+        var ledger = new FakePledgeLedger();
+        var pledgeId = Guid.NewGuid();
+        await Credit(repository, ledger).Handle(new AddPledgeToCampaignCommand(campaign.Id, pledgeId, 300m, "USD"), CancellationToken.None);
 
-        var command = new ReverseContributionOnCampaignCommand(campaign.Id, contributionId, 300m, "USD");
+        var command = new ReversePledgeOnCampaignCommand(campaign.Id, pledgeId, 300m, "USD");
         var first = await Reverse(repository, ledger).Handle(command, CancellationToken.None);
         var second = await Reverse(repository, ledger).Handle(command, CancellationToken.None);
 
@@ -99,12 +99,12 @@ public sealed class CampaignLedgerTests
     {
         var campaign = PublishedCampaign(goal: 5000m);
         var repository = new FakeCampaignRepository(campaign);
-        var ledger = new FakeContributionLedger();
-        var contributionId = Guid.NewGuid();
-        await Credit(repository, ledger).Handle(new AddContributionToCampaignCommand(campaign.Id, contributionId, 100m, "USD"), CancellationToken.None);
+        var ledger = new FakePledgeLedger();
+        var pledgeId = Guid.NewGuid();
+        await Credit(repository, ledger).Handle(new AddPledgeToCampaignCommand(campaign.Id, pledgeId, 100m, "USD"), CancellationToken.None);
         campaign.MarkFailed(AfterDeadline);
 
-        await Reverse(repository, ledger).Handle(new ReverseContributionOnCampaignCommand(campaign.Id, contributionId, 100m, "USD"), CancellationToken.None);
+        await Reverse(repository, ledger).Handle(new ReversePledgeOnCampaignCommand(campaign.Id, pledgeId, 100m, "USD"), CancellationToken.None);
 
         Assert.Equal(0m, campaign.RaisedAmount.Amount);
         Assert.Equal(0m, await ledger.SumAsync(campaign.Id, CancellationToken.None));
@@ -115,8 +115,8 @@ public sealed class CampaignLedgerTests
     {
         var campaign = PublishedCampaign(goal: 1000m);
         var repository = new FakeCampaignRepository(campaign);
-        var ledger = new FakeContributionLedger();
-        await Credit(repository, ledger).Handle(new AddContributionToCampaignCommand(campaign.Id, Guid.NewGuid(), 400m, "USD"), CancellationToken.None);
+        var ledger = new FakePledgeLedger();
+        await Credit(repository, ledger).Handle(new AddPledgeToCampaignCommand(campaign.Id, Guid.NewGuid(), 400m, "USD"), CancellationToken.None);
 
         // Something edited the counter behind the ledger's back: it now claims the goal was reached.
         campaign.ReconcileRaisedAmount(new Money(1000m, "USD"));
@@ -134,8 +134,8 @@ public sealed class CampaignLedgerTests
     {
         var campaign = PublishedCampaign(goal: 1000m);
         var repository = new FakeCampaignRepository(campaign);
-        var ledger = new FakeContributionLedger();
-        await Credit(repository, ledger).Handle(new AddContributionToCampaignCommand(campaign.Id, Guid.NewGuid(), 400m, "USD"), CancellationToken.None);
+        var ledger = new FakePledgeLedger();
+        await Credit(repository, ledger).Handle(new AddPledgeToCampaignCommand(campaign.Id, Guid.NewGuid(), 400m, "USD"), CancellationToken.None);
         campaign.ReconcileRaisedAmount(new Money(1000m, "USD"));
         var handler = new CompleteHandler(repository, new FakeDateTimeProvider(AfterDeadline), new FakeCampaignTransactionExecutor(), ledger, NullLogger<CompleteHandler>.Instance);
 

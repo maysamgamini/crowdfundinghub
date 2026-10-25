@@ -51,7 +51,7 @@ quadrantChart
 |---|---|---|---|:---:|
 | **Tier 1: Pragmatic Vertical Slice** | One endpoint | Endpoint + the module's `DbContext` | Simple lookups and single-row edits that no other module cares about. | Minimal (1 file) |
 | **Tier 2: Command + Handler on the DbContext** | Command and handler, no aggregate, no repository | Command + handler in the module's Infrastructure, using its own `DbContext` directly. Real example: Notifications preferences (`Notifications.Infrastructure/Features/Preferences`) | Writes with no invariants worth a domain model, no events, and no concurrent-write risk. | Low (2-3 files) |
-| **Tier 3: Rich DDD Transactional Core** | Aggregate Root + repository | Aggregate, repository, command dispatcher, transactional outbox, `pg_advisory_xact_lock`, `xmin` tokens | Contributions, campaign funding balance, double-spend prevention, anything another module must react to reliably. | High (10-12 files) |
+| **Tier 3: Rich DDD Transactional Core** | Aggregate Root + repository | Aggregate, repository, command dispatcher, transactional outbox, `pg_advisory_xact_lock`, `xmin` tokens | Pledges, campaign funding balance, double-spend prevention, anything another module must react to reliably. | High (10-12 files) |
 
 The outbox belongs to Tier 3: only aggregates that raise events write to it. Cross-module reactions run from the outbox through the message bus (`InProcess` or `RabbitMQ`; log-based CDC such as Debezium is a possible evolution, not something this repository implements).
 
@@ -126,7 +126,7 @@ public static class CreateDraftCampaignEndpoint
 
 ---
 
-### Tier 3: Confirming a Contribution Payment (Rich DDD + Financial Invariants)
+### Tier 3: Confirming a Pledge Payment (Rich DDD + Financial Invariants)
 Conversely, when a backer's payment is confirmed by Stripe/Adyen:
 1. Pledged funds must be credited to the campaign balance.
 2. The campaign's raised amount cannot overflow or desync.
@@ -136,8 +136,8 @@ Conversely, when a backer's payment is confirmed by Stripe/Adyen:
 Here, **the 14-file pipeline is 100% justified**:
 
 ```csharp
-// Inside Campaigns Application, crediting a confirmed pledge (AddContributionToCampaignCommandHandler).
-// Contributions has already confirmed the payment under its own xmin token and published the event through its outbox.
+// Inside Campaigns Application, crediting a confirmed pledge (AddPledgeToCampaignCommandHandler).
+// Pledges has already confirmed the payment under its own xmin token and published the event through its outbox.
 await _transactionExecutor.ExecuteAsync(advisoryLockKey, async ct =>
 {
     // 1. The executor first takes the PostgreSQL advisory lock on the campaign ID: SELECT pg_advisory_xact_lock(key)
@@ -145,10 +145,10 @@ await _transactionExecutor.ExecuteAsync(advisoryLockKey, async ct =>
     // 2. Load the Aggregate Root inside the lock & enforce its invariants
     var campaign = await _campaignRepository.GetByIdAsync(campaignId, ct);
 
-    // 3. Ledger row first (unique per contribution), so a redelivered event is a no-op
-    if (await _contributionLedger.TryRecordAsync(campaignId, contributionId, amount, currency, ct))
+    // 3. Ledger row first (unique per pledge), so a redelivered event is a no-op
+    if (await _pledgeLedger.TryRecordAsync(campaignId, pledgeId, amount, currency, ct))
     {
-        campaign.ApplyConfirmedContribution(new Money(amount, currency));
+        campaign.ApplyConfirmedPledge(new Money(amount, currency));
         await _campaignRepository.UpdateAsync(campaign, ct); // optimistic concurrency token checked
     }
 
@@ -177,11 +177,11 @@ sequenceDiagram
     participant Kafka as Apache Kafka
     participant Downstream as Extracted Microservices
 
-    Client->>App: Confirm Contribution Payment
+    Client->>App: Confirm Pledge Payment
     rect rgb(240, 248, 255)
         Note over App,DB: Local ACID Transaction (Same Database)
-        App->>DB: UPDATE contributions SET status = 'Succeeded'
-        App->>DB: INSERT INTO contributions_outbox_messages (payload_json)
+        App->>DB: UPDATE pledges SET status = 'Succeeded'
+        App->>DB: INSERT INTO pledges_outbox_messages (payload_json)
         DB-->>App: Commit Transaction
     end
     App-->>Client: 200 OK (Payment Confirmed)
@@ -190,7 +190,7 @@ sequenceDiagram
         Note over DB,Kafka: Zero Application Overhead (Log-Based CDC)
         DB->>WAL: Emit Transaction WAL Records
         WAL->>Deb: Stream Binary Change Stream
-        Deb->>Kafka: Publish to 'contributions.payment-confirmed' topic
+        Deb->>Kafka: Publish to 'pledges.payment-confirmed' topic
         Kafka->>Downstream: Consume & Process Async
     end
 ```

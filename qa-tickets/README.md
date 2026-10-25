@@ -14,7 +14,7 @@ Findings from a consistency check across the active repositories (crowdfundinghu
 
 ## Fixed before filing
 
-- Contribution list and detail endpoints were anonymous (audit A2-F2): fixed, with unit and end-to-end tests.
+- Pledge list and detail endpoints were anonymous (audit A2-F2): fixed, with unit and end-to-end tests.
 - Outbox claim ignored expired leases, and the lease and due time used different clocks: fixed (reclaim, attempt counting, application clock).
 - Idempotent pledge creation and the outbox wake-up signal: built.
 
@@ -29,7 +29,7 @@ Findings from a consistency check across the active repositories (crowdfundinghu
 | [QA-003](QA-003.md) | P1 | crowdfunding | With Messaging:Provider = RabbitMQ nothing consumes events, so no handler ever runs | Fixed |
 | [QA-004](QA-004.md) | P1 | crowdfunding | docker-compose.microservices.yml monolith cannot reach its databases; base settings and compose disagree | Open |
 | [QA-005](QA-005.md) | P1 | crowdfunding | One-click unsubscribe is anonymous and appears to take any user id | Open |
-| [QA-021](QA-021.md) | P1 | crowdfunding | Docs teach the removed ICampaignContributionAvailabilityReader as the live design | Fixed |
+| [QA-021](QA-021.md) | P1 | crowdfunding | Docs teach the removed ICampaignPledgeAvailabilityReader as the live design | Fixed |
 | [QA-022](QA-022.md) | P1 | crowdfunding | TRADE_OFFS still describes the old outbox worker (4 events/s, PeriodicTimer, 'Processed' rows, TODO items, backoff numbers) | Fixed |
 | [QA-023](QA-023.md) | P1 | crowdfunding | Unclosed fence leaks NetArchTest code; box-character diagrams; documentation tests need tuning | Fixed |
 | [QA-028](QA-028.md) | P1 | hitechies-backend | Outbox claim compares application-clock time with database now(), and writes the lease with now() | Open |

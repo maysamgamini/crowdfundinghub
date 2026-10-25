@@ -30,23 +30,23 @@ public sealed class LoggingEmailNotificationService : IEmailNotificationService
         _logger = logger;
     }
 
-    public Task SendContributionReceiptAsync(
+    public Task SendPledgeReceiptAsync(
         Guid recipientUserId,
         Guid campaignId,
-        Guid contributionId,
+        Guid pledgeId,
         decimal amount,
         string currency,
         CancellationToken cancellationToken = default)
-        => SendAsync("ContributionReceipt", $"contribution-{contributionId}", recipientUserId, campaignId, amount, currency, cancellationToken);
+        => SendAsync("PledgeReceipt", $"pledge-{pledgeId}", recipientUserId, campaignId, amount, currency, cancellationToken);
 
     public Task SendCampaignCancellationAlertAsync(
         Guid recipientUserId,
         Guid campaignId,
-        Guid contributionId,
+        Guid pledgeId,
         decimal refundedAmount,
         string currency,
         CancellationToken cancellationToken = default)
-        => SendAsync("CampaignCancellationAlert", $"cancellation-{contributionId}", recipientUserId, campaignId, refundedAmount, currency, cancellationToken);
+        => SendAsync("CampaignCancellationAlert", $"cancellation-{pledgeId}", recipientUserId, campaignId, refundedAmount, currency, cancellationToken);
 
     public async Task SendCampaignUpdateAlertAsync(
         Guid recipientUserId,

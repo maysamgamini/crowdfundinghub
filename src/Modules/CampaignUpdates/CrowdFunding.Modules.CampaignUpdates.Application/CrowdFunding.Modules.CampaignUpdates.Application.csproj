@@ -3,7 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\CrowdFunding.Modules.CampaignUpdates.Domain\CrowdFunding.Modules.CampaignUpdates.Domain.csproj" />
     <ProjectReference Include="..\..\Campaigns\CrowdFunding.Modules.Campaigns.Contracts\CrowdFunding.Modules.Campaigns.Contracts.csproj" />
-    <ProjectReference Include="..\..\Contributions\CrowdFunding.Modules.Contributions.Contracts\CrowdFunding.Modules.Contributions.Contracts.csproj" />
+    <ProjectReference Include="..\..\Pledges\CrowdFunding.Modules.Pledges.Contracts\CrowdFunding.Modules.Pledges.Contracts.csproj" />
     <ProjectReference Include="..\..\Moderation\CrowdFunding.Modules.Moderation.Contracts\CrowdFunding.Modules.Moderation.Contracts.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\CrowdFunding.BuildingBlocks.Application\CrowdFunding.BuildingBlocks.Application.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\CrowdFunding.BuildingBlocks.Domain\CrowdFunding.BuildingBlocks.Domain.csproj" />

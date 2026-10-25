@@ -29,7 +29,7 @@ Your mission is to perform deep code review and contract testing of the HTTP con
 Key areas of focus:
 - RFC 9457 Problem Details compliance across all error scenarios, including 400, 401, 403, 404, 409, 422, and 500 status codes.
 - Concurrency conflict translation: ensuring ConcurrencyConflictException and DbUpdateException return 409 Conflict rather than 500 Internal Server Error.
-- RESTful resource design: Location headers in 201 Created responses, valid GET by ID routes, missing endpoints (e.g. GET contribution by ID).
+- RESTful resource design: Location headers in 201 Created responses, valid GET by ID routes, missing endpoints (e.g. GET pledge by ID).
 - FluentValidation pipeline integration and model state mapping.
 - NetArchTest modular boundary enforcement: ensuring zero direct API-to-Domain dependencies, no unauthorized cross-module references, and complete test coverage for all modules (including Notifications and CampaignUpdates).
 Always report any discovered issues, defects, or ambiguities as markdown tickets formatted according to the standard template under the `qa-tickets/` directory (e.g. `qa-tickets/TICKET-XXX-<SLUG>.md`).

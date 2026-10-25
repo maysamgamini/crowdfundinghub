@@ -109,13 +109,13 @@ Before a monolith can be broken into microservices, it must first be **cloud-nat
 ### Lesson 5: Event-Carried State Transfer vs. Synchronous Query Coupling
 
 #### The Common Trap in Industry
-When splitting a monolith, teams often replace in-memory queries with synchronous HTTP/gRPC calls (`Contributions` calls `Campaigns.GetById`). This creates a **Distributed Monolith** with cascading timeouts and brittle availability (if Campaigns is down, Contributions cannot accept pledges).
+When splitting a monolith, teams often replace in-memory queries with synchronous HTTP/gRPC calls (`Pledges` calls `Campaigns.GetById`). This creates a **Distributed Monolith** with cascading timeouts and brittle availability (if Campaigns is down, Pledges cannot accept pledges).
 
 #### The Pedagogical Benefit
 Through `TICKET-023`, students implement **Asynchronous Replicated Read Models**:
-- The `Contributions` module subscribes to `CampaignPublishedApplicationEvent` and `CampaignCancelledApplicationEvent`.
-- It populates its own local `contributions.active_campaigns_cache` table.
-- When evaluating a pledge, `Contributions` checks its own local data store in 0.1ms, achieving **100% autonomous uptime** even if the Campaigns module or database is offline.
+- The `Pledges` module subscribes to `CampaignPublishedApplicationEvent` and `CampaignCancelledApplicationEvent`.
+- It populates its own local `pledges.active_campaigns_cache` table.
+- When evaluating a pledge, `Pledges` checks its own local data store in 0.1ms, achieving **100% autonomous uptime** even if the Campaigns module or database is offline.
 
 **Key Learning Takeaway:**  
 Service autonomy is achieved through **asynchronous data replication**, not synchronous remote procedural calls.

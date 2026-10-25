@@ -40,7 +40,7 @@ quadrantChart
     quadrant-3 Skip
     quadrant-4 Skim
     Module dependency tests: [0.2, 0.85]
-    Contribution concurrency: [0.6, 0.9]
+    Pledge concurrency: [0.6, 0.9]
     Webhook subscription concurrency: [0.55, 0.9]
     Inbox retry: [0.65, 0.8]
     Schema rules: [0.45, 0.75]
@@ -53,11 +53,11 @@ quadrantChart
 | Test | What it proves | Why a student should read it |
 |---|---|---|
 | `*ModuleDependencyTests` (architecture) | A module's Application and Domain never reference another module's internals; Tier 2 handlers depend only on their own `DbContext` and clock. | Shortest path to understanding module boundaries. A broken rule fails the build with the offending type named. |
-| `ContributionConcurrencyTests`, `CampaignContributionConcurrencyTests`, `RewardTierConcurrencyE2ETests` | Many simultaneous contributions never oversell a reward tier or lose a pledge total. | Shows **why** the xmin token, advisory lock and unique key exist. Remove the guard and the test fails; that is the lesson. |
+| `PledgeConcurrencyTests`, `CampaignPledgeConcurrencyTests`, `RewardTierConcurrencyE2ETests` | Many simultaneous pledges never oversell a reward tier or lose a pledge total. | Shows **why** the xmin token, advisory lock and unique key exist. Remove the guard and the test fails; that is the lesson. |
 | `WebhookSubscriptionConcurrencyTests` | A stale background save cannot re-activate a subscription that an owner deleted. | Found a real lost-update bug while converting a feature to Tier 2, so it teaches the tier rule "can concurrent writes corrupt it?" with evidence. |
 | `InboxRetryTests` | A handler that fails is retried; one that succeeded is not run twice for the same message. | Makes at-least-once delivery and idempotent consumers concrete. It also documents the crash window that remains. |
 | `ModuleSchemaRulesTests` | Each module's tables live in its own schema, each module has its own migration history, and no foreign key crosses a schema. | Turns "schema isolation" from a diagram into a check that runs against a real database. |
-| `OutboxLeanTableE2ETests`, `ContributionAndOutboxE2ETests` | A business change and its event commit together or not at all; dispatch is claimed with `SKIP LOCKED`. | The transactional outbox end to end. |
+| `OutboxLeanTableE2ETests`, `PledgeAndOutboxE2ETests` | A business change and its event commit together or not at all; dispatch is claimed with `SKIP LOCKED`. | The transactional outbox end to end. |
 | `RefundSagaE2ETests`, `PaymentGatewayWebhookReconciliationE2ETests` | A multi-module flow completes by events, and duplicate webhooks are harmless. | Eventual consistency between modules without a distributed transaction. |
 | `PledgeIdempotencyE2ETests`, `PledgeIdempotencyTests` | A retried pledge returns the first one; twelve simultaneous requests with one key create exactly one pledge; the same key with a different request is a conflict. | The guarantee is a unique index, not application code. Delete the index or the lookup and the tests fail, which is the lesson. |
 | `OutboxWakeUpLatencyE2ETests`, `OutboxSignalTests` | An event reaches its consumer in under a second with no manual drain; without the wake-up the slowest delivery is the five-second timer. | Measures a design choice instead of asserting it. Remove the `Notify()` call and the test fails with the number. |
@@ -67,7 +67,7 @@ quadrantChart
 | `ModerationReadAccessTests` | Reading a review needs the moderation permission in whichever host serves the module. | Why a rule that matters belongs in the handler, not only on the endpoint. |
 | `RetentionE2ETests`, `RetentionBackgroundServiceTests` | Idempotency keys older than a week are cleared and recent ones stay; old inbox rows are deleted; one failing cleanup task does not stop the others. | Data with a useful life needs an owner and a schedule, or the table grows for ever. |
 | `OneLivePledgeTests`, `PledgeIdempotencyE2ETests` (the two-tabs tests) | A second pledge with a new key is refused, twelve simultaneous pledges with twelve keys create exactly one, and a backer can pledge again once the first failed. | An idempotency key stops a retry; only a business rule enforced by the database stops a second attempt. |
-| `LateContributionTests`, `LateConfirmationRefundE2ETests` | A payment confirmed after the campaign ended is refused under the campaign lock and refunded, not retried into the dead-letter table. | The closing fence across two databases is a lock plus a compensation. |
+| `LatePledgeTests`, `LateConfirmationRefundE2ETests` | A payment confirmed after the campaign ended is refused under the campaign lock and refunded, not retried into the dead-letter table. | The closing fence across two databases is a lock plus a compensation. |
 | `RewardTierDatabaseGuardTests` | Writing around the aggregate with plain SQL cannot oversell a reward tier, because the database holds the same rule as a CHECK constraint. | Defence in depth: the lock and the aggregate are the first line, the database is the last. |
 | `CampaignLedgerTests`, `CampaignLedgerDatabaseGuardTests` | A refund processed before its credit still ends at zero; the database refuses a wrongly signed entry and any update or delete; the deadline decision uses the ledger total when the counter has drifted. | A ledger is a record: constraints and a trigger make the rules unbreakable, and an exact sum beats a snapshot. |
 | `PaymentProviderRefundTests`, `RefundThroughProviderE2ETests` | A crash after the provider refunded and before the status changed cannot refund twice; a refusal is a new attempt with a new key, not a replayed failure. | Idempotency keys are per attempt: reusing one forever turns a single failure into a permanent one. |
@@ -88,7 +88,7 @@ These were run against the real stack, not simulated.
 | Stop the standby, then write | The write waited and was never acknowledged, then timed out on the client. Other modules kept serving. This is the consistency-first choice. |
 | Bring the standby back | Writes resumed at once; a write that had stalled committed after the standby returned. |
 
-The last point is worth a lesson on its own: a client timeout does not cancel a commit that is waiting for its standby, so a timed-out request may still become durable later. Idempotency keys exist for this reason, and `MakeContribution` now accepts one (see `PledgeIdempotencyE2ETests`).
+The last point is worth a lesson on its own: a client timeout does not cancel a commit that is waiting for its standby, so a timed-out request may still become durable later. Idempotency keys exist for this reason, and `MakePledge` now accepts one (see `PledgeIdempotencyE2ETests`).
 
 ## Tests that are not worth a student's time
 

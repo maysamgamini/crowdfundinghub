@@ -9,7 +9,7 @@ change.
 > that used to live in `CrowdFunding.API` and knew about all three module DbContexts by name has
 > been replaced by `ModuleOutboxProcessor<TDbContext>` (`BuildingBlocks.Infrastructure.Outbox`),
 > an abstract `BackgroundService` each module subclasses and registers in its own Infrastructure
-> DI extension (`CampaignsOutboxBackgroundService`, `ContributionsOutboxBackgroundService`,
+> DI extension (`CampaignsOutboxBackgroundService`, `PledgesOutboxBackgroundService`,
 > `ModerationOutboxBackgroundService`). The API host no longer references any module's DbContext
 > or outbox table name — three independent workers run on their own loops (each woken by its own commit signal, with a 5 s timer as a safety net) inside the
 > same process, so a slow or failing module's outbox can no longer starve the others, and
@@ -31,7 +31,7 @@ commits, both the state change and the intent-to-publish are durable together; i
 neither happened. A separate process then reads the outbox table and does the actual publish,
 retrying independently of the original transaction.
 
-Every module's `TransactionExecutor` (`CampaignTransactionExecutor`, `ContributionTransactionExecutor`,
+Every module's `TransactionExecutor` (`CampaignTransactionExecutor`, `PledgeTransactionExecutor`,
 `ModerationTransactionExecutor`) already does the "write" half of this correctly: domain events
 raised during `action()` are mapped to `OutboxMessage` rows and saved in the same transaction as
 the aggregate change, before commit. This document is about the "read" half — how a background

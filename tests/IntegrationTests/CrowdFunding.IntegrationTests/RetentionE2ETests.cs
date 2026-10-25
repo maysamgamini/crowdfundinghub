@@ -1,8 +1,8 @@
 using CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
 using CrowdFunding.BuildingBlocks.Infrastructure.Retention;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.DbContexts;
-using CrowdFunding.Modules.Contributions.Domain.Aggregates;
-using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.DbContexts;
+using CrowdFunding.Modules.Pledges.Domain.Aggregates;
+using CrowdFunding.Modules.Pledges.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -33,23 +33,23 @@ public sealed class RetentionE2ETests
     public async Task AnIdempotencyKeyOlderThanTheWindow_IsCleared_AndTheRecentOneAndThePledgesStay()
     {
         var campaignId = Guid.NewGuid();
-        var oldPledge = Contribution.Create(campaignId, Guid.NewGuid(), 10m, "USD", DateTime.UtcNow.AddDays(-8), idempotencyKey: $"old-{Guid.NewGuid():N}");
-        var recentPledge = Contribution.Create(campaignId, Guid.NewGuid(), 10m, "USD", DateTime.UtcNow.AddDays(-2), idempotencyKey: $"recent-{Guid.NewGuid():N}");
+        var oldPledge = Pledge.Create(campaignId, Guid.NewGuid(), 10m, "USD", DateTime.UtcNow.AddDays(-8), idempotencyKey: $"old-{Guid.NewGuid():N}");
+        var recentPledge = Pledge.Create(campaignId, Guid.NewGuid(), 10m, "USD", DateTime.UtcNow.AddDays(-2), idempotencyKey: $"recent-{Guid.NewGuid():N}");
         var recentKey = recentPledge.IdempotencyKey;
 
         await using (var seed = _factory.Services.CreateAsyncScope())
         {
-            var db = seed.ServiceProvider.GetRequiredService<ContributionsDbContext>();
-            db.Contributions.AddRange(oldPledge, recentPledge);
+            var db = seed.ServiceProvider.GetRequiredService<PledgesDbContext>();
+            db.Pledges.AddRange(oldPledge, recentPledge);
             await db.SaveChangesAsync();
         }
 
         await RunRetentionAsync();
 
         await using var scope = _factory.Services.CreateAsyncScope();
-        var check = scope.ServiceProvider.GetRequiredService<ContributionsDbContext>();
-        var old = await check.Contributions.AsNoTracking().SingleAsync(x => x.Id == oldPledge.Id);
-        var recent = await check.Contributions.AsNoTracking().SingleAsync(x => x.Id == recentPledge.Id);
+        var check = scope.ServiceProvider.GetRequiredService<PledgesDbContext>();
+        var old = await check.Pledges.AsNoTracking().SingleAsync(x => x.Id == oldPledge.Id);
+        var recent = await check.Pledges.AsNoTracking().SingleAsync(x => x.Id == recentPledge.Id);
         Assert.Null(old.IdempotencyKey);
         Assert.Equal(10m, old.Money.Amount);
         Assert.Equal(recentKey, recent.IdempotencyKey);

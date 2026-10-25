@@ -27,21 +27,21 @@ These external systems include:
 
 ## 2. The Dual-Write Hazard: Why In-Memory Integrations Mathematically Fail
 
-Consider the naive implementation of sending a **Contribution Payment Receipt Email** or triggering a **Cloud Function** for malware analysis:
+Consider the naive implementation of sending a **Pledge Payment Receipt Email** or triggering a **Cloud Function** for malware analysis:
 
 ### Naive Anti-Pattern A: Calling the External API Before Committing the Database
 ```csharp
 // ANTI-PATTERN: External call before DB commit
-await _emailService.SendReceiptEmailAsync(backer.Email, contribution.Amount);
+await _emailService.SendReceiptEmailAsync(backer.Email, pledge.Amount);
 await _dbContext.SaveChangesAsync(); // <-- If this throws (DB deadlock, network crash, constraint violation)!
 ```
-* **Failure Mode (Ghost Side-Effect):** The user receives a receipt email confirming their $1,000 pledge, but the database transaction was rolled back! The platform has no record of the contribution, creating customer support nightmares and audit reconciliation failures.
+* **Failure Mode (Ghost Side-Effect):** The user receives a receipt email confirming their $1,000 pledge, but the database transaction was rolled back! The platform has no record of the pledge, creating customer support nightmares and audit reconciliation failures.
 
 ### Naive Anti-Pattern B: Calling the External API After Committing the Database
 ```csharp
 // ANTI-PATTERN: External call after DB commit
 await _dbContext.SaveChangesAsync();
-await _emailService.SendReceiptEmailAsync(backer.Email, contribution.Amount); // <-- If this fails!
+await _emailService.SendReceiptEmailAsync(backer.Email, pledge.Amount); // <-- If this fails!
 ```
 * **Failure Mode (Lost Side-Effect):** The database commit succeeds. The user was charged. But the web server dies, the email API drops the connection, or rate limits are hit. The email is lost forever with zero retry mechanism or durability.
 
@@ -54,8 +54,8 @@ sequenceDiagram
     participant Ext as External API (SendGrid / Cloud Function)
 
     Note over API,Ext: Attempting Naive In-Memory Dual Write
-    Client->>API: POST /api/campaigns/{campaignId}/contributions/{contributionId}/confirm-payment
-    API->>DB: BEGIN TRANSACTION & UPDATE contribution
+    Client->>API: POST /api/campaigns/{campaignId}/pledges/{pledgeId}/confirm-payment
+    API->>DB: BEGIN TRANSACTION & UPDATE pledge
     API->>Ext: POST /v3/mail/send (Network Call)
     Note over Ext: Email Sent to Customer!
     API->>DB: COMMIT TRANSACTION
@@ -70,8 +70,8 @@ sequenceDiagram
 To make `CrowdFundingHub` an indisputable reference for enterprise architects, the platform incorporates five production-grade features where the Outbox Pattern and rich DDD state machines are mathematically mandatory:
 
 ### Feature 1: Guaranteed Transactional Email Delivery (SendGrid / AWS SES)
-* **The Business Need:** When a backer confirms a $500 contribution, or when a creator's campaign reaches its funding milestone, transactional emails must be delivered with guaranteed at-least-once reliability.
-* **Why Outbox Is Mandatory:** Email APIs (SendGrid, Mailgun, AWS SES) are HTTP services prone to network jitter, timeouts, and throttling. Saving the `SendContributionReceiptNotification` command in the Outbox guarantees that the receipt is emitted atomically with the ledger balance update.
+* **The Business Need:** When a backer confirms a $500 pledge, or when a creator's campaign reaches its funding milestone, transactional emails must be delivered with guaranteed at-least-once reliability.
+* **Why Outbox Is Mandatory:** Email APIs (SendGrid, Mailgun, AWS SES) are HTTP services prone to network jitter, timeouts, and throttling. Saving the `SendPledgeReceiptNotification` command in the Outbox guarantees that the receipt is emitted atomically with the ledger balance update.
 * **Resilience Mechanics:**
   - The background worker claims the outbox record using `FOR UPDATE SKIP LOCKED`.
   - The email client dispatches the email with idempotent client tokens (`X-Message-Id`).
@@ -110,12 +110,12 @@ sequenceDiagram
 ### Feature 3: Payment Gateway Intent & Webhook Reconciliation Saga (Stripe / Adyen)
 * **The Business Need:** Modern payments do not complete in a single synchronous call. They involve Payment Intents, 3D Secure (3DS) biometric challenges, and asynchronous payment provider webhooks.
 * **Why Outbox & Rich DDD Are Mandatory:**
-  - Backer initiates pledge $\to$ `Contribution` aggregate created in the `Pending` state with a client secret.
+  - Backer initiates pledge $\to$ `Pledge` aggregate created in the `Pending` state with a client secret.
   - User completes 3DS challenge on Stripe.
   - Stripe sends `payment_intent.succeeded` webhook to `POST /api/webhooks/payments/stripe`.
   - **The Race Hazard:** The webhook may arrive *before* the user's browser redirects back to the API!
   - *(Not everything here is built; see the "What is not built" box under the matrix in section 4.)*
-  - **The Solution:** The `Contribution` aggregate enforces state machine invariants (`Pending` $\to$ `Succeeded`; the real `ContributionStatus` values are Pending, Succeeded, Failed and Refunded). The webhook handler writes a `ProcessPaymentConfirmationCommand` to the outbox, ensuring idempotent ledger updates even if Stripe retries the webhook 5 times.
+  - **The Solution:** The `Pledge` aggregate enforces state machine invariants (`Pending` $\to$ `Succeeded`; the real `PledgeStatus` values are Pending, Succeeded, Failed and Refunded). The webhook handler writes a `ProcessPaymentConfirmationCommand` to the outbox, ensuring idempotent ledger updates even if Stripe retries the webhook 5 times.
 
 ### Feature 4: Reward Perk Tier Allocation & Inventory Reservation (Rich DDD State Machine)
 * **The Business Need:** A campaign offers "Early Bird" reward tiers (e.g. "Only 50 units available at $199").

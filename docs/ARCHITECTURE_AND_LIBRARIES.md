@@ -83,10 +83,10 @@ graph TB
             CampInfra["Infrastructure (CampaignsDbContext)"]
         end
 
-        subgraph ModContrib["Contributions Module"]
+        subgraph ModContrib["Pledges Module"]
             ContApp["Application (Make/Confirm Pledge)"]
-            ContDom["Domain (Contribution Aggregate)"]
-            ContInfra["Infrastructure (ContributionsDbContext)"]
+            ContDom["Domain (Pledge Aggregate)"]
+            ContInfra["Infrastructure (PledgesDbContext)"]
         end
 
         subgraph ModIdent["Identity Module"]
@@ -112,7 +112,7 @@ graph TB
 
     subgraph DataTier["PostgreSQL 16 Storage (Physical Database)"]
         CampSchema["Campaigns Tables<br/>(campaigns, ledger, outbox)"]
-        ContSchema["Contributions Tables<br/>(contributions, outbox)"]
+        ContSchema["Pledges Tables<br/>(pledges, outbox)"]
         IdentSchema["Identity Tables<br/>(users, signing_keys)"]
         ModSchema["Moderation Tables<br/>(reviews, outbox)"]
         DeadLetter["Dead-Letter Table<br/>(dead_letter_events)"]
@@ -156,15 +156,15 @@ graph TB
 
 The solution is divided into six distinct Bounded Contexts:
 1. **[`Campaigns`](../src/Modules/Campaigns)**: Owns campaign creation, editing, publishing, financial target definitions, and balance accumulation.
-2. **[`Contributions`](../src/Modules/Contributions)**: Owns backer pledge lifecycle, payment state transitions (`Pending`, `Succeeded`, `Failed`, `Refunded`), and payment gateway callbacks.
+2. **[`Pledges`](../src/Modules/Pledges)**: Owns backer pledge lifecycle, payment state transitions (`Pending`, `Succeeded`, `Failed`, `Refunded`), and payment gateway callbacks.
 3. **[`Identity`](../src/Modules/Identity)**: Owns user credentials, PBKDF2 hashing, roles/permissions, ES256 asymmetric cryptographic keys, and token issuance.
 4. **[`Moderation`](../src/Modules/Moderation)**: Owns campaign audit, manual compliance review, and approval/rejection workflows.
 5. **[`Notifications`](../src/Modules/Notifications)**: Owns email, SMS, and backer notification dispatching upon domain event triggers.
 6. **[`CampaignUpdates`](../src/Modules/CampaignUpdates)**: Owns creator project updates, backer comments, and progress broadcasts.
 
 #### Module Boundaries & Encapsulation Invariants
-- **Database Context Isolation**: Each module maintains its own dedicated EF Core DbContext ([`CampaignsDbContext`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Persistence/DbContexts/CampaignsDbContext.cs), [`ContributionsDbContext`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Infrastructure/Persistence/DbContexts/ContributionsDbContext.cs), [`IdentityDbContext`](../src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Persistence/DbContexts/IdentityDbContext.cs), [`ModerationDbContext`](../src/Modules/Moderation/CrowdFunding.Modules.Moderation.Infrastructure/Persistence/DbContexts/ModerationDbContext.cs)). Cross-context joins or entity navigation properties crossing module boundaries are forbidden at compile-time and runtime.
-- **Contract Decoupling**: Modules expose public contracts strictly via dedicated `.Contracts` assemblies (e.g., [`CrowdFunding.Modules.Campaigns.Contracts`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Contracts) or [`CrowdFunding.Modules.Contributions.Contracts`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Contracts)). Internal entity definitions (`Campaign`, `Contribution`) never escape their owning module.
+- **Database Context Isolation**: Each module maintains its own dedicated EF Core DbContext ([`CampaignsDbContext`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Persistence/DbContexts/CampaignsDbContext.cs), [`PledgesDbContext`](../src/Modules/Pledges/CrowdFunding.Modules.Pledges.Infrastructure/Persistence/DbContexts/PledgesDbContext.cs), [`IdentityDbContext`](../src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Persistence/DbContexts/IdentityDbContext.cs), [`ModerationDbContext`](../src/Modules/Moderation/CrowdFunding.Modules.Moderation.Infrastructure/Persistence/DbContexts/ModerationDbContext.cs)). Cross-context joins or entity navigation properties crossing module boundaries are forbidden at compile-time and runtime.
+- **Contract Decoupling**: Modules expose public contracts strictly via dedicated `.Contracts` assemblies (e.g., [`CrowdFunding.Modules.Campaigns.Contracts`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Contracts) or [`CrowdFunding.Modules.Pledges.Contracts`](../src/Modules/Pledges/CrowdFunding.Modules.Pledges.Contracts)). Internal entity definitions (`Campaign`, `Pledge`) never escape their owning module.
 - **Zero API-to-Domain Dependencies**: The [`CrowdFunding.API`](../src/API/CrowdFunding.API) project does **NOT** reference any module's `.Domain` assembly. Controllers interact exclusively with Application command/query models and Mapster DTOs.
 - **Automated Architecture Boundary Verification**: Dependency direction and encapsulation rules are checked continuously via automated architectural unit tests in [`CrowdFunding.ArchitectureTests`](../tests/ArchitectureTests/CrowdFunding.ArchitectureTests).
 
@@ -203,7 +203,7 @@ graph TD
             subgraph LayerApp["Application Layer (Use Case Orchestration)"]
                 C_APP["Command / Query Handlers, Dispatcher Pipeline,<br/>FluentValidation Rules, Transaction Boundary Orchestration,<br/>ICurrentUser Access Verification, Application Event Contracts"]
                 subgraph LayerDom["Domain Layer (Core Enterprise Business Logic)"]
-                    C_DOM["Aggregates (Campaign, Contribution, User),<br/>Value Objects (Money), Domain Invariants,<br/>Pure Domain Events, Zero External Dependencies"]
+                    C_DOM["Aggregates (Campaign, Pledge, User),<br/>Value Objects (Money), Domain Invariants,<br/>Pure Domain Events, Zero External Dependencies"]
                 end
             end
         end
@@ -225,7 +225,7 @@ graph TD
 | :--- | :--- | :--- | :--- |
 | **API** | `CrowdFunding.API` | Translates HTTP requests to commands/queries; validates bearer tokens; enforces authorization policies; maps results to JSON contracts via Mapster; hosts WebSockets. | [`CampaignsController.cs`](../src/API/CrowdFunding.API/Controllers/CampaignsController.cs)<br/>[`Program.cs`](../src/API/CrowdFunding.API/Program.cs)<br/>[`CampaignHub.cs`](../src/API/CrowdFunding.API/RealTime/CampaignHub.cs) |
 | **Application** | `CrowdFunding.Modules.*.Application`<br/>`CrowdFunding.BuildingBlocks.Application` | Orchestrates use cases; enforces authorization via [`ICurrentUser`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Application/Security/ICurrentUser.cs); coordinates database transactions; dispatches domain events to Outbox. | [`CreateCampaignCommand.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Application/Features/Campaigns/Commands/CreateCampaign/CreateCampaignCommand.cs)<br/>[`CommandDispatcher.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Application/Messaging/CommandDispatcher.cs) |
-| **Domain** | `CrowdFunding.Modules.*.Domain`<br/>`CrowdFunding.BuildingBlocks.Domain` | Pure domain logic. Enforces aggregate state transitions and business invariants; raises domain events; encapsulates value objects. Pure C# with zero infrastructure or framework dependencies. | [`Campaign.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs)<br/>[`Contribution.cs`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Domain/Aggregates/Contribution.cs)<br/>[`Money.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Domain/ValueObjects/Money.cs) |
+| **Domain** | `CrowdFunding.Modules.*.Domain`<br/>`CrowdFunding.BuildingBlocks.Domain` | Pure domain logic. Enforces aggregate state transitions and business invariants; raises domain events; encapsulates value objects. Pure C# with zero infrastructure or framework dependencies. | [`Campaign.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs)<br/>[`Pledge.cs`](../src/Modules/Pledges/CrowdFunding.Modules.Pledges.Domain/Aggregates/Pledge.cs)<br/>[`Money.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Domain/ValueObjects/Money.cs) |
 | **Infrastructure** | `CrowdFunding.Modules.*.Infrastructure`<br/>`CrowdFunding.BuildingBlocks.Infrastructure` | Implements persistence via EF Core and Npgsql; executes PostgreSQL concurrency locks; manages signing keys; talks to OpenMeter API. | [`CampaignConfiguration.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Persistence/Configurations/CampaignConfiguration.cs)<br/>[`CampaignTransactionExecutor.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Transactions/CampaignTransactionExecutor.cs) |
 
 ---
@@ -354,10 +354,10 @@ graph TD
         AdvisoryLock --> Reload["Reload Campaign Inside Lock Boundary"]
         Reload --> CheckStatus{"Campaign Status == Published?"}
         CheckStatus -->|"No (Cancelled/Draft)"| Abort["Throw InvalidOperationException<br/>(Transaction Aborted, Zero Funds Accepted)"]
-        CheckStatus -->|Yes| LedgerGuard["Insert into campaign_contributions_ledger<br/>Unique Constraint: (campaign_id, contribution_id)"]
+        CheckStatus -->|Yes| LedgerGuard["Insert into campaign_pledges_ledger<br/>Unique Constraint: (campaign_id, pledge_id)"]
         
-        LedgerGuard -->|Duplicate Key Conflict| NoOp["Idempotent No-Op<br/>(Contribution already recorded)"]
-        LedgerGuard -->|Unique Insert Succeeds| ApplyFunds["Aggregate.ApplyConfirmedContribution()<br/>RaisedAmount = RaisedAmount + Amount"]
+        LedgerGuard -->|Duplicate Key Conflict| NoOp["Idempotent No-Op<br/>(Pledge already recorded)"]
+        LedgerGuard -->|Unique Insert Succeeds| ApplyFunds["Aggregate.ApplyConfirmedPledge()<br/>RaisedAmount = RaisedAmount + Amount"]
         
         ApplyFunds --> EFSave["DbContext.SaveChangesAsync()"]
     end
@@ -376,9 +376,9 @@ graph TD
 | :--- | :--- | :--- | :--- |
 | **`pg_advisory_xact_lock`** | Transaction-scoped mutually exclusive lock on a 64-bit integer. | [`CampaignTransactionExecutor.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Transactions/CampaignTransactionExecutor.cs#L48-L58):<br/>`SELECT pg_advisory_xact_lock(@key)` | Serializes concurrent writers targeting the same campaign; closes the TOCTOU window between status checks and balance updates. |
 | **`AdvisoryLockKey.FromGuid`** | 64-bit entropy XOR folding of a 128-bit UUID. | [`AdvisoryLockKey.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Domain/Common/AdvisoryLockKey.cs#L14-L26):<br/>`high ^ low` | Eliminates 32-bit `Guid.GetHashCode()` collision hazards (which cause false lock contention across unrelated campaigns). |
-| **PostgreSQL `xmin` System Column** | Built-in MVCC transaction ID acting as a row-version concurrency token. | [`CampaignConfiguration.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Persistence/Configurations/CampaignConfiguration.cs#L76-L78) & [`ContributionConfiguration.cs`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Infrastructure/Persistence/Configurations/ContributionConfiguration.cs#L64-L66):<br/>`builder.Property<uint>("xmin").IsRowVersion();` | Detects stale writes and out-of-band updates. EF Core issues `WHERE id = @p0 AND xmin = @p1`. |
+| **PostgreSQL `xmin` System Column** | Built-in MVCC transaction ID acting as a row-version concurrency token. | [`CampaignConfiguration.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Persistence/Configurations/CampaignConfiguration.cs#L76-L78) & [`PledgeConfiguration.cs`](../src/Modules/Pledges/CrowdFunding.Modules.Pledges.Infrastructure/Persistence/Configurations/PledgeConfiguration.cs#L64-L66):<br/>`builder.Property<uint>("xmin").IsRowVersion();` | Detects stale writes and out-of-band updates. EF Core issues `WHERE id = @p0 AND xmin = @p1`. |
 | **`FOR UPDATE SKIP LOCKED`** | Non-blocking row-level lock acquisition for batch processing. | [`OutboxClaimQuery.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxClaimQuery.cs#L28-L45):<br/>`WITH claimable AS (SELECT ... FOR UPDATE SKIP LOCKED) UPDATE ... RETURNING *` | Allows multiple background worker replicas to poll the same outbox table concurrently, claiming disjoint batches with zero duplicate processing. |
-| **Ledger Unique Constraint** | Append-only idempotency table with unique compound index. | `campaign_contributions_ledger`: `UNIQUE(campaign_id, contribution_id)` | Prevents duplicate balance inflation when at-least-once outbox deliveries or network retries re-execute. |
+| **Ledger Unique Constraint** | Append-only idempotency table with unique compound index. | `campaign_pledges_ledger`: `UNIQUE(campaign_id, pledge_id)` | Prevents duplicate balance inflation when at-least-once outbox deliveries or network retries re-execute. |
 
 ---
 
@@ -429,10 +429,10 @@ In [`services/CrowdFunding.Moderation.Service/`](../services/CrowdFunding.Modera
 ### 2.8 Asynchronous Replicated Read Models & Pluggable Message Bus
 
 #### Eliminating Synchronous Cross-Module Queries
-In earlier iterations, `Contributions` executed a synchronous in-process query through a reader interface (`ICampaignContributionAvailabilityReader`, since removed) to verify if a campaign was active before accepting pledges. When moving toward microservices, this synchronous call creates a **Distributed Monolith** (if Campaigns is down, Contributions cannot accept pledges).
+In earlier iterations, `Pledges` executed a synchronous in-process query through a reader interface (`ICampaignPledgeAvailabilityReader`, since removed) to verify if a campaign was active before accepting pledges. When moving toward microservices, this synchronous call creates a **Distributed Monolith** (if Campaigns is down, Pledges cannot accept pledges).
 
 In TICKET-023 (the ticket text is not kept in this repository), this was replaced with **Event-Carried State Transfer**:
-- `Contributions` maintains its own local `contributions.active_campaigns_cache` table.
+- `Pledges` maintains its own local `pledges.active_campaigns_cache` table.
 - When `CampaignCreatedApplicationEvent`, `CampaignPublishedApplicationEvent` or `CampaignCancelledApplicationEvent` (and the succeeded and failed events) fire, an event handler (`ReplicatedCampaignEventHandlers`) updates this local read model.
 - Pledge validation checks the local read model in 0.1ms, ensuring **100% autonomous availability**.
 
@@ -452,9 +452,9 @@ Isolation is by **schema**: each module owns a schema and its own `__EFMigration
 ```mermaid
 flowchart LR
     API["CrowdFunding Host"] --> M1["campaigns schema"]
-    API --> M2["contributions schema"]
+    API --> M2["pledges schema"]
     M1 --> D1[("campaigns_db")]
-    M2 --> D2[("contributions_db")]
+    M2 --> D2[("pledges_db")]
     D1 --> P1["HA profile: Patroni primary + standby"]
     D2 --> P2["HA profile: Patroni primary + standby"]
     P1 --> E["etcd witness (3 members)"]
@@ -592,7 +592,7 @@ Provides structured, machine-parseable log telemetry and correlates log events a
 ### 3.7 OpenMeter & CloudEvents v1.0
 
 - **Package/Runtime:** Custom Ingestion Client adhering to CNCF CloudEvents v1.0
-- **Location:** [`CloudEvent.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Application/Metering/CloudEvent.cs), [`OpenMeterClient.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Metering/OpenMeterClient.cs), [`PledgeConfirmedMeteringEventHandler.cs`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Metering/PledgeConfirmedMeteringEventHandler.cs)
+- **Location:** [`CloudEvent.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Application/Metering/CloudEvent.cs), [`OpenMeterClient.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Metering/OpenMeterClient.cs), [`PledgeConfirmedMeteringEventHandler.cs`](../src/Modules/Pledges/CrowdFunding.Modules.Pledges.Application/Features/Metering/PledgeConfirmedMeteringEventHandler.cs)
 
 #### Problem It Solves
 Tracks usage, pledge transaction fees, creator platform levies, and backer engagement metrics in real time without bogging down the operational relational database.
@@ -712,23 +712,23 @@ sequenceDiagram
     autonumber
     actor Backer as Backer Browser
     participant API as API Controller / Gateway
-    participant Handler as ConfirmContributionPaymentCommandHandler
-    participant ContTx as ContributionTransactionExecutor
-    participant ContDB as ContributionsDbContext (Postgres)
+    participant Handler as ConfirmPledgePaymentCommandHandler
+    participant ContTx as PledgeTransactionExecutor
+    participant ContDB as PledgesDbContext (Postgres)
     participant OutboxService as ModuleOutboxProcessor
-    participant CampHandler as AddContributionToCampaignCommandHandler
+    participant CampHandler as AddPledgeToCampaignCommandHandler
     participant CampTx as CampaignTransactionExecutor
     participant CampDB as CampaignsDbContext (Postgres)
     participant SignalR as CampaignHub (WebSockets)
     participant OpenMeter as OpenMeter (Usage Metering)
 
-    Backer->>API: POST /api/campaigns/{campaignId}/contributions/{contributionId}/confirm-payment
-    API->>Handler: Dispatch ConfirmContributionPaymentCommand
+    Backer->>API: POST /api/campaigns/{campaignId}/pledges/{pledgeId}/confirm-payment
+    API->>Handler: Dispatch ConfirmPledgePaymentCommand
     Handler->>ContTx: ExecuteAsync(action)
     ContTx->>ContDB: BEGIN TRANSACTION
-    ContTx->>ContDB: Lock Contribution (xmin verified)
+    ContTx->>ContDB: Lock Pledge (xmin verified)
     ContTx->>ContDB: Update Status = Succeeded
-    ContTx->>ContDB: Map Event -> INSERT contributions_outbox_messages (Status=Pending)
+    ContTx->>ContDB: Map Event -> INSERT pledges_outbox_messages (Status=Pending)
     ContTx->>ContDB: COMMIT TRANSACTION
     Handler-->>API: 200 OK (Succeeded)
     API-->>Backer: Pledge Confirmed Receipt
@@ -737,15 +737,15 @@ sequenceDiagram
     OutboxService->>ContDB: Claim Batch via FOR UPDATE SKIP LOCKED
     ContDB-->>OutboxService: Return Disjoint Claimed Outbox Rows (Status=Processing)
     
-    OutboxService->>CampHandler: Handle(ContributionPaymentConfirmedApplicationEvent)
+    OutboxService->>CampHandler: Handle(PledgePaymentConfirmedApplicationEvent)
     CampHandler->>CampTx: ExecuteAsync(advisoryLockKey, action)
     CampTx->>CampDB: BEGIN TRANSACTION
     CampTx->>CampDB: SELECT pg_advisory_xact_lock(advisoryLockKey)
     Note over CampTx,CampDB: Critical Section Locked across All Concurrent Workers
     
     CampHandler->>CampDB: Reload Campaign Inside Lock
-    CampHandler->>CampDB: INSERT campaign_contributions_ledger (Unique Check)
-    CampHandler->>CampDB: Campaign.ApplyConfirmedContribution(Amount)
+    CampHandler->>CampDB: INSERT campaign_pledges_ledger (Unique Check)
+    CampHandler->>CampDB: Campaign.ApplyConfirmedPledge(Amount)
     CampHandler->>CampDB: SaveChangesAsync (Verifies xmin Concurrency Token)
     CampTx->>CampDB: COMMIT TRANSACTION (Advisory Lock Released)
 
@@ -838,7 +838,7 @@ Uncaught exceptions must never leak raw database connection strings, SQL query t
 To safeguard against distributed denial-of-service (DDoS) and brute-force credential stuffing:
 - Configured in [`RateLimitingConfiguration.cs`](../src/API/CrowdFunding.API/RateLimiting/RateLimitingConfiguration.cs) using ASP.NET Core's native Partitioned Rate Limiter:
   - **Auth Endpoints (login, registration and token refresh under `/api/identity`)**: Fixed window limit per client IP to mitigate password guessing attacks.
-  - **Pledge Endpoint (`POST /api/campaigns/{campaignId}/contributions`)**: Partitioned by authenticated `UserId`, falling back to IP address, to prevent pledge flooding and credit card testing fraud.
+  - **Pledge Endpoint (`POST /api/campaigns/{campaignId}/pledges`)**: Partitioned by authenticated `UserId`, falling back to IP address, to prevent pledge flooding and credit card testing fraud.
   - **Webhook Endpoints (`/api/webhooks/payments/stripe`, `/api/webhooks/moderation/media-analysis`)**: A third policy, `webhook-strict`, 200 requests per minute per client IP.
 
 ---
@@ -850,7 +850,7 @@ To safeguard against distributed denial-of-service (DDoS) and brute-force creden
 | **System Architecture** | Modular Monolith (6 Bounded Contexts) | Distributed Microservices; Monolithic Spaghetti | Eliminates distributed transaction failures and network hops while guaranteeing strict boundary isolation via assembly-reference architecture tests. | [`DEV_GUIDELINES.md`](../DEV_GUIDELINES.md)<br/>[`improvement.md`](../improvement.md) |
 | **Outbox Claiming** | PostgreSQL Native `FOR UPDATE SKIP LOCKED` | Debezium CDC + Kafka; RabbitMQ | Zero extra infrastructure; guarantees zero multi-worker race conditions. Revisit for Debezium when throughput exceeds 5,000 events/sec. | [`outbox-architecture.md`](outbox-architecture.md)<br/>[`OutboxClaimQuery.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxClaimQuery.cs) |
 | **Financial Concurrency** | `pg_advisory_xact_lock` + `xmin` + Unique Ledger | Pessimistic Table Locks; Optimistic Locking alone | Advisory locks serialize read-modify-write loops to prevent TOCTOU races; `xmin` catches out-of-band updates; ledger blocks duplicate replays. | [`CampaignTransactionExecutor.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Transactions/CampaignTransactionExecutor.cs)<br/>[`AdvisoryLockKey.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Domain/Common/AdvisoryLockKey.cs) |
-| **Integration Testing** | `Testcontainers.PostgreSql` | EF Core InMemory; SQLite In-Memory | Real PostgreSQL semantics required to execute and test `xmin`, `SKIP LOCKED`, advisory locks, and raw SQL CTE queries. | [`CampaignsPostgresFixture.cs`](../tests/IntegrationTests/CrowdFunding.IntegrationTests/CampaignsPostgresFixture.cs)<br/>[`CampaignContributionConcurrencyTests.cs`](../tests/IntegrationTests/CrowdFunding.IntegrationTests/CampaignContributionConcurrencyTests.cs) |
+| **Integration Testing** | `Testcontainers.PostgreSql` | EF Core InMemory; SQLite In-Memory | Real PostgreSQL semantics required to execute and test `xmin`, `SKIP LOCKED`, advisory locks, and raw SQL CTE queries. | [`CampaignsPostgresFixture.cs`](../tests/IntegrationTests/CrowdFunding.IntegrationTests/CampaignsPostgresFixture.cs)<br/>[`CampaignPledgeConcurrencyTests.cs`](../tests/IntegrationTests/CrowdFunding.IntegrationTests/CampaignPledgeConcurrencyTests.cs) |
 | **Token Cryptography** | Asymmetric ES256 ECDSA + JWKS | Symmetric HMAC-SHA256 (`HS256`); RSA 2048 | Enables edge verifiers and gateways to authenticate tokens using public JWKS without possessing the master signing secret. | [`JwksEndpoint.cs`](../src/API/CrowdFunding.API/Security/JwksEndpoint.cs)<br/>[`EfSigningKeyStore.cs`](../src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Services/EfSigningKeyStore.cs) |
 | **Object Mapping** | Mapster | AutoMapper; Manual Hand-Written Extensions | Direct IL generation delivers 3x–4x faster performance with minimal allocations compared to AutoMapper, eliminating manual boilerplate. | [`CampaignsMappingConfig.cs`](../src/API/CrowdFunding.API/Mapping/CampaignsMappingConfig.cs) |
 | **Validation Pipeline** | FluentValidation | DataAnnotations; Domain Invariants Only | Keeps DTOs clean; handles complex cross-property validation rules; fails fast with RFC 9457 errors before database transactions open. | [`CreateCampaignCommandValidator.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Application/Features/Campaigns/Commands/CreateCampaign/CreateCampaignCommandValidator.cs) |

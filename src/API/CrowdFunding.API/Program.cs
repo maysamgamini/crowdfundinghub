@@ -19,9 +19,9 @@ using CrowdFunding.Modules.Campaigns.Application.Abstractions.Services;
 using CrowdFunding.Modules.Campaigns.Application.DependencyInjection;
 using CrowdFunding.Modules.Campaigns.Infrastructure.DependencyInjection;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.DbContexts;
-using CrowdFunding.Modules.Contributions.Application.DependencyInjection;
-using CrowdFunding.Modules.Contributions.Infrastructure.DependencyInjection;
-using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.DbContexts;
+using CrowdFunding.Modules.Pledges.Application.DependencyInjection;
+using CrowdFunding.Modules.Pledges.Infrastructure.DependencyInjection;
+using CrowdFunding.Modules.Pledges.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Services;
 using CrowdFunding.Modules.Identity.Application.DependencyInjection;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
@@ -35,7 +35,7 @@ using CrowdFunding.Modules.Notifications.Infrastructure.DependencyInjection;
 using CrowdFunding.Modules.Notifications.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Samples.RosettaStone;
 using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignCreated;
-using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPaymentConfirmed;
+using CrowdFunding.Modules.Pledges.Contracts.Events.PledgePaymentConfirmed;
 using CrowdFunding.Modules.Moderation.Contracts.Events.CampaignReviewApproved;
 using Mapster;
 using MapsterMapper;
@@ -69,7 +69,7 @@ builder.Services.Configure<CloudFunctionWebhookOptions>(
 
 builder.Services.AddHealthChecks()
     .AddCheck<DbContextHealthCheck<CampaignsDbContext>>("campaigns-db", tags: ["ready"])
-    .AddCheck<DbContextHealthCheck<ContributionsDbContext>>("contributions-db", tags: ["ready"])
+    .AddCheck<DbContextHealthCheck<PledgesDbContext>>("pledges-db", tags: ["ready"])
     .AddCheck<DbContextHealthCheck<IdentityDbContext>>("identity-db", tags: ["ready"])
     .AddCheck<DbContextHealthCheck<ModerationDbContext>>("moderation-db", tags: ["ready"])
     .AddCheck<DbContextHealthCheck<NotificationsDbContext>>("notifications-db", tags: ["ready"])
@@ -112,7 +112,7 @@ builder.Services.AddAuditInfrastructure(builder.Configuration);
 builder.Services.AddRequestHandlersFromAssemblies(
     typeof(IdentityApplicationDependencyInjection).Assembly,
     typeof(CampaignsApplicationDependencyInjection).Assembly,
-    typeof(ContributionsApplicationDependencyInjection).Assembly,
+    typeof(PledgesApplicationDependencyInjection).Assembly,
     typeof(ModerationApplicationDependencyInjection).Assembly,
     typeof(NotificationsApplicationDependencyInjection).Assembly,
     // Notifications preferences are a Tier 2 feature: their handlers live in Infrastructure.
@@ -121,13 +121,13 @@ builder.Services.AddRequestHandlersFromAssemblies(
 
 builder.Services.AddEventTypeRegistry(
     typeof(CampaignCreatedApplicationEvent).Assembly,
-    typeof(ContributionPaymentConfirmedApplicationEvent).Assembly,
+    typeof(PledgePaymentConfirmedApplicationEvent).Assembly,
     typeof(CampaignReviewApprovedApplicationEvent).Assembly);
 
 builder.Services.AddEventHandlersFromAssemblies(
     typeof(IdentityApplicationDependencyInjection).Assembly,
     typeof(CampaignsApplicationDependencyInjection).Assembly,
-    typeof(ContributionsApplicationDependencyInjection).Assembly,
+    typeof(PledgesApplicationDependencyInjection).Assembly,
     typeof(ModerationApplicationDependencyInjection).Assembly,
     typeof(NotificationsApplicationDependencyInjection).Assembly,
     typeof(CampaignUpdatesApplicationDependencyInjection).Assembly);
@@ -206,8 +206,8 @@ builder.Services.AddIdentityInfrastructure(builder.Configuration);
 builder.Services.AddCampaignsApplication();
 builder.Services.AddCampaignsInfrastructure(builder.Configuration);
 
-builder.Services.AddContributionsApplication();
-builder.Services.AddContributionsInfrastructure(builder.Configuration);
+builder.Services.AddPledgesApplication();
+builder.Services.AddPledgesInfrastructure(builder.Configuration);
 
 builder.Services.AddModerationApplication();
 builder.Services.AddModerationInfrastructure(builder.Configuration);
@@ -221,7 +221,7 @@ builder.Services.AddRosettaStoneSample(builder.Configuration);
 
 var typeAdapterConfig = new TypeAdapterConfig();
 CampaignsMappingConfig.Register(typeAdapterConfig);
-ContributionsMappingConfig.Register(typeAdapterConfig);
+PledgesMappingConfig.Register(typeAdapterConfig);
 IdentityMappingConfig.Register(typeAdapterConfig);
 ModerationMappingConfig.Register(typeAdapterConfig);
 CampaignUpdatesMappingConfig.Register(typeAdapterConfig);

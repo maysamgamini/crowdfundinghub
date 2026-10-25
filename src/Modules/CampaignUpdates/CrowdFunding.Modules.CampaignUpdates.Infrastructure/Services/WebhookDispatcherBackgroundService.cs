@@ -83,7 +83,7 @@ public sealed class WebhookDispatcherBackgroundService : BackgroundService
                 httpClient.Timeout = TimeSpan.FromSeconds(5);
 
                 // Signed over the exact bytes sent — the payload built at enqueue time
-                // (ContributionPaymentConfirmedActivityHandler etc.), sent verbatim as the
+                // (PledgePaymentConfirmedActivityHandler etc.), sent verbatim as the
                 // request body, never re-serialized here (a different JSON encoding of the same
                 // logical object would still be signed correctly by the receiver, but would not
                 // match this signature, which is computed over one specific byte sequence).

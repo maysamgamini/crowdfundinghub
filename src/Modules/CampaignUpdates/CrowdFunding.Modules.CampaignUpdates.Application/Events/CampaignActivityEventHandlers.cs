@@ -5,7 +5,7 @@ using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignPublished;
 using CrowdFunding.Modules.CampaignUpdates.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.CampaignUpdates.Application.Abstractions.Services;
 using CrowdFunding.Modules.CampaignUpdates.Domain.Aggregates;
-using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPaymentConfirmed;
+using CrowdFunding.Modules.Pledges.Contracts.Events.PledgePaymentConfirmed;
 using CrowdFunding.Modules.Moderation.Contracts.Events.CampaignReviewApproved;
 using CrowdFunding.Modules.Moderation.Contracts.Events.CampaignReviewRejected;
 using CrowdFunding.BuildingBlocks.Application.Events;
@@ -53,10 +53,10 @@ public sealed class CampaignCancelledActivityHandler : IEventHandler<CampaignCan
 /// <summary>
 /// Fans a confirmed pledge out into one durable <see cref="WebhookDeliveryTask"/> per active
 /// webhook subscription on the campaign — never an in-memory/synchronous HTTP call from inside
-/// this handler, which already runs inside Contributions' own outbox worker and must not become
+/// this handler, which already runs inside Pledges' own outbox worker and must not become
 /// slow or unreliable because a creator's CRM endpoint is. See TICKET-035.
 /// </summary>
-public sealed class ContributionPaymentConfirmedActivityHandler : IEventHandler<ContributionPaymentConfirmedApplicationEvent>
+public sealed class PledgePaymentConfirmedActivityHandler : IEventHandler<PledgePaymentConfirmedApplicationEvent>
 {
     private const string PledgeConfirmedEventType = "pledge.confirmed";
 
@@ -64,7 +64,7 @@ public sealed class ContributionPaymentConfirmedActivityHandler : IEventHandler<
     private readonly IWebhookDeliveryTaskRepository _deliveryTaskRepository;
     private readonly ICampaignUpdatesDateTimeProvider _dateTimeProvider;
 
-    public ContributionPaymentConfirmedActivityHandler(
+    public PledgePaymentConfirmedActivityHandler(
         IWebhookSubscriptionRepository subscriptionRepository,
         IWebhookDeliveryTaskRepository deliveryTaskRepository,
         ICampaignUpdatesDateTimeProvider dateTimeProvider)
@@ -75,7 +75,7 @@ public sealed class ContributionPaymentConfirmedActivityHandler : IEventHandler<
     }
 
     /// <inheritdoc/>
-    public async Task Handle(ContributionPaymentConfirmedApplicationEvent notification, CancellationToken cancellationToken)
+    public async Task Handle(PledgePaymentConfirmedApplicationEvent notification, CancellationToken cancellationToken)
     {
         var subscriptions = await _subscriptionRepository.GetActiveByCampaignIdAsync(notification.CampaignId, cancellationToken);
         if (subscriptions.Count == 0)
@@ -86,7 +86,7 @@ public sealed class ContributionPaymentConfirmedActivityHandler : IEventHandler<
         var payload = JsonSerializer.Serialize(new
         {
             eventType = PledgeConfirmedEventType,
-            contributionId = notification.ContributionId,
+            pledgeId = notification.PledgeId,
             campaignId = notification.CampaignId,
             amount = notification.Amount,
             currency = notification.Currency,

@@ -26,13 +26,13 @@ the module boundary is.
 
 ## What the code says today
 
-Only three aggregates raise events: `Campaign`, `Contribution` and `CampaignReview`. Six
-entities carry an `xmin` token: `Campaign`, `Contribution`, `RefreshToken`, `WebhookSubscription`, `RewardTier` and `RewardTierReservation`.
+Only three aggregates raise events: `Campaign`, `Pledge` and `CampaignReview`. Six
+entities carry an `xmin` token: `Campaign`, `Pledge`, `RefreshToken`, `WebhookSubscription`, `RewardTier` and `RewardTierReservation`.
 
 | Module | Write features | Today | Proposed tier |
 |---|---|---|---|
-| Contributions | MakeContribution, ConfirmContributionPayment, FailContributionPayment, ReconcilePaymentWebhook | Tier 3 | Stay 3 (money, `xmin`, unique-key webhook guard, events) |
-| Campaigns | AddContributionToCampaign, ReserveRewardTierSlot, ReleaseExpiredRewardTierReservation, Publish, Cancel, Complete, Fail, CreateCampaign | Tier 3 | Stay 3 (advisory lock, `xmin`, ledger, events) |
+| Pledges | MakePledge, ConfirmPledgePayment, FailPledgePayment, ReconcilePaymentWebhook | Tier 3 | Stay 3 (money, `xmin`, unique-key webhook guard, events) |
+| Campaigns | AddPledgeToCampaign, ReserveRewardTierSlot, ReleaseExpiredRewardTierReservation, Publish, Cancel, Complete, Fail, CreateCampaign | Tier 3 | Stay 3 (advisory lock, `xmin`, ledger, events) |
 | Campaigns | CreateRewardTier | Tier 3 | Candidate for Tier 2: confirm it raises no event and needs no lock |
 | Moderation | CreateCampaignReview, Approve, Reject | Tier 3 | Stay 3 (`CampaignReview` raises events) |
 | Moderation | RecordMediaAnalysis | Tier 3 | Candidate for Tier 2: check whether it raises an event |

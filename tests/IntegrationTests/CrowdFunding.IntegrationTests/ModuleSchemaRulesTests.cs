@@ -1,6 +1,6 @@
 using CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.CampaignUpdates.Infrastructure.Persistence.DbContexts;
-using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.DbContexts;
+using CrowdFunding.Modules.Pledges.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.Identity.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.Moderation.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.Notifications.Infrastructure.Persistence.DbContexts;
@@ -18,7 +18,7 @@ namespace CrowdFunding.IntegrationTests;
 public sealed class ModuleSchemaRulesTests : IAsyncLifetime
 {
     private static readonly string[] ModuleSchemas =
-        ["campaigns", "contributions", "identity", "moderation", "notifications", "campaignupdates"];
+        ["campaigns", "pledges", "identity", "moderation", "notifications", "campaignupdates"];
 
     private readonly PostgreSqlContainer _container = new PostgreSqlBuilder()
         .WithImage("postgres:16-alpine")
@@ -33,7 +33,7 @@ public sealed class ModuleSchemaRulesTests : IAsyncLifetime
         var cs = _container.GetConnectionString();
 
         await Migrate(new CampaignsDbContext(Options<CampaignsDbContext>(cs, "campaigns")));
-        await Migrate(new ContributionsDbContext(Options<ContributionsDbContext>(cs, "contributions")));
+        await Migrate(new PledgesDbContext(Options<PledgesDbContext>(cs, "pledges")));
         await Migrate(new IdentityDbContext(Options<IdentityDbContext>(cs, "identity")));
         await Migrate(new ModerationDbContext(Options<ModerationDbContext>(cs, "moderation")));
         await Migrate(new NotificationsDbContext(Options<NotificationsDbContext>(cs, "notifications")));

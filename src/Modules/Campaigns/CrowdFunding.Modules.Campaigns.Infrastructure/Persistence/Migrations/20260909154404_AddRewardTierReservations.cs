@@ -22,7 +22,7 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Migrations
                     Status = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
                     CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     ExpiresAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    ContributionId = table.Column<Guid>(type: "uuid", nullable: true),
+                    PledgeId = table.Column<Guid>(type: "uuid", nullable: true),
                     // NOTE: `xmin` is a reserved PostgreSQL system column that already exists on
                     // every table — it cannot be added via CREATE TABLE (Postgres rejects the
                     // reserved name: "column name \"xmin\" conflicts with a system column name").

@@ -1,5 +1,5 @@
 using System.Net.Http.Json;
-using CrowdFunding.API.Contracts.Contributions;
+using CrowdFunding.API.Contracts.Pledges;
 using CrowdFunding.API.Contracts.Campaigns;
 using CrowdFunding.API.Migrations;
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
@@ -21,7 +21,7 @@ namespace CrowdFunding.IntegrationTests;
 /// executor (Create + Publish called back-to-back on explicit, fabricated timestamps) rather than
 /// through the full HTTP create/moderate/publish flow, so the only real-time wait needed is the
 /// few seconds between placing a pledge and the deadline actually elapsing —
-/// <c>CampaignExpirationBackgroundService</c> and <c>MakeContributionCommandHandler</c>'s deadline
+/// <c>CampaignExpirationBackgroundService</c> and <c>MakePledgeCommandHandler</c>'s deadline
 /// guard both compare against the real system clock (<c>SystemDateTimeProvider</c>), so a pledge
 /// has to land before the deadline and expiration has to run after it.
 /// </summary>
@@ -60,17 +60,17 @@ public sealed class CampaignExpirationE2ETests
             await transactionExecutor.ExecuteAsync(ct => repository.AddAsync(campaign, ct), CancellationToken.None);
         }
 
-        // Replicates the campaign (Created + Published) into Contributions' active_campaigns_cache.
+        // Replicates the campaign (Created + Published) into Pledges' active_campaigns_cache.
         await _factory.ProcessOutboxMessagesAsync();
 
         using var client = _factory.CreateClient();
         var (_, backerToken) = await client.RegisterAndLoginAsync(ApiTestExtensions.UniqueEmail("expiration-backer"), "Expiration Backer");
         client.SetBearerToken(backerToken);
 
-        var contributeResponse = await client.PostAsJsonAsync(
-            $"/api/campaigns/{campaignId}/contributions", new MakeContributionRequest(50m, "USD"));
-        contributeResponse.EnsureSuccessStatusCode();
-        var contribution = await contributeResponse.Content.ReadFromJsonAsync<MakeContributionResponse>();
+        var makeResponse = await client.PostAsJsonAsync(
+            $"/api/campaigns/{campaignId}/pledges", new MakePledgeRequest(50m, "USD"));
+        Assert.True(makeResponse.IsSuccessStatusCode, await makeResponse.Content.ReadAsStringAsync());
+        var pledge = await makeResponse.Content.ReadFromJsonAsync<MakePledgeResponse>();
 
         var adminEmail = ApiTestExtensions.UniqueEmail("expiration-admin");
         await AdminSeeder.RunAsync(_factory.Services, adminEmail, ApiTestExtensions.DefaultPassword, "Expiration Admin");
@@ -78,8 +78,8 @@ public sealed class CampaignExpirationE2ETests
         client.SetBearerToken(adminToken);
 
         var confirmResponse = await client.PostAsJsonAsync(
-            $"/api/campaigns/{campaignId}/contributions/{contribution!.ContributionId}/confirm-payment",
-            new ConfirmContributionPaymentRequest("test-payment-ref"));
+            $"/api/campaigns/{campaignId}/pledges/{pledge!.PledgeId}/confirm-payment",
+            new ConfirmPledgePaymentRequest("test-payment-ref"));
         confirmResponse.EnsureSuccessStatusCode();
         await _factory.ProcessOutboxMessagesAsync();
 
@@ -109,9 +109,9 @@ public sealed class CampaignExpirationE2ETests
         var campaignAfter = await campaignResponse.Content.ReadFromJsonAsync<GetCampaignByIdResponse>();
         Assert.Equal("Failed", campaignAfter!.Status);
 
-        var contributionResponse = await client.GetAsync($"/api/campaigns/{campaignId}/contributions/{contribution.ContributionId}");
-        contributionResponse.EnsureSuccessStatusCode();
-        var contributionDetail = await contributionResponse.Content.ReadFromJsonAsync<GetContributionByIdResponse>();
-        Assert.Equal("Refunded", contributionDetail!.Status);
+        var pledgeResponse = await client.GetAsync($"/api/campaigns/{campaignId}/pledges/{pledge.PledgeId}");
+        pledgeResponse.EnsureSuccessStatusCode();
+        var pledgeDetail = await pledgeResponse.Content.ReadFromJsonAsync<GetPledgeByIdResponse>();
+        Assert.Equal("Refunded", pledgeDetail!.Status);
     }
 }

@@ -74,7 +74,7 @@ public sealed class CampaignConfiguration : IEntityTypeConfiguration<Campaign>
         });
 
         // PostgreSQL system column used as an optimistic concurrency token. Prevents lost
-        // updates when two concurrent confirmed contributions race to update RaisedAmount:
+        // updates when two concurrent confirmed pledges race to update RaisedAmount:
         // EF issues WHERE id = @p0 AND xmin = @p1, and a stale write throws
         // DbUpdateConcurrencyException instead of silently overwriting the other update.
         builder.Property<uint>("xmin")

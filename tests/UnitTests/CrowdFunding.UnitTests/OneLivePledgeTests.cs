@@ -1,8 +1,8 @@
 using CrowdFunding.BuildingBlocks.Application.Exceptions;
-using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
-using CrowdFunding.Modules.Contributions.Application.Abstractions.Transactions;
-using CrowdFunding.Modules.Contributions.Application.Features.Contributions.Commands.MakeContribution;
-using CrowdFunding.Modules.Contributions.Domain.Aggregates;
+using CrowdFunding.Modules.Pledges.Application.Abstractions.Persistence;
+using CrowdFunding.Modules.Pledges.Application.Abstractions.Transactions;
+using CrowdFunding.Modules.Pledges.Application.Features.Pledges.Commands.MakePledge;
+using CrowdFunding.Modules.Pledges.Domain.Aggregates;
 using CrowdFunding.Modules.Identity.Contracts.Authorization;
 
 namespace CrowdFunding.UnitTests;
@@ -16,28 +16,28 @@ public sealed class OneLivePledgeTests
 {
     private static readonly DateTime Now = new(2026, 4, 6, 12, 0, 0, DateTimeKind.Utc);
 
-    private static MakeContributionCommandHandler HandlerFor(TestCurrentUser user, FakeContributionRepository repository, IContributionTransactionExecutor? executor = null)
+    private static MakePledgeCommandHandler HandlerFor(TestCurrentUser user, FakePledgeRepository repository, IPledgeTransactionExecutor? executor = null)
         => new(
             new FakeActiveCampaignCacheRepository(exists: true, isActive: true),
             user,
-            new FakeContributionDateTimeProvider(Now),
+            new FakePledgeDateTimeProvider(Now),
             repository,
-            executor ?? new FakeContributionTransactionExecutor(),
-            new CrowdFunding.Modules.Contributions.Infrastructure.Payments.FakePaymentProvider(),
+            executor ?? new FakePledgeTransactionExecutor(),
+            new CrowdFunding.Modules.Pledges.Infrastructure.Payments.FakePaymentProvider(),
             new FakePaymentSettings());
 
-    private static TestCurrentUser Backer() => new() { UserId = Guid.NewGuid(), Permissions = [PermissionConstants.CampaignsContribute] };
+    private static TestCurrentUser Backer() => new() { UserId = Guid.NewGuid(), Permissions = [PermissionConstants.CampaignsPledge] };
 
     [Fact]
     public async Task ASecondPledgeOnTheSameCampaign_WithADifferentKey_IsRefused()
     {
         var campaignId = Guid.NewGuid();
         var user = Backer();
-        var live = Contribution.Create(campaignId, user.UserId, 100m, "USD", Now, idempotencyKey: "first");
+        var live = Pledge.Create(campaignId, user.UserId, 100m, "USD", Now, idempotencyKey: "first");
 
         var exception = await Assert.ThrowsAsync<ResourceConflictException>(() =>
-            HandlerFor(user, new FakeContributionRepository(live))
-                .Handle(new MakeContributionCommand(campaignId, 100m, "USD", IdempotencyKey: "second"), CancellationToken.None));
+            HandlerFor(user, new FakePledgeRepository(live))
+                .Handle(new MakePledgeCommand(campaignId, 100m, "USD", IdempotencyKey: "second"), CancellationToken.None));
 
         Assert.Contains("already have a pledge", exception.Message);
     }
@@ -47,12 +47,12 @@ public sealed class OneLivePledgeTests
     {
         var campaignId = Guid.NewGuid();
         var user = Backer();
-        var live = Contribution.Create(campaignId, user.UserId, 100m, "USD", Now);
+        var live = Pledge.Create(campaignId, user.UserId, 100m, "USD", Now);
         live.ConfirmPayment("ref", Now);
 
         await Assert.ThrowsAsync<ResourceConflictException>(() =>
-            HandlerFor(user, new FakeContributionRepository(live))
-                .Handle(new MakeContributionCommand(campaignId, 50m, "USD"), CancellationToken.None));
+            HandlerFor(user, new FakePledgeRepository(live))
+                .Handle(new MakePledgeCommand(campaignId, 50m, "USD"), CancellationToken.None));
     }
 
     [Fact]
@@ -60,24 +60,24 @@ public sealed class OneLivePledgeTests
     {
         var campaignId = Guid.NewGuid();
         var user = Backer();
-        var failed = Contribution.Create(campaignId, user.UserId, 100m, "USD", Now);
+        var failed = Pledge.Create(campaignId, user.UserId, 100m, "USD", Now);
         failed.FailPayment("card declined", Now);
 
-        var result = await HandlerFor(user, new FakeContributionRepository(failed))
-            .Handle(new MakeContributionCommand(campaignId, 100m, "USD"), CancellationToken.None);
+        var result = await HandlerFor(user, new FakePledgeRepository(failed))
+            .Handle(new MakePledgeCommand(campaignId, 100m, "USD"), CancellationToken.None);
 
         Assert.False(result.IsReplay);
-        Assert.NotEqual(failed.Id, result.ContributionId);
+        Assert.NotEqual(failed.Id, result.PledgeId);
     }
 
     [Fact]
     public async Task ABackersPledgeOnAnotherCampaign_DoesNotBlockThisOne()
     {
         var user = Backer();
-        var elsewhere = Contribution.Create(Guid.NewGuid(), user.UserId, 100m, "USD", Now);
+        var elsewhere = Pledge.Create(Guid.NewGuid(), user.UserId, 100m, "USD", Now);
 
-        var result = await HandlerFor(user, new FakeContributionRepository(elsewhere))
-            .Handle(new MakeContributionCommand(Guid.NewGuid(), 100m, "USD"), CancellationToken.None);
+        var result = await HandlerFor(user, new FakePledgeRepository(elsewhere))
+            .Handle(new MakePledgeCommand(Guid.NewGuid(), 100m, "USD"), CancellationToken.None);
 
         Assert.False(result.IsReplay);
     }
@@ -86,10 +86,10 @@ public sealed class OneLivePledgeTests
     public async Task AnotherBackersPledge_DoesNotBlockThisBacker()
     {
         var campaignId = Guid.NewGuid();
-        var someoneElses = Contribution.Create(campaignId, Guid.NewGuid(), 100m, "USD", Now);
+        var someoneElses = Pledge.Create(campaignId, Guid.NewGuid(), 100m, "USD", Now);
 
-        var result = await HandlerFor(Backer(), new FakeContributionRepository(someoneElses))
-            .Handle(new MakeContributionCommand(campaignId, 100m, "USD"), CancellationToken.None);
+        var result = await HandlerFor(Backer(), new FakePledgeRepository(someoneElses))
+            .Handle(new MakePledgeCommand(campaignId, 100m, "USD"), CancellationToken.None);
 
         Assert.False(result.IsReplay);
     }
@@ -99,16 +99,16 @@ public sealed class OneLivePledgeTests
     {
         var campaignId = Guid.NewGuid();
         var user = Backer();
-        var first = Contribution.Create(campaignId, user.UserId, 100m, "USD", Now, idempotencyKey: "same");
+        var first = Pledge.Create(campaignId, user.UserId, 100m, "USD", Now, idempotencyKey: "same");
 
-        var result = await HandlerFor(user, new FakeContributionRepository(first))
-            .Handle(new MakeContributionCommand(campaignId, 100m, "USD", IdempotencyKey: "same"), CancellationToken.None);
+        var result = await HandlerFor(user, new FakePledgeRepository(first))
+            .Handle(new MakePledgeCommand(campaignId, 100m, "USD", IdempotencyKey: "same"), CancellationToken.None);
 
         Assert.True(result.IsReplay);
-        Assert.Equal(first.Id, result.ContributionId);
+        Assert.Equal(first.Id, result.PledgeId);
     }
 
-    private sealed class LosingTheRaceExecutor : IContributionTransactionExecutor
+    private sealed class LosingTheRaceExecutor : IPledgeTransactionExecutor
     {
         public Task<T> ExecuteAsync<T>(Func<CancellationToken, Task<T>> action, CancellationToken cancellationToken)
             => throw new AlreadyBackingException(new InvalidOperationException("unique violation"));
@@ -121,23 +121,23 @@ public sealed class OneLivePledgeTests
     public async Task LosingTheInsertRace_IsReportedAsTheSameConflict()
     {
         await Assert.ThrowsAsync<ResourceConflictException>(() =>
-            HandlerFor(Backer(), new FakeContributionRepository(), new LosingTheRaceExecutor())
-                .Handle(new MakeContributionCommand(Guid.NewGuid(), 100m, "USD"), CancellationToken.None));
+            HandlerFor(Backer(), new FakePledgeRepository(), new LosingTheRaceExecutor())
+                .Handle(new MakePledgeCommand(Guid.NewGuid(), 100m, "USD"), CancellationToken.None));
     }
 
     /// <summary>The key lookup finds nothing (the other request has not committed yet), then the live-pledge lookup finds the winner.</summary>
-    private sealed class WinnerAppearsLateRepository(Contribution winner) : IContributionRepository
+    private sealed class WinnerAppearsLateRepository(Pledge winner) : IPledgeRepository
     {
         public Task AddActivationAsync(PledgeActivation activation, CancellationToken cancellationToken) => Task.CompletedTask;
 
-        public Task AddAsync(Contribution contribution, CancellationToken cancellationToken) => Task.CompletedTask;
-        public Task<Contribution?> GetByIdAsync(Guid contributionId, CancellationToken cancellationToken) => Task.FromResult<Contribution?>(null);
-        public Task<Contribution?> GetByExternalPaymentIntentIdAsync(string externalPaymentIntentId, CancellationToken cancellationToken) => Task.FromResult<Contribution?>(null);
-        public Task<Contribution?> GetByIdempotencyKeyAsync(Guid contributorId, string idempotencyKey, CancellationToken cancellationToken) => Task.FromResult<Contribution?>(null);
-        public Task<Contribution?> GetLivePledgeAsync(Guid campaignId, Guid contributorId, CancellationToken cancellationToken) => Task.FromResult<Contribution?>(winner);
-        public Task UpdateAsync(Contribution contribution, CancellationToken cancellationToken) => Task.CompletedTask;
-        public Task<IReadOnlyList<Contribution>> GetSucceededByCampaignIdAsync(Guid campaignId, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<Contribution>>([]);
-        public Task<IReadOnlyList<Contribution>> GetSucceededBatchByCampaignIdAsync(Guid campaignId, int batchSize, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<Contribution>>([]);
+        public Task AddAsync(Pledge pledge, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<Pledge?> GetByIdAsync(Guid pledgeId, CancellationToken cancellationToken) => Task.FromResult<Pledge?>(null);
+        public Task<Pledge?> GetByExternalPaymentIntentIdAsync(string externalPaymentIntentId, CancellationToken cancellationToken) => Task.FromResult<Pledge?>(null);
+        public Task<Pledge?> GetByIdempotencyKeyAsync(Guid backerId, string idempotencyKey, CancellationToken cancellationToken) => Task.FromResult<Pledge?>(null);
+        public Task<Pledge?> GetLivePledgeAsync(Guid campaignId, Guid backerId, CancellationToken cancellationToken) => Task.FromResult<Pledge?>(winner);
+        public Task UpdateAsync(Pledge pledge, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<IReadOnlyList<Pledge>> GetSucceededByCampaignIdAsync(Guid campaignId, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<Pledge>>([]);
+        public Task<IReadOnlyList<Pledge>> GetSucceededBatchByCampaignIdAsync(Guid campaignId, int batchSize, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<Pledge>>([]);
     }
 
     [Fact]
@@ -145,15 +145,15 @@ public sealed class OneLivePledgeTests
     {
         var campaignId = Guid.NewGuid();
         var user = Backer();
-        var winner = Contribution.Create(campaignId, user.UserId, 100m, "USD", Now, idempotencyKey: "same");
-        var handler = new MakeContributionCommandHandler(
-            new FakeActiveCampaignCacheRepository(exists: true, isActive: true), user, new FakeContributionDateTimeProvider(Now),
-            new WinnerAppearsLateRepository(winner), new FakeContributionTransactionExecutor(), new CrowdFunding.Modules.Contributions.Infrastructure.Payments.FakePaymentProvider(), new FakePaymentSettings());
+        var winner = Pledge.Create(campaignId, user.UserId, 100m, "USD", Now, idempotencyKey: "same");
+        var handler = new MakePledgeCommandHandler(
+            new FakeActiveCampaignCacheRepository(exists: true, isActive: true), user, new FakePledgeDateTimeProvider(Now),
+            new WinnerAppearsLateRepository(winner), new FakePledgeTransactionExecutor(), new CrowdFunding.Modules.Pledges.Infrastructure.Payments.FakePaymentProvider(), new FakePaymentSettings());
 
-        var result = await handler.Handle(new MakeContributionCommand(campaignId, 100m, "USD", IdempotencyKey: "same"), CancellationToken.None);
+        var result = await handler.Handle(new MakePledgeCommand(campaignId, 100m, "USD", IdempotencyKey: "same"), CancellationToken.None);
 
         Assert.True(result.IsReplay);
-        Assert.Equal(winner.Id, result.ContributionId);
+        Assert.Equal(winner.Id, result.PledgeId);
     }
 
     [Fact]
@@ -161,12 +161,12 @@ public sealed class OneLivePledgeTests
     {
         var campaignId = Guid.NewGuid();
         var user = Backer();
-        var winner = Contribution.Create(campaignId, user.UserId, 100m, "USD", Now, idempotencyKey: "first");
-        var handler = new MakeContributionCommandHandler(
-            new FakeActiveCampaignCacheRepository(exists: true, isActive: true), user, new FakeContributionDateTimeProvider(Now),
-            new WinnerAppearsLateRepository(winner), new FakeContributionTransactionExecutor(), new CrowdFunding.Modules.Contributions.Infrastructure.Payments.FakePaymentProvider(), new FakePaymentSettings());
+        var winner = Pledge.Create(campaignId, user.UserId, 100m, "USD", Now, idempotencyKey: "first");
+        var handler = new MakePledgeCommandHandler(
+            new FakeActiveCampaignCacheRepository(exists: true, isActive: true), user, new FakePledgeDateTimeProvider(Now),
+            new WinnerAppearsLateRepository(winner), new FakePledgeTransactionExecutor(), new CrowdFunding.Modules.Pledges.Infrastructure.Payments.FakePaymentProvider(), new FakePaymentSettings());
 
         await Assert.ThrowsAsync<ResourceConflictException>(() =>
-            handler.Handle(new MakeContributionCommand(campaignId, 100m, "USD", IdempotencyKey: "second"), CancellationToken.None));
+            handler.Handle(new MakePledgeCommand(campaignId, 100m, "USD", IdempotencyKey: "second"), CancellationToken.None));
     }
 }

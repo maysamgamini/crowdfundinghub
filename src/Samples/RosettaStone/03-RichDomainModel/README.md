@@ -20,7 +20,7 @@ second, drifting source of truth. Read the real pipeline instead:
 
 That's 14 files. Several of them (the controller, the aggregate, the repository, the
 transaction executor) are *shared* across every Campaigns write use case — Publish, Cancel,
-AddContribution, etc. — so the marginal cost of one more command on top of an already-justified
+AddPledge, etc. — so the marginal cost of one more command on top of an already-justified
 Tier 3 module is smaller than the raw count suggests. It's the *first* command that pays for the
 aggregate, the outbox executor, and the transaction boundary; see the root `README.md`
 scorecard for the honest line-count breakdown of what's genuinely Create-specific versus
@@ -28,9 +28,9 @@ shared infrastructure this use case rides on for free.
 
 ## Why this tier earns its cost here, but wouldn't for a lookup table
 
-`Campaign` is the aggregate that will, in later commands (`AddContribution`, `Publish`,
+`Campaign` is the aggregate that will, in later commands (`AddPledge`, `Publish`,
 `Cancel`), enforce invariants that a flat `CampaignRecord` insert cannot: a campaign can't
-receive contributions once cancelled, funding totals can't be corrupted by concurrent writers
+receive pledges once cancelled, funding totals can't be corrupted by concurrent writers
 (`xmin` optimistic concurrency), and every state transition emits a domain event that other
 modules (Notifications, Moderation, CampaignUpdates) rely on being delivered at-least-once via
 the outbox — even across a process crash between the SQL commit and the message being

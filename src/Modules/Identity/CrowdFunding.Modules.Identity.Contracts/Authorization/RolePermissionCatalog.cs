@@ -22,7 +22,7 @@ public static class RolePermissionCatalog
                 PermissionConstants.CampaignsPublish,
                 PermissionConstants.CampaignsCancel
             ],
-            RoleConstants.Backer => [PermissionConstants.CampaignsContribute],
+            RoleConstants.Backer => [PermissionConstants.CampaignsPledge],
             _ => []
         };
     }

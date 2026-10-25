@@ -39,8 +39,8 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Migrations
                 newSchema: "campaigns");
 
             migrationBuilder.RenameTable(
-                name: "campaign_contributions_ledger",
-                newName: "campaign_contributions_ledger",
+                name: "campaign_pledges_ledger",
+                newName: "campaign_pledges_ledger",
                 newSchema: "campaigns");
         }
 
@@ -73,9 +73,9 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Migrations
                 newName: "campaigns");
 
             migrationBuilder.RenameTable(
-                name: "campaign_contributions_ledger",
+                name: "campaign_pledges_ledger",
                 schema: "campaigns",
-                newName: "campaign_contributions_ledger");
+                newName: "campaign_pledges_ledger");
         }
     }
 }

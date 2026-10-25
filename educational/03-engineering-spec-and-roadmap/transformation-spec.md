@@ -79,12 +79,12 @@ The transactional outbox poller is hardcoded to in-memory dispatching (`ServiceP
 ## 4. Epic 3: Asynchronous Replicated Read Models (Status: ✅ Completed via `TICKET-023`)
 
 ### Problem Statement:
-[`MakeContributionCommandHandler.cs`](../../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs) called a synchronous availability reader (`ICampaignContributionAvailabilityReader`, since removed), creating a distributed monolith failure cascade.
+[`MakePledgeCommandHandler.cs`](../../src/Modules/Pledges/CrowdFunding.Modules.Pledges.Application/Features/Pledges/Commands/MakePledge/MakePledgeCommandHandler.cs) called a synchronous availability reader (`ICampaignPledgeAvailabilityReader`, since removed), creating a distributed monolith failure cascade.
 
 ### Technical Specification:
-1. In `contributions` schema, create a new table:
+1. In `pledges` schema, create a new table:
    ```sql
-   CREATE TABLE contributions.active_campaigns_cache (
+   CREATE TABLE pledges.active_campaigns_cache (
        campaign_id UUID PRIMARY KEY,
        owner_id UUID NOT NULL,
        title VARCHAR(200) NOT NULL,
@@ -94,14 +94,14 @@ The transactional outbox poller is hardcoded to in-memory dispatching (`ServiceP
        updated_at_utc TIMESTAMP WITH TIME ZONE NOT NULL
    );
    ```
-2. In `Contributions.Application`, add event consumers for:
+2. In `Pledges.Application`, add event consumers for:
    - `CampaignPublishedApplicationEvent` $\rightarrow$ Inserts/updates `active_campaigns_cache`.
    - `CampaignCancelledApplicationEvent` $\rightarrow$ Marks `is_active = false`.
-3. In `MakeContributionCommandHandler`, query `active_campaigns_cache` locally in the `ContributionsDbContext`.
+3. In `MakePledgeCommandHandler`, query `active_campaigns_cache` locally in the `PledgesDbContext`.
 4. **Outcome:** Zero synchronous cross-module RPC calls during pledge processing!
 
 > [!NOTE]
-> Fully implemented in the `Contributions` module (`ReplicatedCampaignEventHandlers` keeps the table current). The synchronous query reader `ICampaignContributionAvailabilityReader` has been removed.
+> Fully implemented in the `Pledges` module (`ReplicatedCampaignEventHandlers` keeps the table current). The synchronous query reader `ICampaignPledgeAvailabilityReader` has been removed.
 
 ---
 
@@ -125,17 +125,17 @@ Campaigns never complete or fail, and backer pledges cannot be refunded, leaving
   - If `CurrentBalance >= GoalAmount`: Dispatches `CompleteCampaignCommand` $\rightarrow$ transitions to `Successful` $\rightarrow$ emits `CampaignSucceededApplicationEvent`.
   - If `CurrentBalance < GoalAmount`: Dispatches `FailCampaignCommand` $\rightarrow$ transitions to `Failed` $\rightarrow$ emits `CampaignFailedApplicationEvent`.
 
-#### 2. Refund Workflow in Contributions:
-- Add `Refunded` to `ContributionStatus` enum.
-- Add `ContributionRefundedDomainEvent`.
+#### 2. Refund Workflow in Pledges:
+- Add `Refunded` to `PledgeStatus` enum.
+- Add `PledgeRefundedDomainEvent`.
 - When `CampaignFailedApplicationEvent` or `CampaignCancelledApplicationEvent` arrives:
-  - Contributions module loads all `Succeeded` contributions for the campaign.
+  - Pledges module loads all `Succeeded` pledges for the campaign.
   - Iterates and executes refund commands.
-  - Updates contribution status to `Refunded`.
-  - Publishes `ContributionRefundedApplicationEvent`.
+  - Updates pledge status to `Refunded`.
+  - Publishes `PledgeRefundedApplicationEvent`.
 
 > [!NOTE]
-> Fully implemented with `CampaignExpirationBackgroundService`, `CampaignCompletedSuccessfulDomainEvent`, `CampaignExpiredFailedDomainEvent`, and `RefundContributionCommandHandler`.
+> Fully implemented with `CampaignExpirationBackgroundService`, `CampaignCompletedSuccessfulDomainEvent`, `CampaignExpiredFailedDomainEvent`, and `RefundPledgeCommandHandler`.
 >
 > Limits: the payment provider is a fake, so no real money moves, and there is no card saving or creator payout.
 

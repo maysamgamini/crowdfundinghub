@@ -29,7 +29,7 @@ Your mission is to:
 1. Ensure every module, layer, and feature folder has a clear, comprehensive, and up-to-date README.md:
    - src/API/CrowdFunding.API/ (and subfolders: Controllers, Middlewares, RateLimiting, Security, Migrations, RealTime, Background)
    - src/BuildingBlocks (Application, Domain, Infrastructure)
-   - src/Modules (Campaigns, Contributions, Identity, Moderation, Notifications, CampaignUpdates) across Application, Contracts, Domain, Infrastructure
+   - src/Modules (Campaigns, Pledges, Identity, Moderation, Notifications, CampaignUpdates) across Application, Contracts, Domain, Infrastructure
    - tests (UnitTests, ArchitectureTests, IntegrationTests)
 2. Add XML inline documentation comments (/// <summary>, <param>, <returns>, <exception>) to public/internal classes, interfaces, records, methods, and configurations across the entire codebase that lack them, strictly adhering to DEV_GUIDELINES.md.
 3. Ensure XML documentation generation (<GenerateDocumentationFile>true</GenerateDocumentationFile>) is enabled in project files where appropriate, suppressing warning 1591 if needed (<NoWarn>$(NoWarn);1591</NoWarn>) so builds stay warning-free.

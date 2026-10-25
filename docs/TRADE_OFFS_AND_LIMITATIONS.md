@@ -48,7 +48,7 @@ graph TB
         subgraph "In-Process Modules"
             Identity["Identity Module<br/>(Auth, Roles, Grants)"]
             Campaigns["Campaigns Module<br/>(Lifecycle, Ledger, Totals)"]
-            Contributions["Contributions Module<br/>(Pledges, Payment State)"]
+            Pledges["Pledges Module<br/>(Pledges, Payment State)"]
             Moderation["Moderation Module<br/>(Review, Approval)"]
             Notifications["Notifications Module<br/>(Event Consumers)"]
             CampaignUpdates["CampaignUpdates Module<br/>(Audit & Feeds)"]
@@ -64,8 +64,8 @@ graph TB
 
     subgraph "Storage & Caching Layer"
         subgraph "PostgreSQL 16 (database per module locally)"
-            SchemaCamp["campaigns Schema<br/>- campaigns (xmin)<br/>- contribution_ledger_entries<br/>- campaigns_outbox_messages<br/>- campaigns_dead_letter_events"]
-            SchemaCont["contributions Schema<br/>- contributions<br/>- active_campaigns_cache<br/>- contributions_outbox_messages"]
+            SchemaCamp["campaigns Schema<br/>- campaigns (xmin)<br/>- pledge_ledger_entries<br/>- campaigns_outbox_messages<br/>- campaigns_dead_letter_events"]
+            SchemaCont["pledges Schema<br/>- pledges<br/>- active_campaigns_cache<br/>- pledges_outbox_messages"]
             SchemaMod["moderation Schema<br/>- campaign_reviews<br/>- moderation_outbox_messages"]
             SchemaId["identity Schema<br/>- users, roles, permissions"]
         end
@@ -78,11 +78,11 @@ graph TB
     Client --> ALB --> Auth --> RateLimit --> CorrId --> Dispatchers
     Dispatchers --> Identity
     Dispatchers --> Campaigns
-    Dispatchers --> Contributions
+    Dispatchers --> Pledges
     Dispatchers --> Moderation
 
     Campaigns -- "pg_advisory_xact_lock" --> SchemaCamp
-    Contributions --> SchemaCont
+    Pledges --> SchemaCont
     Moderation --> SchemaMod
     Identity --> SchemaId
 
@@ -91,7 +91,7 @@ graph TB
     OutboxWorker --> SchemaMod
     OutboxWorker --> EventPub
     EventPub -. "In-process Event" .-> Campaigns
-    EventPub -. "Campaign events replicate state" .-> Contributions
+    EventPub -. "Campaign events replicate state" .-> Pledges
     EventPub -. "In-process Event" .-> Notifications
     EventPub -. "In-process Event" .-> CampaignUpdates
 
@@ -110,7 +110,7 @@ However, every architectural decision incurs a cost. The sections below analyze 
 
 ### 2.1 Modular Monolith vs. Distributed Microservices
 
-The CrowdFunding Hub architecture implements a **Modular Monolith** pattern: code is split into bounded modules (`Identity`, `Campaigns`, `Contributions`, `Moderation`, `Notifications`, `CampaignUpdates`), each maintaining internal domain models, application handlers, and infrastructure configurations, but running within a single unified host process.
+The CrowdFunding Hub architecture implements a **Modular Monolith** pattern: code is split into bounded modules (`Identity`, `Campaigns`, `Pledges`, `Moderation`, `Notifications`, `CampaignUpdates`), each maintaining internal domain models, application handlers, and infrastructure configurations, but running within a single unified host process.
 
 ```mermaid
 graph LR
@@ -118,7 +118,7 @@ graph LR
         direction TB
         API["Single ASP.NET Host"]
         M1["Campaigns"]
-        M2["Contributions"]
+        M2["Pledges"]
         M3["Identity"]
         API --> M1
         API --> M2
@@ -129,7 +129,7 @@ graph LR
     subgraph "Distributed Microservices (Alternative Architecture)"
         direction TB
         S1["Campaigns Service<br/>Pod / Container"]
-        S2["Contributions Service<br/>Pod / Container"]
+        S2["Pledges Service<br/>Pod / Container"]
         S3["Identity Service<br/>Pod / Container"]
         S2 -- "gRPC / HTTP Call<br/>(2 - 15 ms + Network Hops)" --> S1
         Mesh["Service Mesh / Envoy / Sidecar"]
@@ -141,8 +141,8 @@ graph LR
 | Architectural Dimension | Modular Monolith (CrowdFunding Hub) | Distributed Microservices |
 | :--- | :--- | :--- |
 | **Deployment Complexity** | **Very Low**: Single container image, single CI/CD pipeline, atomic zero-downtime rolling updates. | **High**: Multiple independently deployed artifacts, service meshes, canary releases, orchestration overhead. |
-| **Operational Blast Radius** | **High**: An unhandled OOM, CPU saturation, or fatal crash in one module takes down the entire API host. | **Low**: A failure in `CampaignUpdates` does not crash `Contributions` or `Identity`. |
-| **Scaling Flexibility** | **Coarse-Grained**: The entire monolithic process must be scaled out, even if only `Campaigns` queries are hot. | **Fine-Grained**: Hot services (e.g. contribution writes) can be scaled to 50 pods while moderation stays at 2 pods. |
+| **Operational Blast Radius** | **High**: An unhandled OOM, CPU saturation, or fatal crash in one module takes down the entire API host. | **Low**: A failure in `CampaignUpdates` does not crash `Pledges` or `Identity`. |
+| **Scaling Flexibility** | **Coarse-Grained**: The entire monolithic process must be scaled out, even if only `Campaigns` queries are hot. | **Fine-Grained**: Hot services (e.g. pledge writes) can be scaled to 50 pods while moderation stays at 2 pods. |
 | **Cross-Module Communication** | **Zero Latency**: Direct in-memory C# method calls via contracts and interfaces (`~50 nanoseconds`). | **Network Overhead**: Serialization (JSON/Protobuf), socket management, TLS handshakes, network latency (`2 - 20 ms`). |
 | **Transaction Integrity** | **ACID Capable**: Modules can participate in coordinated database transactions if critical; outbox ensures consistency. | **Eventual Consistency / Sagas**: Requires 2-Phase Commit (anti-pattern) or complex choreographed Sagas with compensations. |
 | **Polyglot & Team Autonomy** | **Constrained**: Single language (.NET 10 / C#), shared runtime, synchronized dependencies across projects. | **Unconstrained**: Teams can pick Go, Rust, Python, or Node.js per service and deploy on decoupled schedules. |
@@ -156,15 +156,15 @@ graph LR
 
 > [!WARNING]
 > **Trade-off Incurred:**  
-> **No resource isolation.** A resource-intensive query in `Moderation` (e.g., generating an administrative audit report) can saturate host CPU cores or database worker threads, degrading the latency of backer checkout requests in `Contributions`.
+> **No resource isolation.** A resource-intensive query in `Moderation` (e.g., generating an administrative audit report) can saturate host CPU cores or database worker threads, degrading the latency of backer checkout requests in `Pledges`.
 
 ---
 
 ### 2.2 Single Database with Schema Isolation vs. Database-Per-Service
 
-CrowdFunding Hub gives every module its own PostgreSQL schema and dedicated EF Core context. There are six modules (Identity, Campaigns, Contributions, Moderation, Notifications, CampaignUpdates), plus the Audit and RosettaStone contexts, for example:
+CrowdFunding Hub gives every module its own PostgreSQL schema and dedicated EF Core context. There are six modules (Identity, Campaigns, Pledges, Moderation, Notifications, CampaignUpdates), plus the Audit and RosettaStone contexts, for example:
 - [`CampaignsDbContext`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Persistence/DbContexts/CampaignsDbContext.cs)
-- [`ContributionsDbContext`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Infrastructure/Persistence/DbContexts/ContributionsDbContext.cs)
+- [`PledgesDbContext`](../src/Modules/Pledges/CrowdFunding.Modules.Pledges.Infrastructure/Persistence/DbContexts/PledgesDbContext.cs)
 - [`IdentityDbContext`](../src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Persistence/DbContexts/IdentityDbContext.cs)
 - [`ModerationDbContext`](../src/Modules/Moderation/CrowdFunding.Modules.Moderation.Infrastructure/Persistence/DbContexts/ModerationDbContext.cs)
 
@@ -175,7 +175,7 @@ graph TB
     subgraph "Shared Database (DefaultConnection fallback)"
         DB1[("PostgreSQL: one database")]
         S_Camp["campaigns schema"] --> DB1
-        S_Cont["contributions schema"] --> DB1
+        S_Cont["pledges schema"] --> DB1
         S_Id["identity schema"] --> DB1
         API1["CrowdFunding Host"] --> S_Camp
         API1 --> S_Cont
@@ -184,7 +184,7 @@ graph TB
 
     subgraph "Database per Module (local and HA, current)"
         API2["CrowdFunding Host"] --> DB_C[("campaigns_db")]
-        API2 --> DB_P[("contributions_db")]
+        API2 --> DB_P[("pledges_db")]
         API2 --> DB_I[("identity_db")]
         DB_C -.-> HA["HA profile: Patroni pair per database,<br/>etcd witness decides the primary"]
     end
@@ -195,20 +195,20 @@ graph TB
 | Dimension | Single Database + Schema Isolation (fallback) | Database-Per-Module / Service (local and HA) |
 | :--- | :--- | :--- |
 | **Operational Overhead** | **Trivial**: Single PostgreSQL instance to provision, backup, monitor, patch, replicate, and failover. | **High**: Multiplied maintenance; $N$ primary databases, $N$ replica sets, $N$ connection pools, independent backup schedules. |
-| **Resource Contention ("Noisy Neighbor")**| **High**: Heavy write volume on contributions consumes disk IOPS, WAL write bandwidth, and buffer pool shared with Identity. | **Zero**: Physical isolation guarantees that an IOPS surge in Contributions has zero physical impact on Identity or Campaigns. |
+| **Resource Contention ("Noisy Neighbor")**| **High**: Heavy write volume on pledges consumes disk IOPS, WAL write bandwidth, and buffer pool shared with Identity. | **Zero**: Physical isolation guarantees that an IOPS surge in Pledges has zero physical impact on Identity or Campaigns. |
 | **Connection Pooling** | **Shared Pool Pressure**: Each application instance allocates connection pool slots across every module DbContext from a shared DB ceiling. | **Independent Pools**: Each service has its own dedicated connection pool tuned specifically to its own concurrency profile. |
 | **Data Boundary Enforcement**| **Application-Enforced**: Schemas prevent accidental cross-entity relationships, but nothing physically prevents raw SQL cross-schema joins. | **Strict Physical Isolation**: Foreign keys and cross-service queries are physically impossible at the network and driver levels. |
 | **Cross-Module Reporting** | **Simple**: Analytical queries or ETL pipelines can perform efficient read-only cross-schema queries if authorized. | **Complex**: Requires cross-database federated queries, data lake ingestion (e.g. via Debezium), or expensive API composition. |
-| **Point-in-Time Recovery** | **Coarse-Grained**: Restoring the database rolls back *all* modules together to the target timestamp. | **Independent**: Can restore `Contributions` to 10:00 AM without reverting unrelated campaigns or identity registrations. |
+| **Point-in-Time Recovery** | **Coarse-Grained**: Restoring the database rolls back *all* modules together to the target timestamp. | **Independent**: Can restore `Pledges` to 10:00 AM without reverting unrelated campaigns or identity registrations. |
 
 #### Architectural Evaluation
 
 > [!IMPORTANT]
 > **The Schema-Isolation Compromise:**  
-> By creating distinct schemas and mapping dedicated DbContexts with schema-isolated migration tables (`__EFMigrationsHistory`), the codebase establishes clean architectural boundaries. If a decision is later made to extract `Contributions` into an autonomous service, its entire database schema can be dumped via `pg_dump -n contributions` and restored into a dedicated database instance with zero schema refactoring.
+> By creating distinct schemas and mapping dedicated DbContexts with schema-isolated migration tables (`__EFMigrationsHistory`), the codebase establishes clean architectural boundaries. If a decision is later made to extract `Pledges` into an autonomous service, its entire database schema can be dumped via `pg_dump -n pledges` and restored into a dedicated database instance with zero schema refactoring.
 >
 > **The Vulnerability:**  
-> In the shared-database configuration the single instance remains a **single point of failure (SPOF)** and a shared I/O bottleneck. A runaway transaction holding an exclusive lock on `campaigns` does not directly lock `contributions`, but WAL disk contention or CPU saturation on the Postgres host will degrade all modules uniformly.
+> In the shared-database configuration the single instance remains a **single point of failure (SPOF)** and a shared I/O bottleneck. A runaway transaction holding an exclusive lock on `campaigns` does not directly lock `pledges`, but WAL disk contention or CPU saturation on the Postgres host will degrade all modules uniformly.
 
 ---
 
@@ -304,13 +304,13 @@ Without aggressive `autovacuum` tuning (specifically lowering `autovacuum_vacuum
 
 #### 2.3.1 The per-module inbox (consumer side)
 
-Every module except Identity (Campaigns, Contributions, Moderation, Notifications, CampaignUpdates) keeps a `<module>_inbox_messages` table keyed `(MessageId, Consumer)`, where `Consumer` is the handler's full type name ([`EfInbox`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/EfInbox.cs), used by [`ServiceProviderEventPublisher`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Events/ServiceProviderEventPublisher.cs)). The handler runs first; only after it succeeds is the pair recorded with `INSERT ... ON CONFLICT DO NOTHING`. A crash between the handler and the record therefore re-runs the handler once, so handlers must still tolerate a repeat. Both transports carry the outbox row id as the message id (in process through `InboxMessageContext`, over RabbitMQ as the CloudEvents envelope id read by `RabbitMqConsumerHost`), so the inbox applies to both. A retention task deletes inbox rows older than `Retention:InboxDays` (14 days by default), and another clears pledge idempotency keys older than `Retention:IdempotencyKeyDays` (7 days), both hourly. See the retry test in [`TESTS_THAT_TEACH.md`](TESTS_THAT_TEACH.md).
+Every module except Identity (Campaigns, Pledges, Moderation, Notifications, CampaignUpdates) keeps a `<module>_inbox_messages` table keyed `(MessageId, Consumer)`, where `Consumer` is the handler's full type name ([`EfInbox`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/EfInbox.cs), used by [`ServiceProviderEventPublisher`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Events/ServiceProviderEventPublisher.cs)). The handler runs first; only after it succeeds is the pair recorded with `INSERT ... ON CONFLICT DO NOTHING`. A crash between the handler and the record therefore re-runs the handler once, so handlers must still tolerate a repeat. Both transports carry the outbox row id as the message id (in process through `InboxMessageContext`, over RabbitMQ as the CloudEvents envelope id read by `RabbitMqConsumerHost`), so the inbox applies to both. A retention task deletes inbox rows older than `Retention:InboxDays` (14 days by default), and another clears pledge idempotency keys older than `Retention:IdempotencyKeyDays` (7 days), both hourly. See the retry test in [`TESTS_THAT_TEACH.md`](TESTS_THAT_TEACH.md).
 
 ---
 
 ### 2.4 PostgreSQL Transactional Advisory Locks vs. Distributed Redis Redlock
 
-CrowdFunding Hub uses PostgreSQL transaction-scoped advisory locks via [`pg_advisory_xact_lock`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Transactions/CampaignTransactionExecutor.cs#L55) to serialize concurrent modifications to the same campaign aggregate (e.g. `AddContributionToCampaignCommandHandler` and `CancelCampaignCommandHandler`). Keys are computed deterministically via 64-bit entropy XOR in [`AdvisoryLockKey.FromGuid`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Domain/Common/AdvisoryLockKey.cs#L14).
+CrowdFunding Hub uses PostgreSQL transaction-scoped advisory locks via [`pg_advisory_xact_lock`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Transactions/CampaignTransactionExecutor.cs#L55) to serialize concurrent modifications to the same campaign aggregate (e.g. `AddPledgeToCampaignCommandHandler` and `CancelCampaignCommandHandler`). Keys are computed deterministically via 64-bit entropy XOR in [`AdvisoryLockKey.FromGuid`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Domain/Common/AdvisoryLockKey.cs#L14).
 
 ```mermaid
 sequenceDiagram
@@ -364,63 +364,63 @@ In a Redis Redlock pattern, the application acquires an algorithmic distributed 
 > Financial ledger updates must guarantee absolute serializability. Because `pg_advisory_xact_lock` is transaction-scoped, it has zero chance of leaving orphaned locks if an ASP.NET Core pod is abruptly terminated by Kubernetes (OOMKilled/SIGKILL).
 >
 > **The Bottleneck:**  
-> If a high-profile crowdfunding campaign goes viral, receiving 500 contributions/second, all 500 requests will queue inside PostgreSQL for the same 64-bit advisory key. This will instantly exhaust the Npgsql connection pool (default: 100 connections), causing catastrophic connection starvation across unrelated modules (`Identity`, `Moderation`).
+> If a high-profile crowdfunding campaign goes viral, receiving 500 pledges/second, all 500 requests will queue inside PostgreSQL for the same 64-bit advisory key. This will instantly exhaust the Npgsql connection pool (default: 100 connections), causing catastrophic connection starvation across unrelated modules (`Identity`, `Moderation`).
 
 ---
 
 ### 2.5 Synchronous Read Services vs. Eventual Consistency & Replicated Read Models
 
-When a backer attempts to pledge funds via `POST /api/campaigns/{campaignId}/contributions`, the `Contributions` module must verify that the campaign exists, is currently `Published`, has not passed its deadline, and accepts the specified currency.
+When a backer attempts to pledge funds via `POST /api/campaigns/{campaignId}/pledges`, the `Pledges` module must verify that the campaign exists, is currently `Published`, has not passed its deadline, and accepts the specified currency.
 
 The architecture solves this with a **replicated read model** (Event-Carried State Transfer):
 1. `Campaigns` publishes `CampaignCreated`, `CampaignPublished`, `CampaignCancelled`, `CampaignSucceeded` and `CampaignFailed` application events through its outbox.
-2. [`ReplicatedCampaignEventHandlers`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/ActiveCampaigns/Events/ReplicatedCampaignEventHandlers.cs) in `Contributions` consume them and keep a local table, `contributions.active_campaigns_cache` (campaign id, owner, title, currency, an `IsActive` flag and the deadline), in the `Contributions` database through [`IActiveCampaignCacheRepository`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Abstractions/Persistence/IActiveCampaignCacheRepository.cs).
-3. [`MakeContributionCommandHandler`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs) reads only that local table. It never calls into `Campaigns`.
+2. [`ReplicatedCampaignEventHandlers`](../src/Modules/Pledges/CrowdFunding.Modules.Pledges.Application/Features/ActiveCampaigns/Events/ReplicatedCampaignEventHandlers.cs) in `Pledges` consume them and keep a local table, `pledges.active_campaigns_cache` (campaign id, owner, title, currency, an `IsActive` flag and the deadline), in the `Pledges` database through [`IActiveCampaignCacheRepository`](../src/Modules/Pledges/CrowdFunding.Modules.Pledges.Application/Abstractions/Persistence/IActiveCampaignCacheRepository.cs).
+3. [`MakePledgeCommandHandler`](../src/Modules/Pledges/CrowdFunding.Modules.Pledges.Application/Features/Pledges/Commands/MakePledge/MakePledgeCommandHandler.cs) reads only that local table. It never calls into `Campaigns`.
 
-An earlier design had `Contributions` call a synchronous in-process reader, `ICampaignContributionAvailabilityReader`, that queried `CampaignsDbContext` directly. That interface and its implementation were removed; the rest of this section compares the two designs.
+An earlier design had `Pledges` call a synchronous in-process reader, `ICampaignPledgeAvailabilityReader`, that queried `CampaignsDbContext` directly. That interface and its implementation were removed; the rest of this section compares the two designs.
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Backer
-    participant ContApp as Contributions Module
-    participant Cache as contributions.active_campaigns_cache
+    participant ContApp as Pledges Module
+    participant Cache as pledges.active_campaigns_cache
     participant Camp as Campaigns Module
 
     Camp-->>ContApp: CampaignCreated / CampaignPublished / CampaignCancelled (via outbox)
     ContApp->>Cache: Upsert or flip IsActive
-    Backer->>ContApp: Make Contribution ($50 USD)
+    Backer->>ContApp: Make Pledge ($50 USD)
     ContApp->>Cache: Read campaign snapshot (local, no call into Campaigns)
     Cache-->>ContApp: IsActive = true, Currency = USD, DeadlineUtc
-    ContApp->>ContApp: Validate currency and deadline, insert Contribution (Pending)
-    ContApp-->>Backer: 201 Created (ContributionId)
+    ContApp->>ContApp: Validate currency and deadline, insert Pledge (Pending)
+    ContApp-->>Backer: 201 Created (PledgeId)
 ```
 
 #### The Synchronous Alternative: an In-Process Reader (the earlier design)
 
-In the monolith `Contributions` could ask `Campaigns` directly, through a contract interface that read `campaigns.campaigns` in the same memory space. That is simple and strongly consistent, but it ties the two modules together at runtime.
+In the monolith `Pledges` could ask `Campaigns` directly, through a contract interface that read `campaigns.campaigns` in the same memory space. That is simple and strongly consistent, but it ties the two modules together at runtime.
 
 #### Comparison Matrix
 
 | Dimension | Synchronous In-Process Reader (earlier design) | Replicated Read Model (Current) |
 | :--- | :--- | :--- |
 | **Consistency Guarantee** | **Strict Strong Consistency**: Always reads the absolute latest committed state in PostgreSQL. Zero window for stale reads. | **Eventual Consistency**: The replica lags by the event delivery time (milliseconds with the outbox wake-up signal, up to the 5-second safety-net timer). |
-| **Temporal Coupling** | **High**: A slow query or lock contention in the `Campaigns` schema directly blocks the `Contributions` command handler. | **Zero**: `Contributions` queries its own local table; failures or slowdowns in `Campaigns` have no effect on pledges. |
-| **In-Process Code Coupling** | **Moderate**: `Contributions` depends on a `Campaigns` query contract. Cannot extract `Contributions` without introducing network RPC. | **Low**: `Contributions` only consumes `Campaigns` application events. |
-| **Storage Overhead** | **Zero Duplication**: Data is stored once in `campaigns.campaigns`. | **Storage Duplication**: A few attributes per campaign are copied into `contributions.active_campaigns_cache`. |
+| **Temporal Coupling** | **High**: A slow query or lock contention in the `Campaigns` schema directly blocks the `Pledges` command handler. | **Zero**: `Pledges` queries its own local table; failures or slowdowns in `Campaigns` have no effect on pledges. |
+| **In-Process Code Coupling** | **Moderate**: `Pledges` depends on a `Campaigns` query contract. Cannot extract `Pledges` without introducing network RPC. | **Low**: `Pledges` only consumes `Campaigns` application events. |
+| **Storage Overhead** | **Zero Duplication**: Data is stored once in `campaigns.campaigns`. | **Storage Duplication**: A few attributes per campaign are copied into `pledges.active_campaigns_cache`. |
 | **Compensation Complexity** | **Zero**: Invalid pledges are rejected immediately at the API gate. | **Higher**: A pledge can be accepted against a campaign that was cancelled moments earlier and must then be refunded. |
 
 #### The "Cancelled Campaign Race" Scenario
 
 Eventual consistency has a price, and this is the window in which it shows:
 1. **T0 (00:00)**: Campaign creator cancels Campaign X due to suspected fraud. Aggregate updates `Status = Cancelled`. Outbox row is inserted and the worker is woken.
-2. **T1 (00:00, a moment later)**: Backer submits a $1,000 pledge for Campaign X before the `CampaignCancelled` event has reached `Contributions`.
-3. **T2**: `Contributions` checks its replicated read model. The local replica still shows `IsActive = true`, so the pledge is accepted.
-4. **T3**: The event arrives and `Contributions` flips the replica to inactive. Further pledges and payment confirmations are rejected.
-5. **Result**: The pledge that slipped in is not lost track of. `CampaignTerminationRefundHandler` refunds every contribution of the campaign that has already succeeded, and `ConfirmContributionPaymentCommandHandler` refuses to confirm a payment once the replica says the campaign is no longer published. The window is milliseconds with the wake-up signal, not the several seconds a fixed polling timer would leave. Refunds go through a fake payment provider today (see Known Gaps).
+2. **T1 (00:00, a moment later)**: Backer submits a $1,000 pledge for Campaign X before the `CampaignCancelled` event has reached `Pledges`.
+3. **T2**: `Pledges` checks its replicated read model. The local replica still shows `IsActive = true`, so the pledge is accepted.
+4. **T3**: The event arrives and `Pledges` flips the replica to inactive. Further pledges and payment confirmations are rejected.
+5. **Result**: The pledge that slipped in is not lost track of. `CampaignTerminationRefundHandler` refunds every pledge of the campaign that has already succeeded, and `ConfirmPledgePaymentCommandHandler` refuses to confirm a payment once the replica says the campaign is no longer published. The window is milliseconds with the wake-up signal, not the several seconds a fixed polling timer would leave. Refunds go through a fake payment provider today (see Known Gaps).
 
 > [!NOTE]
-> **Conclusion:** The replicated read model costs a short stale window and a refund path for the pledge that lands inside it. In return, `Contributions` no longer depends on `Campaigns` at runtime, which is what makes extracting it into its own service possible.
+> **Conclusion:** The replicated read model costs a short stale window and a refund path for the pledge that lands inside it. In return, `Pledges` no longer depends on `Campaigns` at runtime, which is what makes extracting it into its own service possible.
 
 ---
 
@@ -514,7 +514,7 @@ graph TD
     end
 
     subgraph "Bottleneck 2: Outbox Processing Throughput"
-        O1["Burst of 2,000 Contributions"] --> O2["Outbox Table Backlog"]
+        O1["Burst of 2,000 Pledges"] --> O2["Outbox Table Backlog"]
         O2 --> O3["Batch of 20 claimed; a full batch is followed by the next claim at once"]
         O3 --> O4["Drain rate is set by handler speed, one message at a time per module"]
         O4 --> O5["Delay lasts only while arrivals outpace handlers"]
@@ -538,7 +538,7 @@ graph TD
 - **Failed messages**: A message whose handler throws goes back to `Pending` with a fixed 10-second delay and is dead-lettered after five attempts, so one bad message delays only itself.
 
 #### 3. Database Connection Pool Exhaustion
-- **Root Cause**: Each HTTP request handling a contribution activates multiple scoped dependencies. In an in-process modular monolith, a single web request may open connections to `CampaignsDbContext` and `ContributionsDbContext` within the same asynchronous scope.
+- **Root Cause**: Each HTTP request handling a pledge activates multiple scoped dependencies. In an in-process modular monolith, a single web request may open connections to `CampaignsDbContext` and `PledgesDbContext` within the same asynchronous scope.
 - **Operating Ceiling**: With default Npgsql pool settings (`MaxPoolSize=100`) and a typical cloud database configured for 200 `max_connections`, a sustained concurrency of 80+ write requests combined with active background outbox polling will saturate available connection slots.
 - **Degradation Behavior**: Requests block waiting for a free connection from the pool. If no connection becomes free within `Timeout=15s`, requests throw `NpgsqlException: The connection pool has been exhausted`.
 
@@ -616,7 +616,7 @@ gantt
     Asynchronous Aggregate Accumulator     :p2_3, 2027-03-01, 40d
     section Phase 3: Autonomous Services
     Database Decomposition (Physical DBs)  :p3_1, 2027-05-01, 90d
-    Service Extraction (Contributions Svc) :p3_2, 2027-06-01, 75d
+    Service Extraction (Pledges Svc) :p3_2, 2027-06-01, 75d
     Choreographed Sagas & Materialized Views:p3_3, 2027-07-15, 60d
 ```
 
@@ -693,7 +693,7 @@ graph LR
   - Polling queries on PostgreSQL drop to zero.
 
 #### 2. Asynchronous Raised Amount Accumulator
-- **Change**: Replace per-pledge `pg_advisory_xact_lock` updates on `Campaign.RaisedAmount`. Instead, the contribution handler only appends a confirmed payment event.
+- **Change**: Replace per-pledge `pg_advisory_xact_lock` updates on `Campaign.RaisedAmount`. Instead, the pledge handler only appends a confirmed payment event.
 - **Processing**: A stream consumer (e.g. using Kafka Streams or Flink) micro-batches pledges over a 500ms sliding window and writes batched increment statements:
   ```sql
   UPDATE campaigns SET raised_amount = raised_amount + @batchTotal WHERE id = @campaignId;
@@ -717,8 +717,8 @@ graph TB
             IdSvc["Identity API"] --> IdDB[("Identity DB")]
         end
 
-        subgraph "Contributions Microservice"
-            ContSvc["Contributions API"] --> ContDB[("Contributions DB")]
+        subgraph "Pledges Microservice"
+            ContSvc["Pledges API"] --> ContDB[("Pledges DB")]
         end
 
         subgraph "Campaigns Microservice"
@@ -734,20 +734,20 @@ graph TB
     Gateway --> ContSvc
     Gateway --> CampSvc
 
-    ContSvc -- "ContributionConfirmedEvent" --> Bus
+    ContSvc -- "PledgeConfirmedEvent" --> Bus
     Bus --> CampSvc
     CampSvc -- "CampaignStatusChangedEvent" --> Bus
     Bus --> ContSvc
 ```
 
 #### 1. Physical Database Extraction
-- Migrate `contributions` and `identity` schemas into physically dedicated database instances.
+- Migrate `pledges` and `identity` schemas into physically dedicated database instances.
 - Configure dedicated connection pools and independent backup/recovery schedules per service.
 
 #### 2. Asynchronous Replicated Read Models
-- Already in place inside the monolith: `Contributions` keeps `active_campaigns_cache` in its own database and updates it from `CampaignCreated`, `CampaignPublished`, `CampaignCancelled`, `CampaignSucceeded` and `CampaignFailed` events (section 2.5).
+- Already in place inside the monolith: `Pledges` keeps `active_campaigns_cache` in its own database and updates it from `CampaignCreated`, `CampaignPublished`, `CampaignCancelled`, `CampaignSucceeded` and `CampaignFailed` events (section 2.5).
 - Remaining step: feed the same handlers from Kafka stream consumers instead of the in-process bus.
-- Extend the existing refund handler (`CampaignTerminationRefundHandler`) into a compensation saga for a contribution that slips in during the eventual consistency window of a campaign cancellation. Done: a late confirmation is refused under the campaign lock and refunded through the payment provider.
+- Extend the existing refund handler (`CampaignTerminationRefundHandler`) into a compensation saga for a pledge that slips in during the eventual consistency window of a campaign cancellation. Done: a late confirmation is refused under the campaign lock and refunded through the payment provider.
 
 #### 3. Lock-Free Partitioned Event Sourcing
 - Route all events for a given `CampaignId` to the same Kafka partition key.
@@ -765,7 +765,7 @@ graph TB
 | **Data Persistence** | **Schema per module; one shared database as the fallback, one database per module locally (Patroni pairs in the HA profile)** | Database-per-Service | Schema boundaries and per-schema migration history hold either way; the shared fallback has a single backup target. | Shared fallback: connection pool ceiling and noisy neighbor I/O. Per-module databases: more instances to back up and migrate. |
 | **Outbox Dispatch** | **PostgreSQL `SKIP LOCKED` with a wake-up signal** | CDC (Debezium / Kafka) | Zero extra infrastructure; native ACID consistency; simple operational surface. | Polling queries (signal plus a 5-second safety net) and dead tuples from the claim update and the delete. |
 | **Aggregate Locking** | **`pg_advisory_xact_lock`** | Distributed Redis Redlock | ACID transaction-bound; automatic rollback on failure; zero risk of orphaned locks. | Ties up active DB connection while waiting; caps single-campaign writes to ~65 TPS. |
-| **Cross-Module Reads**| **Replicated Read Model (Event-Carried State Transfer)** | Synchronous In-Process Adapter | No runtime dependency of `Contributions` on `Campaigns`; local sub-millisecond reads. | A short stale window after a cancellation, covered by the refund handler. |
+| **Cross-Module Reads**| **Replicated Read Model (Event-Carried State Transfer)** | Synchronous In-Process Adapter | No runtime dependency of `Pledges` on `Campaigns`; local sub-millisecond reads. | A short stale window after a cancellation, covered by the refund handler. |
 | **Real-time Push** | **SignalR with a Redis backplane when `ConnectionStrings:Redis` is set, in-memory otherwise** | In-Memory only | Zero configuration for local development; several nodes work once Redis is configured. | Without the Redis setting, one node only: messages do not reach clients on other nodes. |
 
 ---

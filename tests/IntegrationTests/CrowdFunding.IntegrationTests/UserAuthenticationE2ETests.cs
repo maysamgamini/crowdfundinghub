@@ -39,7 +39,7 @@ public sealed class UserAuthenticationE2ETests
         Assert.Contains(RoleConstants.Creator, me.Roles);
         Assert.Contains(RoleConstants.Backer, me.Roles);
         Assert.Contains(PermissionConstants.CampaignsCreate, me.Permissions);
-        Assert.Contains(PermissionConstants.CampaignsContribute, me.Permissions);
+        Assert.Contains(PermissionConstants.CampaignsPledge, me.Permissions);
         Assert.DoesNotContain(PermissionConstants.ModerationReview, me.Permissions);
     }
 

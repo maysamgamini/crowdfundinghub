@@ -12,4 +12,4 @@ Houses cross-cutting observability, diagnostic endpoints, structured logging, he
 
 ## Endpoints
 - `GET /health/live`: Liveness probe indicating process responsiveness without evaluating downstream database dependencies (returns 200 OK).
-- `GET /health/ready`: Readiness probe verifying connectivity across all module databases (`campaigns-db`, `contributions-db`, `identity-db`, `moderation-db`).
+- `GET /health/ready`: Readiness probe verifying connectivity across all module databases (`campaigns-db`, `pledges-db`, `identity-db`, `moderation-db`).

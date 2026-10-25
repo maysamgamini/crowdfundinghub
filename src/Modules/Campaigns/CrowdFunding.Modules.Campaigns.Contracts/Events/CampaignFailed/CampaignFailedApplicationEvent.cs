@@ -3,7 +3,7 @@ using CrowdFunding.BuildingBlocks.Application.Events;
 namespace CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignFailed;
 
 /// <summary>
-/// Represents the application event published when Campaign Failed. Contributions consumes this
+/// Represents the application event published when Campaign Failed. Pledges consumes this
 /// to trigger the refund compensation saga for every backer of the campaign.
 /// </summary>
 public sealed class CampaignFailedApplicationEvent : BaseApplicationEvent

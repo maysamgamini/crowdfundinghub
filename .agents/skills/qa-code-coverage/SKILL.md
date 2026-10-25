@@ -8,7 +8,7 @@ description: >-
 # Code Coverage & Test Gap Audit Runbook
 
 ## Purpose
-This skill guides the collection and deep analysis of automated test code coverage across all modules (`Campaigns`, `Contributions`, `Identity`, `Moderation`, `Notifications`, `CampaignUpdates`, `API`, `BuildingBlocks`).
+This skill guides the collection and deep analysis of automated test code coverage across all modules (`Campaigns`, `Pledges`, `Identity`, `Moderation`, `Notifications`, `CampaignUpdates`, `API`, `BuildingBlocks`).
 
 ## Coverage Collection Procedure
 

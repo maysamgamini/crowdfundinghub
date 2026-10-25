@@ -2,7 +2,7 @@ namespace CrowdFunding.Modules.Identity.Application.Abstractions.Transactions;
 
 /// <summary>
 /// Defines the transaction boundary for identity write operations. Brings Identity in line with
-/// Campaigns/Contributions/Moderation, where <c>SaveChangesAsync</c> is always the transaction
+/// Campaigns/Pledges/Moderation, where <c>SaveChangesAsync</c> is always the transaction
 /// executor's responsibility, never the repository's — previously <c>UserRepository.AddAsync</c>
 /// and <c>UpdateAsync</c> called <c>SaveChangesAsync</c> directly, so a handler that needed to
 /// coordinate a User change with anything else in the same unit of work would have had that

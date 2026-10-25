@@ -39,7 +39,7 @@ public sealed class PublishCampaignCommandHandler : ICommandHandler<PublishCampa
     /// <inheritdoc/>
     public async Task<PublishCampaignResult> Handle(PublishCampaignCommand command, CancellationToken cancellationToken)
     {
-        // Same advisory lock as AddContributionToCampaignCommandHandler/CancelCampaignCommandHandler,
+        // Same advisory lock as AddPledgeToCampaignCommandHandler/CancelCampaignCommandHandler,
         // and the campaign — plus its moderation status — is (re-)loaded inside it. Previously
         // this read the campaign and moderation status outside any lock, then published a stale
         // in-memory instance; a concurrent CancelCampaign could commit a cancellation in between,

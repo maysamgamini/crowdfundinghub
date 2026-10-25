@@ -11,23 +11,23 @@ Method notes: I wrote and ran a read-only link/anchor checker (scratchpad qa/lin
 ### F1: "Recomputes the raised total as a sum over the ledger" is false (also repeated in Round 2)
 - Severity: P1
 - Where: HS 06:2154 (See It Built) and 06:979 (R2 step 2.1 "the reference implementation does it, under a per-campaign lock"); conflicts with HC content/source/data/divergence.yaml "Raised total" entry and CF code.
-- Evidence: 06:2154 "It recomputes the raised total as a sum over the ledger under a per-campaign lock on every pledge". 06:979 "Recompute SUM(entries) on each pledge. It's correct (the reference implementation does it, under a per-campaign lock...)". Code: CF src/Modules/Campaigns/.../AddContributionToCampaignCommandHandler.cs:60-100 takes the advisory lock, inserts one ledger row, then calls `campaign.ApplyConfirmedContribution(...)`, which adds to `RaisedAmount` (Campaign.cs:182). No SUM anywhere. divergence.yaml: "The counter is not a sum over the ledger."
+- Evidence: 06:2154 "It recomputes the raised total as a sum over the ledger under a per-campaign lock on every pledge". 06:979 "Recompute SUM(entries) on each pledge. It's correct (the reference implementation does it, under a per-campaign lock...)". Code: CF src/Modules/Campaigns/.../AddPledgeToCampaignCommandHandler.cs:60-100 takes the advisory lock, inserts one ledger row, then calls `campaign.ApplyConfirmedPledge(...)`, which adds to `RaisedAmount` (Campaign.cs:182). No SUM anywhere. divergence.yaml: "The counter is not a sum over the ledger."
 - Owner: hispeedsystem
 - Fix: Say the code keeps an incremental counter under the per-campaign advisory lock and decides funded/failed from that counter; keep the "exactly right at Round 1 scale, replaced by 2.1" sentence. Delete the parenthetical at 979 or reword to "a counter under a lock".
 - Acceptance: grep 06 for "sum over the ledger" and "reference implementation does it" returns nothing; the replacement wording matches divergence.yaml "Raised total".
 
 ### F2: The ledger description in See It Built is the design, not the code
 - Severity: P1
-- Where: HS 06:2143 (Campaigns row); CF src/Modules/Campaigns/.../Persistence/Configurations/ContributionLedgerEntryConfiguration.cs and Repositories/ContributionLedger.cs; HC divergence.yaml "Ledger".
-- Evidence: 06 says "an append-only campaign ledger in which a unique key on contribution and entry kind makes a redelivered pledge or refund a no-op, a check constraint ties each entry's sign to its kind, and a trigger rejects updates and deletes (refunds are negative compensating entries)". Code: only `HasIndex(x => x.ContributionId).IsUnique()` ("uq_campaign_contributions_ledger_contribution_id"), `INSERT ... ON CONFLICT ("ContributionId") DO NOTHING`; entity has no kind column; `ApplyConfirmedContribution` rejects Amount <= 0; no HasCheckConstraint, no trigger anywhere in src; refunds only change Contribution status. Amounts are decimal(18,2). divergence.yaml: "There is no entry kind, sign check or trigger, and refunds change a status instead of adding an entry."
+- Where: HS 06:2143 (Campaigns row); CF src/Modules/Campaigns/.../Persistence/Configurations/PledgeLedgerEntryConfiguration.cs and Repositories/PledgeLedger.cs; HC divergence.yaml "Ledger".
+- Evidence: 06 says "an append-only campaign ledger in which a unique key on pledge and entry kind makes a redelivered pledge or refund a no-op, a check constraint ties each entry's sign to its kind, and a trigger rejects updates and deletes (refunds are negative compensating entries)". Code: only `HasIndex(x => x.PledgeId).IsUnique()` ("uq_campaign_pledges_ledger_pledge_id"), `INSERT ... ON CONFLICT ("PledgeId") DO NOTHING`; entity has no kind column; `ApplyConfirmedPledge` rejects Amount <= 0; no HasCheckConstraint, no trigger anywhere in src; refunds only change Pledge status. Amounts are decimal(18,2). divergence.yaml: "There is no entry kind, sign check or trigger, and refunds change a status instead of adding an entry."
 - Owner: hispeedsystem
-- Fix: Rewrite the cell: ledger table of confirmed contributions with a unique contribution id and ON CONFLICT DO NOTHING; no kind, sign check, trigger or refund entries (that is step 1.3's design, not yet built).
+- Fix: Rewrite the cell: ledger table of confirmed pledges with a unique pledge id and ON CONFLICT DO NOTHING; no kind, sign check, trigger or refund entries (that is step 1.3's design, not yet built).
 - Acceptance: the cell contains none of "entry kind", "sign", "trigger", "negative compensating"; wording agrees with divergence.yaml.
 
 ### F3: "It charges at pledge time and refunds if the campaign fails" overstates a mock payment path
 - Severity: P1
-- Where: HS 06:2153 and 06:269; CF src/Modules/Contributions/.../MakeContributionCommandHandler.cs:100-102; HC divergence.yaml "Funding model" (status "Not built yet").
-- Evidence: 06:2153 "It charges at pledge time and refunds if the campaign fails: the charge-now model from step 1.1"; 06:269 "The reference implementation at the end of this page makes exactly that choice." Code: "No live gateway call is made here" then `contribution.AttachPaymentIntent($"pi_mock_{contribution.Id:N}", "Mock")`; money state moves only on a manual confirm-payment endpoint or webhook; refunds mark status without a provider call (06:2156 says this last part correctly).
+- Where: HS 06:2153 and 06:269; CF src/Modules/Pledges/.../MakePledgeCommandHandler.cs:100-102; HC divergence.yaml "Funding model" (status "Not built yet").
+- Evidence: 06:2153 "It charges at pledge time and refunds if the campaign fails: the charge-now model from step 1.1"; 06:269 "The reference implementation at the end of this page makes exactly that choice." Code: "No live gateway call is made here" then `pledge.AttachPaymentIntent($"pi_mock_{pledge.Id:N}", "Mock")`; money state moves only on a manual confirm-payment endpoint or webhook; refunds mark status without a provider call (06:2156 says this last part correctly).
 - Owner: hispeedsystem
 - Fix: Say it models the charge-now shape (Pending then Succeeded then Refunded) against a mock provider; no real card is charged or saved. Soften 269 to "the reference implementation follows the charge-now shape".
 - Acceptance: both places mention the mock provider; no sentence implies a real charge.
@@ -43,7 +43,7 @@ Method notes: I wrote and ran a read-only link/anchor checker (scratchpad qa/lin
 ### F5: "Implements Round 1's design" while step 1.1, 1.5, 1.6 and the one-live-pledge rule are still unbuilt
 - Severity: P1
 - Where: HS 06:2138 headline and the "Where it differs" list 06:2151-2157; HC divergence.yaml entries Funding model, Closing fence, Fees and payouts, Refunds, Status names (all "Not built yet") and Double-click protection ("Partly built").
-- Evidence: 06 "implements Round 1's design and parts of Round 2". The differs list names charge-now, the sum, fees/payouts, state-only refunds, reservation purpose. It does not say: no SetupIntent or saved card; no closing fence (CF Campaign.ApplyConfirmedContribution checks status Published, not deadline); no settlement job, charge attempts or per-attempt key; no one-live-pledge rule (grep for already_backing / one-live finds nothing); different status names (Draft/Published/Successful/Failed, Pending/Succeeded/Failed/Refunded); deadline job polls every 1 minute and moves straight to Successful/Failed, sweeper runs every 2 minutes (RewardTierReservationScavengerBackgroundService.cs:21) against the design's 10 s.
+- Evidence: 06 "implements Round 1's design and parts of Round 2". The differs list names charge-now, the sum, fees/payouts, state-only refunds, reservation purpose. It does not say: no SetupIntent or saved card; no closing fence (CF Campaign.ApplyConfirmedPledge checks status Published, not deadline); no settlement job, charge attempts or per-attempt key; no one-live-pledge rule (grep for already_backing / one-live finds nothing); different status names (Draft/Published/Successful/Failed, Pending/Succeeded/Failed/Refunded); deadline job polls every 1 minute and moves straight to Successful/Failed, sweeper runs every 2 minutes (RewardTierReservationScavengerBackgroundService.cs:21) against the design's 10 s.
 - Owner: hispeedsystem
 - Fix: Replace the headline with "implements the module shape and parts of steps 1.2, 1.3 and 1.4" and add one bullet each for: no closing fence, no save-card/settle/charge-attempt path, no one-live-pledge rule, different status names, sweeper 2 min and job 1 min. Link divergence.yaml's course page as the detailed table.
 - Acceptance: every "Not built yet"/"Partly built" entry in divergence.yaml has a matching bullet or is covered by the headline.
@@ -51,7 +51,7 @@ Method notes: I wrote and ran a read-only link/anchor checker (scratchpad qa/lin
 ### F6: See It Built is missing what the code now has, and its review date is stale
 - Severity: P2
 - Where: HS 06:2138-2157 ("checked against the code on 2026-09-28"); CF commits b02a7af, cbfb223, 32b7f3d, plus schema/database/HA changes.
-- Evidence: Newly true and absent from the page: Idempotency-Key header with unique (ContributorId, IdempotencyKey) filtered index (ContributionConfiguration.cs:81-84, 200/409 handling in ContributionsController.cs:101-137); outbox reclaim on lease expiry (OutboxClaimQuery.cs, 30 s lease, 5 attempts then dead-letter, `OutboxReclaimE2ETests`); in-process wake-up signal (5 s timer remains); schema per module and a database per module in the local run (deploy/postgres/init-module-databases.sh) and a replicated Patroni profile. The page still says "one PostgreSQL database with a schema per module", has no step-1.2 note, and carries a hard-coded date.
+- Evidence: Newly true and absent from the page: Idempotency-Key header with unique (BackerId, IdempotencyKey) filtered index (PledgeConfiguration.cs:81-84, 200/409 handling in PledgesController.cs:101-137); outbox reclaim on lease expiry (OutboxClaimQuery.cs, 30 s lease, 5 attempts then dead-letter, `OutboxReclaimE2ETests`); in-process wake-up signal (5 s timer remains); schema per module and a database per module in the local run (deploy/postgres/init-module-databases.sh) and a replicated Patroni profile. The page still says "one PostgreSQL database with a schema per module", has no step-1.2 note, and carries a hard-coded date.
 - Owner: hispeedsystem
 - Fix: Add a short "since then" list (key on pledge creation, reclaim, signal, database per module locally, HA profile) and drop the dated sentence ("checked against the code on 2026-09-28") in favour of undated wording.
 - Acceptance: no calendar date remains in the See It Built section; the listed capabilities appear; "one PostgreSQL database" is qualified ("by default").
@@ -179,13 +179,13 @@ Method notes: I wrote and ran a read-only link/anchor checker (scratchpad qa/lin
 | 1.1 Charge-now alternative = what reference does | Overstated: mock, no real charge (F3) | See It Built, 06:269 |
 | 1.2 Idempotency key on pledge creation | Now true (unique (backer,key) filtered index; 200 replay, 409 mismatch; design says 201/422) | Absent from See It Built (F6) |
 | 1.2 One live pledge per backer per campaign | Still false | Absent (F5) |
-| 1.3 Append-only ledger, unique (request, kind), sign CHECK, trigger | False: unique contribution id only, ON CONFLICT DO NOTHING (F2) | See It Built wrong |
+| 1.3 Append-only ledger, unique (request, kind), sign CHECK, trigger | False: unique pledge id only, ON CONFLICT DO NOTHING (F2) | See It Built wrong |
 | 1.3 Total = sum of ledger; snapshot updated in same txn | False: counter under advisory lock decides (F1) | See It Built wrong, 06:979 wrong |
 | 1.4 Tier counter, conditional update, CHECK | Different mechanism: advisory lock + domain check + xmin, no CHECK | divergence "Tier reservations" |
 | 1.4 15-minute hold | True (RewardTierReservation.ReservationWindow = 15 min) | Stated correctly |
 | 1.4 Sweeper every 10 s | Different: every 2 min, 50 per pass | Missing from See It Built (F5) |
 | 1.4 Late card re-claims same pledge | N/A (no card saving); loop contradicts own diagram (F7) | 06 step 1.4 |
-| 1.5 Closing fence (row lock + status LIVE) | Still false; deadline checked in app and not in ApplyConfirmedContribution | Missing (F5) |
+| 1.5 Closing fence (row lock + status LIVE) | Still false; deadline checked in app and not in ApplyConfirmedPledge | Missing (F5) |
 | 1.6 Close job every 30 s, ENDED state, exact ledger sum | Different: 1 min, no ENDED, decides from counter | divergence "Deadline job" |
 | 1.6 Settlement jobs, SKIP LOCKED + lease, charge-once attempt keys, one success per pledge | Still false (no charge path) | Missing (F5) |
 | 1.6 Webhook inbox deduped by event id in same txn | True for payment webhook (processed_payment_webhooks, in executor txn); module inbox is after-handler (F4) | See It Built partly |
@@ -195,5 +195,5 @@ Method notes: I wrote and ran a read-only link/anchor checker (scratchpad qa/lin
 | Database per module | True for local run and HA profile; microservices compose still one DB | Not stated; "one PostgreSQL database" outdated (F6) |
 | Refund saga (state only) | True: batches of 100, no provider call | Stated correctly |
 | Fees metered, no payouts | True | Stated correctly |
-| Creator cannot back own campaign (R3.2 mention) | True (MakeContributionCommandHandler.cs:86) | Stated correctly |
+| Creator cannot back own campaign (R3.2 mention) | True (MakePledgeCommandHandler.cs:86) | Stated correctly |
 | Status names (DRAFT/LIVE/ENDED/FUNDED/...) | Different (Draft/Published/Successful/Failed/Cancelled; Pending/Succeeded/Failed/Refunded) | divergence "Status names"; absent from See It Built |

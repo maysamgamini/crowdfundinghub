@@ -1,0 +1,140 @@
+﻿using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
+using CrowdFunding.Modules.Pledges.Domain.Aggregates;
+using CrowdFunding.Modules.Pledges.Domain.Enums;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace CrowdFunding.Modules.Pledges.Infrastructure.Persistence.Configurations;
+
+/// <summary>
+/// Configures EF Core persistence for Pledge.
+/// </summary>
+public sealed class PledgeConfiguration : IEntityTypeConfiguration<Pledge>
+{
+    /// <summary>
+    /// Configures the EF Core mapping and constraints for <see cref="Pledge"/>.
+    /// </summary>
+    /// <param name="builder">The entity type builder.</param>
+    public void Configure(EntityTypeBuilder<Pledge> builder)
+    {
+        builder.ToTable("pledges");
+
+        builder.HasKey(x => x.Id);
+
+        builder.Property(x => x.Id)
+            .ValueGeneratedNever();
+
+        builder.Property(x => x.CampaignId)
+            .IsRequired();
+
+        builder.Property(x => x.BackerId)
+            .IsRequired();
+
+        builder.Property(x => x.Status)
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .IsRequired();
+
+        builder.Property(x => x.PaymentReference)
+            .HasMaxLength(100);
+
+        builder.Property(x => x.FailureReason)
+            .HasMaxLength(500);
+
+        builder.Property(x => x.ExternalPaymentIntentId)
+            .HasMaxLength(100);
+
+        builder.Property(x => x.RefundReference)
+            .HasMaxLength(100);
+
+        builder.Property(x => x.PaymentMethodReference)
+            .HasMaxLength(100);
+
+        builder.Property(x => x.ChargeAttempts)
+            .HasDefaultValue(0);
+
+        builder.Property(x => x.NextChargeAtUtc);
+        builder.Property(x => x.ChargeLeaseUntilUtc);
+
+        // The settlement worker's two questions, each answered from a small partial index: which pledges are
+        // due to be charged, and which charge attempts have lost their worker (the lease ran out).
+        builder.HasIndex(x => x.NextChargeAtUtc)
+            .HasDatabaseName("ix_pledges_due_for_charge")
+            .HasFilter("\"Status\" = 'ToCharge'");
+
+        builder.HasIndex(x => x.ChargeLeaseUntilUtc)
+            .HasDatabaseName("ix_pledges_charging_lease")
+            .HasFilter("\"Status\" = 'Charging'");
+
+        builder.Property(x => x.RefundFailures)
+            .HasDefaultValue(0);
+
+        builder.Property(x => x.LastRefundFailure)
+            .HasMaxLength(200);
+
+        builder.Property(x => x.PaymentGateway)
+            .HasMaxLength(50);
+
+        // The webhook reconciliation handler's correlation lookup (TICKET-033) — a payment
+        // gateway webhook arrives keyed by its own intent id, never by our internal PledgeId.
+        builder.HasIndex(x => x.ExternalPaymentIntentId)
+            .IsUnique()
+            .HasFilter("\"ExternalPaymentIntentId\" IS NOT NULL");
+
+        builder.OwnsOne(x => x.Money, money =>
+        {
+            money.Property(x => x.Amount)
+                .HasColumnName("amount")
+                .HasPrecision(18, 2)
+                .IsRequired();
+
+            money.Property(x => x.Currency)
+                .HasColumnName("currency")
+                .HasMaxLength(3)
+                .IsRequired();
+        });
+
+        builder.Property(x => x.CreatedAtUtc)
+            .IsRequired();
+
+        builder.Property(x => x.ProcessedAtUtc);
+
+        builder.Property(x => x.RewardTierReservationId);
+
+        // Makes a retried pledge request safe: one backer, one key, one pledge. The database is
+        // the guard, so two requests carrying the same key at the same instant cannot both insert.
+        builder.Property(x => x.IdempotencyKey)
+            .HasMaxLength(Pledge.MaxIdempotencyKeyLength);
+
+        // One live pledge per backer per campaign. An idempotency key stops a retry of the same attempt;
+        // it cannot stop a backer who opens two tabs and pledges twice with two keys. This index does, and
+        // it ends only when the pledge does (Failed or Refunded), so the backer can pledge again after that.
+        builder.HasIndex(x => new { x.CampaignId, x.BackerId })
+            .IsUnique()
+            .HasDatabaseName(PledgeIndexes.OneLivePledge)
+            .HasFilter("\"Status\" IN ('Pending', 'Active', 'ToCharge', 'Charging', 'Succeeded')");
+
+        builder.HasIndex(x => new { x.BackerId, x.IdempotencyKey })
+            .IsUnique()
+            .HasDatabaseName(PledgeIndexes.IdempotencyKey)
+            .HasFilter("\"IdempotencyKey\" IS NOT NULL");
+
+        // The hot read path (GET /api/campaigns/{campaignId}/pledges, and any per-backer
+        // lookup) filters on these columns; without an index Postgres does a sequential scan of
+        // the whole table on every request as pledge volume grows.
+        builder.HasIndex(x => x.BackerId);
+        builder.HasIndex(x => new { x.CampaignId, x.CreatedAtUtc });
+
+        // Optimistic concurrency token (mirrors CampaignConfiguration). Without it, a payment
+        // confirmation and a payment failure racing on the same Pending pledge silently
+        // overwrite each other's state instead of one of them failing with a detectable
+        // conflict — e.g. a pledge already marked Succeeded (with
+        // PledgePaymentConfirmedDomainEvent already in the outbox) could be clobbered back
+        // to Failed by a losing concurrent write.
+        builder.Property<uint>("xmin")
+            .HasColumnName("xmin")
+            .HasColumnType("xid")
+            .ValueGeneratedOnAddOrUpdate()
+            .IsConcurrencyToken();
+    }
+}

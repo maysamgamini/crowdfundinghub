@@ -4,7 +4,7 @@ namespace CrowdFunding.Modules.Campaigns.Domain.Events;
 
 /// <summary>
 /// Represents the domain event raised when a published campaign's deadline passes without
-/// reaching its funding goal. Consumed by Contributions to trigger the refund compensation saga.
+/// reaching its funding goal. Consumed by Pledges to trigger the refund compensation saga.
 /// </summary>
 public sealed class CampaignFailedDomainEvent : BaseEvent
 {

@@ -1,8 +1,8 @@
 using CrowdFunding.BuildingBlocks.Application.Events;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
-using CrowdFunding.Modules.Campaigns.Contracts.Commands.ReverseContributionOnCampaign;
-using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPaymentFailed;
-using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionReleased;
+using CrowdFunding.Modules.Campaigns.Contracts.Commands.ReversePledgeOnCampaign;
+using CrowdFunding.Modules.Pledges.Contracts.Events.PledgePaymentFailed;
+using CrowdFunding.Modules.Pledges.Contracts.Events.PledgeReleased;
 
 namespace CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Events;
 
@@ -12,8 +12,8 @@ namespace CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Events;
 /// owed. A pledge that was never counted (its card was never saved) makes this a harmless no-op.
 /// </summary>
 public sealed class PledgeEndedApplicationEventHandler :
-    IEventHandler<ContributionReleasedApplicationEvent>,
-    IEventHandler<ContributionPaymentFailedApplicationEvent>
+    IEventHandler<PledgeReleasedApplicationEvent>,
+    IEventHandler<PledgePaymentFailedApplicationEvent>
 {
     private readonly ICommandDispatcher _commandDispatcher;
 
@@ -22,16 +22,16 @@ public sealed class PledgeEndedApplicationEventHandler :
         _commandDispatcher = commandDispatcher;
     }
 
-    public Task Handle(ContributionReleasedApplicationEvent notification, CancellationToken cancellationToken)
-        => ReverseAsync(notification.CampaignId, notification.ContributionId, notification.Amount, notification.Currency, cancellationToken);
+    public Task Handle(PledgeReleasedApplicationEvent notification, CancellationToken cancellationToken)
+        => ReverseAsync(notification.CampaignId, notification.PledgeId, notification.Amount, notification.Currency, cancellationToken);
 
-    public Task Handle(ContributionPaymentFailedApplicationEvent notification, CancellationToken cancellationToken)
-        => ReverseAsync(notification.CampaignId, notification.ContributionId, notification.Amount, notification.Currency, cancellationToken);
+    public Task Handle(PledgePaymentFailedApplicationEvent notification, CancellationToken cancellationToken)
+        => ReverseAsync(notification.CampaignId, notification.PledgeId, notification.Amount, notification.Currency, cancellationToken);
 
-    private async Task ReverseAsync(Guid campaignId, Guid contributionId, decimal amount, string currency, CancellationToken cancellationToken)
+    private async Task ReverseAsync(Guid campaignId, Guid pledgeId, decimal amount, string currency, CancellationToken cancellationToken)
     {
-        await _commandDispatcher.SendAsync<ReverseContributionOnCampaignResult>(
-            new ReverseContributionOnCampaignCommand(campaignId, contributionId, amount, currency),
+        await _commandDispatcher.SendAsync<ReversePledgeOnCampaignResult>(
+            new ReversePledgeOnCampaignCommand(campaignId, pledgeId, amount, currency),
             cancellationToken);
     }
 }

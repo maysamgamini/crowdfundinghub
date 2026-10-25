@@ -1,5 +1,5 @@
 using System.Net.Http.Json;
-using CrowdFunding.API.Contracts.Contributions;
+using CrowdFunding.API.Contracts.Pledges;
 using CrowdFunding.API.Migrations;
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.BuildingBlocks.Infrastructure.Outbox;
@@ -7,9 +7,9 @@ using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Campaigns.Domain.Aggregates;
 using CrowdFunding.Modules.Campaigns.Infrastructure.BackgroundServices;
-using CrowdFunding.Modules.Contributions.Domain.Enums;
-using CrowdFunding.Modules.Contributions.Infrastructure.Payments;
-using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.DbContexts;
+using CrowdFunding.Modules.Pledges.Domain.Enums;
+using CrowdFunding.Modules.Pledges.Infrastructure.Payments;
+using CrowdFunding.Modules.Pledges.Infrastructure.Persistence.DbContexts;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -75,27 +75,27 @@ public sealed class SaveThenChargeE2ETests
     {
         var (_, backerToken) = await client.RegisterAndLoginAsync(ApiTestExtensions.UniqueEmail(label), label);
         client.SetBearerToken(backerToken);
-        var response = await client.PostAsJsonAsync($"/api/campaigns/{campaignId}/contributions", new MakeContributionRequest(100m, "USD"));
+        var response = await client.PostAsJsonAsync($"/api/campaigns/{campaignId}/pledges", new MakePledgeRequest(100m, "USD"));
         response.EnsureSuccessStatusCode();
-        var made = (await response.Content.ReadFromJsonAsync<MakeContributionResponse>())!;
+        var made = (await response.Content.ReadFromJsonAsync<MakePledgeResponse>())!;
         Assert.False(string.IsNullOrEmpty(made.ClientSecret));
 
         if (saveCard)
         {
             client.SetBearerToken(adminToken);
             (await client.PostAsJsonAsync(
-                $"/api/campaigns/{campaignId}/contributions/{made.ContributionId}/confirm-setup",
+                $"/api/campaigns/{campaignId}/pledges/{made.PledgeId}/confirm-setup",
                 new ConfirmPledgeSetupRequest(card))).EnsureSuccessStatusCode();
         }
 
-        return new Pledge(campaignId, made.ContributionId, card);
+        return new Pledge(campaignId, made.PledgeId, card);
     }
 
-    private static async Task<ContributionStatus> StatusAsync(IServiceProvider services, Guid pledgeId)
+    private static async Task<PledgeStatus> StatusAsync(IServiceProvider services, Guid pledgeId)
     {
         await using var scope = services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<ContributionsDbContext>();
-        return (await db.Contributions.AsNoTracking().SingleAsync(c => c.Id == pledgeId)).Status;
+        var db = scope.ServiceProvider.GetRequiredService<PledgesDbContext>();
+        return (await db.Pledges.AsNoTracking().SingleAsync(c => c.Id == pledgeId)).Status;
     }
 
     private static async Task CloseAtDeadlineAsync(IServiceProvider services, DateTime deadline)
@@ -134,30 +134,30 @@ public sealed class SaveThenChargeE2ETests
 
         // Nothing is taken while the campaign is open; only the two saved cards count.
         Assert.Equal(0, provider.ChargeCalls);
-        Assert.Equal(ContributionStatus.Active, await StatusAsync(services, good.Id));
-        Assert.Equal(ContributionStatus.Pending, await StatusAsync(services, unsaved.Id));
+        Assert.Equal(PledgeStatus.Active, await StatusAsync(services, good.Id));
+        Assert.Equal(PledgeStatus.Pending, await StatusAsync(services, unsaved.Id));
 
         await CloseAtDeadlineAsync(services, deadline);
         await DeliverAsync(services);   // CampaignSucceeded -> pledges queued; the settlement pass charges them
         await DeliverAsync(services);
 
-        Assert.Equal(ContributionStatus.Succeeded, await StatusAsync(services, good.Id));
-        Assert.Equal(ContributionStatus.ToCharge, await StatusAsync(services, flaky.Id));
-        Assert.Equal(ContributionStatus.Released, await StatusAsync(services, unsaved.Id));
+        Assert.Equal(PledgeStatus.Succeeded, await StatusAsync(services, good.Id));
+        Assert.Equal(PledgeStatus.ToCharge, await StatusAsync(services, flaky.Id));
+        Assert.Equal(PledgeStatus.Released, await StatusAsync(services, unsaved.Id));
 
         // The decline is retried later as a new attempt (new key). Make it due now instead of waiting a day.
         await using (var scope = services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<ContributionsDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<PledgesDbContext>();
             await db.Database.ExecuteSqlRawAsync(
-                "UPDATE contributions.contributions SET \"NextChargeAtUtc\" = {0} WHERE \"Id\" = {1}",
+                "UPDATE pledges.pledges SET \"NextChargeAtUtc\" = {0} WHERE \"Id\" = {1}",
                 DateTime.UtcNow.AddMinutes(-1), flaky.Id);
         }
 
         await DeliverAsync(services);
         await DeliverAsync(services);
 
-        Assert.Equal(ContributionStatus.Succeeded, await StatusAsync(services, flaky.Id));
+        Assert.Equal(PledgeStatus.Succeeded, await StatusAsync(services, flaky.Id));
         Assert.Equal(2, provider.ChargesPerformed);
         Assert.Contains(provider.ChargeKeys, k => k.Contains($"{flaky.Id:N}:charge:2"));
 
@@ -185,13 +185,13 @@ public sealed class SaveThenChargeE2ETests
 
         var promised = await PledgeAsync(client, campaignId, adminToken, "stc-promised", "pm_ok_2", saveCard: true);
         await DeliverAsync(services);
-        Assert.Equal(ContributionStatus.Active, await StatusAsync(services, promised.Id));
+        Assert.Equal(PledgeStatus.Active, await StatusAsync(services, promised.Id));
 
         await CloseAtDeadlineAsync(services, deadline);
         await DeliverAsync(services);
         await DeliverAsync(services);
 
-        Assert.Equal(ContributionStatus.Released, await StatusAsync(services, promised.Id));
+        Assert.Equal(PledgeStatus.Released, await StatusAsync(services, promised.Id));
         Assert.Equal(0, provider.ChargeCalls);
         Assert.Equal(0, provider.RefundCalls);
     }

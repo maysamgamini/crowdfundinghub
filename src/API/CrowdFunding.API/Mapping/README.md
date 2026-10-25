@@ -5,7 +5,7 @@ Stores Mapster registration code that maps API contracts to application commands
 
 ## Files
 - `CampaignsMappingConfig.cs`: Mapster configuration that maps API contracts to application models and back.
-- `ContributionsMappingConfig.cs`: Mapster configuration that maps API contracts to application models and back.
+- `PledgesMappingConfig.cs`: Mapster configuration that maps API contracts to application models and back.
 - `IdentityMappingConfig.cs`: Mapster configuration that maps API contracts to application models and back.
 - `ModerationMappingConfig.cs`: Mapster configuration that maps API contracts to application models and back.
 

@@ -1,12 +1,12 @@
 using System.Net.Http.Json;
 using CrowdFunding.API.Contracts.Campaigns;
-using CrowdFunding.API.Contracts.Contributions;
+using CrowdFunding.API.Contracts.Pledges;
 using CrowdFunding.API.Contracts.Moderation;
 using CrowdFunding.API.Migrations;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.DbContexts;
-using CrowdFunding.Modules.Contributions.Application.Abstractions.Persistence;
-using CrowdFunding.Modules.Contributions.Application.Abstractions.Transactions;
-using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.DbContexts;
+using CrowdFunding.Modules.Pledges.Application.Abstractions.Persistence;
+using CrowdFunding.Modules.Pledges.Application.Abstractions.Transactions;
+using CrowdFunding.Modules.Pledges.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -51,23 +51,23 @@ public sealed class LateConfirmationRefundE2ETests
 
         var (_, backerToken) = await client.RegisterAndLoginAsync(ApiTestExtensions.UniqueEmail("late-backer"), "Backer");
         client.SetBearerToken(backerToken);
-        var pledge = await (await client.PostAsJsonAsync($"/api/campaigns/{campaignId}/contributions", new MakeContributionRequest(100m, "USD")))
-            .Content.ReadFromJsonAsync<MakeContributionResponse>();
+        var pledge = await (await client.PostAsJsonAsync($"/api/campaigns/{campaignId}/pledges", new MakePledgeRequest(100m, "USD")))
+            .Content.ReadFromJsonAsync<MakePledgeResponse>();
 
         // The campaign ends.
         client.SetBearerToken(creatorToken);
         (await client.PostAsync($"/api/campaigns/{campaignId}/cancel", content: null)).EnsureSuccessStatusCode();
         await _factory.ProcessOutboxMessagesAsync();
 
-        // The payment confirmation was already on its way when the campaign ended, so Contributions had
+        // The payment confirmation was already on its way when the campaign ended, so Pledges had
         // accepted it. Over HTTP that window is now only milliseconds wide (the wake-up signal delivers the
         // cancellation at once, and the confirm endpoint refuses an ended campaign), so the confirmation is
         // applied here through the module's own services, exactly as the endpoint would have done it.
         await using (var confirmScope = _factory.Services.CreateAsyncScope())
         {
-            var repository = confirmScope.ServiceProvider.GetRequiredService<IContributionRepository>();
-            var executor = confirmScope.ServiceProvider.GetRequiredService<IContributionTransactionExecutor>();
-            var pending = await repository.GetByIdAsync(pledge!.ContributionId, CancellationToken.None);
+            var repository = confirmScope.ServiceProvider.GetRequiredService<IPledgeRepository>();
+            var executor = confirmScope.ServiceProvider.GetRequiredService<IPledgeTransactionExecutor>();
+            var pending = await repository.GetByIdAsync(pledge!.PledgeId, CancellationToken.None);
             await executor.ExecuteAsync(async ct =>
             {
                 pending!.ConfirmPayment("late-payment-ref", DateTime.UtcNow);
@@ -75,23 +75,23 @@ public sealed class LateConfirmationRefundE2ETests
             }, CancellationToken.None);
         }
 
-        // Confirmed -> Campaigns refuses it -> LateContributionRejected -> Contributions refunds it.
+        // Confirmed -> Campaigns refuses it -> LatePledgeRejected -> Pledges refunds it.
         await _factory.ProcessOutboxMessagesAsync();
         await _factory.ProcessOutboxMessagesAsync();
 
-        var after = await client.GetFromJsonAsync<GetContributionByIdResponse>($"/api/campaigns/{campaignId}/contributions/{pledge.ContributionId}");
+        var after = await client.GetFromJsonAsync<GetPledgeByIdResponse>($"/api/campaigns/{campaignId}/pledges/{pledge.PledgeId}");
         Assert.Equal("Refunded", after!.Status);
 
         await using var scope = _factory.Services.CreateAsyncScope();
         var campaigns = scope.ServiceProvider.GetRequiredService<CampaignsDbContext>();
-        var contributions = scope.ServiceProvider.GetRequiredService<ContributionsDbContext>();
-        var id = pledge.ContributionId.ToString();
+        var pledges = scope.ServiceProvider.GetRequiredService<PledgesDbContext>();
+        var id = pledge.PledgeId.ToString();
 
         // Before the fix the credit threw, the confirmation event went back to Pending with a failed attempt
         // and, after five of them, to the dead-letter table, with the backer never refunded.
-        Assert.False(await contributions.OutboxMessages.AnyAsync(m => m.Payload.Contains(id) && m.Attempts > 0));
+        Assert.False(await pledges.OutboxMessages.AnyAsync(m => m.Payload.Contains(id) && m.Attempts > 0));
         Assert.False(await campaigns.OutboxMessages.AnyAsync(m => m.Payload.Contains(id) && m.Attempts > 0));
-        Assert.False(await contributions.DeadLetterEvents.AnyAsync(d => d.Payload.Contains(id)));
+        Assert.False(await pledges.DeadLetterEvents.AnyAsync(d => d.Payload.Contains(id)));
         var campaign = await campaigns.Campaigns.AsNoTracking().SingleAsync(c => c.Id == campaignId);
         Assert.Equal(0m, campaign.RaisedAmount.Amount);
     }

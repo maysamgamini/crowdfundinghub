@@ -1,4 +1,4 @@
-﻿using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.AddContributionToCampaign;
+﻿using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.AddPledgeToCampaign;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.CancelCampaign;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.CompleteCampaign;
 using CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Commands.CreateCampaign;
@@ -25,7 +25,7 @@ public static class CampaignsApplicationDependencyInjection
     /// <returns>The configured service collection.</returns>
     public static IServiceCollection AddCampaignsApplication(this IServiceCollection services)
     {
-        services.AddScoped<AddContributionToCampaignCommandHandler>();
+        services.AddScoped<AddPledgeToCampaignCommandHandler>();
         services.AddScoped<CancelCampaignCommandHandler>();
         services.AddScoped<CreateCampaignCommandHandler>();
         services.AddScoped<PublishCampaignCommandHandler>();

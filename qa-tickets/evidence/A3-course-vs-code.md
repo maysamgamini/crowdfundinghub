@@ -35,15 +35,15 @@ Quiz note: content/source/data/quizzes (step-1.1 to 1.6) are Stage 1 design quiz
 
 ### F4: Traces and line-number references drift against reclaim
 - Severity: P2 (reclaim only)
-- Where: traces/libraries.json and traces/make-contribution.json (HASH CHANGED for Outbox/ModuleOutboxProcessor.cs; make-contribution step 12 range [140,173] no longer matches), test-confirm-payment.json and test-contribution-credit.json also report DRIFT. Against main all five traces pass. Also stage2/08-patterns.md:91 table, and reference/03-code-walks.md steps that cite the processor.
-- Evidence: check_traces.py against crowdfunding-reclaim: "HASH CHANGED libraries ... ModuleOutboxProcessor.cs", "RANGE DRIFT make-contribution step 12 ... [140, 173]". The processor grew from 174 to 187 lines (reclaim guard at 109-121).
+- Where: traces/libraries.json and traces/make-pledge.json (HASH CHANGED for Outbox/ModuleOutboxProcessor.cs; make-pledge step 12 range [140,173] no longer matches), test-confirm-payment.json and test-pledge-credit.json also report DRIFT. Against main all five traces pass. Also stage2/08-patterns.md:91 table, and reference/03-code-walks.md steps that cite the processor.
+- Evidence: check_traces.py against crowdfunding-reclaim: "HASH CHANGED libraries ... ModuleOutboxProcessor.cs", "RANGE DRIFT make-pledge step 12 ... [140, 173]". The processor grew from 174 to 187 lines (reclaim guard at 109-121).
 - Fix: course session; re-record traces after the merge (python3 traces/check_traces.py --repo <tree>).
 - Acceptance: check_traces.py exits 0 against the chosen tree.
 
 ### F5: Test and migration counts change if reclaim merges
 - Severity: P3 (reclaim only)
 - Where: reference/05-tests.md:20 ("100 methods in 33 files (98 facts and 2 theories)"), :24 table; stage2/21-ready.md:28 and 13-archtests.md:48 ("22 tests in 8 files") if the untracked tests/ArchitectureTests/.../DocumentationTests.cs (6 tests) lands.
-- Evidence: counted today. main: integration 98 methods in 32 files (96 facts, 2 theories), plus ModerationService.IntegrationTests 2 facts in 1 file = the course's 100 / 33 / 98 facts. reclaim: integration 102 in 33 files (+OutboxReclaimE2ETests, 4 facts) so the course figure becomes 104 methods in 34 files, 102 facts. Unit tests (278 facts + 10 theories = 288 in 18 files, 27 data rows = 305 cases) and architecture tests (22 in 8 files without DocumentationTests; 28 in 9 with it) unchanged otherwise. Migrations per module on reclaim: CampaignUpdates 5, Campaigns 11, Contributions 15, Identity 5, Moderation 8, Notifications 4 (+1 each for Campaigns, Contributions, Moderation vs main); the course states no migration count, so no text changes.
+- Evidence: counted today. main: integration 98 methods in 32 files (96 facts, 2 theories), plus ModerationService.IntegrationTests 2 facts in 1 file = the course's 100 / 33 / 98 facts. reclaim: integration 102 in 33 files (+OutboxReclaimE2ETests, 4 facts) so the course figure becomes 104 methods in 34 files, 102 facts. Unit tests (278 facts + 10 theories = 288 in 18 files, 27 data rows = 305 cases) and architecture tests (22 in 8 files without DocumentationTests; 28 in 9 with it) unchanged otherwise. Migrations per module on reclaim: CampaignUpdates 5, Campaigns 11, Pledges 15, Identity 5, Moderation 8, Notifications 4 (+1 each for Campaigns, Pledges, Moderation vs main); the course states no migration count, so no text changes.
 - Fix: course session, recount after the pin is chosen.
 - Acceptance: counts re-derived with grep -c of [Fact]/[Theory] per project match the page.
 
@@ -53,14 +53,14 @@ Quiz note: content/source/data/quizzes (step-1.1 to 1.6) are Stage 1 design quiz
 
 ### F6: A decision option says the code is "one schema, naming discipline"; it has a schema per module
 - Severity: P1
-- Where: data/decisions.yaml:696 (option "One schema and one context, with naming discipline": "This is where the reference code is today."), :716 (`why`: "recommended because the reference code does not do it yet"), :678 (context is correct), :722 (note is correct). Code: every module DbContext calls `HasDefaultSchema(...)` (identity, campaigns, contributions, moderation, notifications, campaignupdates), migrations 20261023101510_MoveTablesToCampaignsSchema etc., ModuleSchemaRulesTests.
+- Where: data/decisions.yaml:696 (option "One schema and one context, with naming discipline": "This is where the reference code is today."), :716 (`why`: "recommended because the reference code does not do it yet"), :678 (context is correct), :722 (note is correct). Code: every module DbContext calls `HasDefaultSchema(...)` (identity, campaigns, pledges, moderation, notifications, campaignupdates), migrations 20261023101510_MoveTablesToCampaignsSchema etc., ModuleSchemaRulesTests.
 - Evidence: option text claims the code shares one schema and tables are told apart by prefixes; the code has six schemas. Line 716 says schema + context + role "is not done yet" while the same entry's note (722) says the schema is done and only the role is missing. The learner sees the code placed on the wrong option.
 - Fix: course session. Change the option to "This is where the reference code was before the schema move" or remove the marker; reword 716 to "the code has the schema and the context per module, not the role".
 - Acceptance: the only option marked "reference code is today" is the schema-per-module-one-login one (or none); 716 and 722 agree.
 
 ### F7: Glossary says the code has no pledge key
 - Severity: P1
-- Where: data/glossary.yaml:84 ("The reference code has no pledge key yet."). Code: ContributionsController.cs:118-137 (`Idempotency-Key` header, 200 + `Idempotent-Replayed: true`), Contribution.cs:45-47,92-94, ContributionConfiguration.cs:81-84 (unique index UX_contributions_ContributorId_IdempotencyKey, filtered `IdempotencyKey IS NOT NULL`), MakeContributionCommandHandler.cs:45-56,111-120, PledgeIdempotencyTests (12), PledgeIdempotencyE2ETests.
+- Where: data/glossary.yaml:84 ("The reference code has no pledge key yet."). Code: PledgesController.cs:118-137 (`Idempotency-Key` header, 200 + `Idempotent-Replayed: true`), Pledge.cs:45-47,92-94, PledgeConfiguration.cs:81-84 (unique index UX_pledges_BackerId_IdempotencyKey, filtered `IdempotencyKey IS NOT NULL`), MakePledgeCommandHandler.cs:45-56,111-120, PledgeIdempotencyTests (12), PledgeIdempotencyE2ETests.
 - Evidence: the course's own divergence.yaml:94, errors.yaml:14,74 and 04-one-request.md now say the key is built; the glossary contradicts them.
 - Fix: course session; replace the sentence with "The reference code takes an optional Idempotency-Key header (see Design versus code)."
 - Acceptance: grep "no pledge key" returns nothing.
@@ -80,7 +80,7 @@ Quiz note: content/source/data/quizzes (step-1.1 to 1.6) are Stage 1 design quiz
 
 ### F10: "Charge-now variant" wording contradicts the funding-model entry
 - Severity: P3
-- Where: stage2/01-start.md:11 ("a simpler charge-now variant of the design"), :~140 ("It is a charge-now variant, and it never charges a real card"), stage2/07-payments.md:276 ("a charge-now variant of the design"). Code: MakeContributionCommandHandler.cs attaches `pi_mock_{id}` and makes no gateway call.
+- Where: stage2/01-start.md:11 ("a simpler charge-now variant of the design"), :~140 ("It is a charge-now variant, and it never charges a real card"), stage2/07-payments.md:276 ("a charge-now variant of the design"). Code: MakePledgeCommandHandler.cs attaches `pi_mock_{id}` and makes no gateway call.
 - Evidence: divergence.yaml (Funding model) says "neither route is complete: no real charge happens". Calling it "charge-now" suggests a charge is made.
 - Fix: course session; say "a mock-payment variant" or "the code records a pending payment and never charges".
 - Acceptance: wording consistent with divergence.yaml.
@@ -110,7 +110,7 @@ Quiz note: content/source/data/quizzes (step-1.1 to 1.6) are Stage 1 design quiz
 
 ### F14: Commit ids and run dates sit in the trace data
 - Severity: P3
-- Where: content/traces/*.json and traces/*.json: `"repo": {"commit": ...}` (content/traces still 57482c3; traces/ updated to b02a7af but uncommitted), test-confirm-payment.json and test-contribution-credit.json `recordedRun.date`/`recordedRun.commit` (2026-10-21, a486c10). Also docs/reference-pin.md still says the verification target is 837d8aa while the traces say b02a7af.
+- Where: content/traces/*.json and traces/*.json: `"repo": {"commit": ...}` (content/traces still 57482c3; traces/ updated to b02a7af but uncommitted), test-confirm-payment.json and test-pledge-credit.json `recordedRun.date`/`recordedRun.commit` (2026-10-21, a486c10). Also docs/reference-pin.md still says the verification target is 837d8aa while the traces say b02a7af.
 - Evidence: src/features/lesson/CodeWalkView.tsx renders only `recordedRun.result` and `.command`, so the React app does not show them; tools/codewalk/template.html (the standalone wireframe) does render runDate and runCommit.
 - Fix: course session; keep ids in traces only if never rendered, or move them to docs/reference-pin.md; sync content/traces from traces/ (they differ in all five files); update reference-pin.md to the real target.
 - Acceptance: grep of the shipped site output for a 7-hex commit id finds none; content/traces equals traces/.
@@ -130,10 +130,10 @@ Quiz note: content/source/data/quizzes (step-1.1 to 1.6) are Stage 1 design quiz
 ## D. Checked and found accurate (no finding)
 - Excerpts: all 195 reference= blocks match main line by line; against reclaim only the three OutboxClaimQuery excerpts (F2) differ.
 - Constants: lock 30 s, retry delay 10 s, batch 20, max attempts 5, outbox poll 5 s, webhook dispatcher poll 5 s / batch 20, scavenger 2 min / 50 / 15 min window, expiration poll 1 min, log retention 14 files, cache 30 s, webhook tolerance 300 s.
-- Counts: 6 modules, 4 with Contracts, 27 projects in src (22 in modules: 4,4,4,4,3,3), 30 in the solution, nine controllers, 22 architecture tests in 8 files, 5 OutboxSignalTests, 12 PledgeIdempotencyTests, 43 methods in ContributionsTests.cs (16 in ContributionDomainTests), 288 unit methods in 18 files, 5 inbox modules, 3 outbox-worker modules, 15 divergence entries with correct label counts (1/6/4/4).
-- Idempotency (divergence.yaml:94, errors.yaml:14/74/108, 04-one-request.md retry section, 05-guarantees rule 1, 06-jobs key-cleanup row, reference/05-tests.md rows): header rules, 200 + Idempotent-Replayed, 409 on mismatch, index name semantics, race handling all match the code. Per-module inbox "written after the handler in a separate statement" matches ServiceProviderEventPublisher/EfInbox. Wake-up signal (IOutboxSignal, ChannelOutboxSignal, Notify after commit in Campaigns/Contributions/Moderation executors, OutboxWakeUpLatencyE2ETests 5 samples / 1.5 s / 10 s cap) matches exactly, and the delivery lesson, outbox "wake-up signal" section, decision 20 and the concepts teach polling plus signal, not polling only.
+- Counts: 6 modules, 4 with Contracts, 27 projects in src (22 in modules: 4,4,4,4,3,3), 30 in the solution, nine controllers, 22 architecture tests in 8 files, 5 OutboxSignalTests, 12 PledgeIdempotencyTests, 43 methods in PledgesTests.cs (16 in PledgeDomainTests), 288 unit methods in 18 files, 5 inbox modules, 3 outbox-worker modules, 15 divergence entries with correct label counts (1/6/4/4).
+- Idempotency (divergence.yaml:94, errors.yaml:14/74/108, 04-one-request.md retry section, 05-guarantees rule 1, 06-jobs key-cleanup row, reference/05-tests.md rows): header rules, 200 + Idempotent-Replayed, 409 on mismatch, index name semantics, race handling all match the code. Per-module inbox "written after the handler in a separate statement" matches ServiceProviderEventPublisher/EfInbox. Wake-up signal (IOutboxSignal, ChannelOutboxSignal, Notify after commit in Campaigns/Pledges/Moderation executors, OutboxWakeUpLatencyE2ETests 5 samples / 1.5 s / 10 s cap) matches exactly, and the delivery lesson, outbox "wake-up signal" section, decision 20 and the concepts teach polling plus signal, not polling only.
 - Schema per module, six schema names, `system` and `rosetta` schemas, per-module DB in Development/HA appsettings, three ModuleSchemaRulesTests names, init-module-databases compose, HA compose (16 nodes + 3 etcd).
-- Routes and statuses: /api/campaigns, publish, cancel, contributions, confirm-payment, fail-payment, reward-tiers/reserve, /api/webhooks/payments/stripe, 400 mapping for InvalidOperationException, 409 for ResourceConflictException, 401 for bad webhook signature.
+- Routes and statuses: /api/campaigns, publish, cancel, pledges, confirm-payment, fail-payment, reward-tiers/reserve, /api/webhooks/payments/stripe, 400 mapping for InvalidOperationException, 409 for ResourceConflictException, 401 for bad webhook signature.
 
 ## E. Lessons and concepts judged accurate against main
 Stage 2: 02-project-map, 03-layers, 07-payments, 09-contracts, 11-delivery (except line 322 under reclaim), 12-schema, 13-archtests, 14-tests-that-teach, 15-operate, 16-change-the-store, 17-extraction, 18-decisions-over-time, 20-mental-models, 04-one-request (as now rewritten), 05-guarantees (as now rewritten). Reference: 00-index, 02-errors, 03-code-walks (apart from F9), 04-libraries, 05-tests (counts per F5). Data: architecture, requirements, walkthrough, ownership, loop, rounds, cast, errors, syntax, quizzes. Concepts: all 48 cards (design-level; outbox-wake-up-signal and outbox-delivery-options are right).

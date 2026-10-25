@@ -19,7 +19,7 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.BackgroundServices;
 /// is ever extracted into its own service.
 ///
 /// A false read here (e.g. the campaign was already resolved by a concurrent instance, or
-/// received a contribution between this scan and the command handler's advisory lock) is not a
+/// received a pledge between this scan and the command handler's advisory lock) is not a
 /// bug: <c>CompleteCampaignCommandHandler</c>/<c>FailCampaignCommandHandler</c> re-load the
 /// campaign under an advisory lock and re-validate before mutating, so a stale guess here just
 /// throws <see cref="InvalidOperationException"/>, logged and skipped, rather than corrupting state.

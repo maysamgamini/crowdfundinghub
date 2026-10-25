@@ -1,7 +1,7 @@
 using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignCancelled;
 using CrowdFunding.Modules.Campaigns.Contracts.Events.CampaignPublished;
-using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPaymentConfirmed;
-using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionRefunded;
+using CrowdFunding.Modules.Pledges.Contracts.Events.PledgePaymentConfirmed;
+using CrowdFunding.Modules.Pledges.Contracts.Events.PledgeRefunded;
 using CrowdFunding.Modules.Moderation.Contracts.Events.CampaignReviewApproved;
 using CrowdFunding.Modules.Moderation.Contracts.Events.CampaignReviewRejected;
 using CrowdFunding.Modules.Notifications.Application.Abstractions.Services;
@@ -17,8 +17,8 @@ public sealed class CampaignPublishedNotificationHandler : IEventHandler<Campaig
 /// <summary>
 /// Deliberately not the backer-facing cancellation alert (TICKET-031's acceptance criteria) —
 /// the event carries only <c>CampaignId</c>/<c>OwnerId</c>, not the list of affected backers.
-/// <see cref="ContributionRefundedNotificationHandler"/> below reacts to the per-contribution
-/// <c>ContributionRefundedApplicationEvent</c> the refund saga (TICKET-027) already fires once for
+/// <see cref="PledgeRefundedNotificationHandler"/> below reacts to the per-pledge
+/// <c>PledgeRefundedApplicationEvent</c> the refund saga (TICKET-027) already fires once for
 /// every backer of a cancelled campaign, which both carries the right recipient and fires exactly
 /// once per person who actually needs to hear about it.
 /// </summary>
@@ -28,48 +28,48 @@ public sealed class CampaignCancelledNotificationHandler : IEventHandler<Campaig
 }
 
 /// <summary>
-/// Sends a backer their pledge confirmation receipt. Runs inside the Contributions module's
+/// Sends a backer their pledge confirmation receipt. Runs inside the Pledges module's
 /// outbox worker — see <see cref="IEmailNotificationService"/>'s remarks for why a thrown
 /// exception here is the intended dual-write defense, not a bug to swallow.
 /// </summary>
-public sealed class ContributionPaymentConfirmedNotificationHandler : IEventHandler<ContributionPaymentConfirmedApplicationEvent>
+public sealed class PledgePaymentConfirmedNotificationHandler : IEventHandler<PledgePaymentConfirmedApplicationEvent>
 {
     private readonly IEmailNotificationService _emailService;
 
-    public ContributionPaymentConfirmedNotificationHandler(IEmailNotificationService emailService)
+    public PledgePaymentConfirmedNotificationHandler(IEmailNotificationService emailService)
     {
         _emailService = emailService;
     }
 
-    public Task Handle(ContributionPaymentConfirmedApplicationEvent notification, CancellationToken cancellationToken)
-        => _emailService.SendContributionReceiptAsync(
-            notification.ContributorId,
+    public Task Handle(PledgePaymentConfirmedApplicationEvent notification, CancellationToken cancellationToken)
+        => _emailService.SendPledgeReceiptAsync(
+            notification.BackerId,
             notification.CampaignId,
-            notification.ContributionId,
+            notification.PledgeId,
             notification.Amount,
             notification.Currency,
             cancellationToken);
 }
 
 /// <summary>
-/// The real backer-facing cancellation alert: fires once per refunded contribution (see the
+/// The real backer-facing cancellation alert: fires once per refunded pledge (see the
 /// comment on <see cref="CampaignCancelledNotificationHandler"/> for why this is the right event
 /// to react to instead).
 /// </summary>
-public sealed class ContributionRefundedNotificationHandler : IEventHandler<ContributionRefundedApplicationEvent>
+public sealed class PledgeRefundedNotificationHandler : IEventHandler<PledgeRefundedApplicationEvent>
 {
     private readonly IEmailNotificationService _emailService;
 
-    public ContributionRefundedNotificationHandler(IEmailNotificationService emailService)
+    public PledgeRefundedNotificationHandler(IEmailNotificationService emailService)
     {
         _emailService = emailService;
     }
 
-    public Task Handle(ContributionRefundedApplicationEvent notification, CancellationToken cancellationToken)
+    public Task Handle(PledgeRefundedApplicationEvent notification, CancellationToken cancellationToken)
         => _emailService.SendCampaignCancellationAlertAsync(
-            notification.ContributorId,
+            notification.BackerId,
             notification.CampaignId,
-            notification.ContributionId,
+            notification.PledgeId,
             notification.Amount,
             notification.Currency,
             cancellationToken);

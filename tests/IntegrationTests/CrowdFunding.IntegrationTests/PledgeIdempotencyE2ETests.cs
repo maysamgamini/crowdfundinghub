@@ -1,10 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
 using CrowdFunding.API.Contracts.Campaigns;
-using CrowdFunding.API.Contracts.Contributions;
+using CrowdFunding.API.Contracts.Pledges;
 using CrowdFunding.API.Contracts.Moderation;
 using CrowdFunding.API.Migrations;
-using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.DbContexts;
+using CrowdFunding.Modules.Pledges.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -61,9 +61,9 @@ public sealed class PledgeIdempotencyE2ETests
     {
         var client = _factory.CreateClient();
         client.SetBearerToken(token);
-        var request = new HttpRequestMessage(HttpMethod.Post, $"/api/campaigns/{campaignId}/contributions")
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/api/campaigns/{campaignId}/pledges")
         {
-            Content = JsonContent.Create(new MakeContributionRequest(amount, "USD"))
+            Content = JsonContent.Create(new MakePledgeRequest(amount, "USD"))
         };
         if (key is not null)
         {
@@ -76,8 +76,8 @@ public sealed class PledgeIdempotencyE2ETests
     private async Task<int> CountPledgesAsync(Guid campaignId)
     {
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<ContributionsDbContext>();
-        return await db.Contributions.CountAsync(x => x.CampaignId == campaignId);
+        var db = scope.ServiceProvider.GetRequiredService<PledgesDbContext>();
+        return await db.Pledges.CountAsync(x => x.CampaignId == campaignId);
     }
 
     [Fact]
@@ -93,9 +93,9 @@ public sealed class PledgeIdempotencyE2ETests
         Assert.Equal(HttpStatusCode.Created, first.StatusCode);
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
         Assert.True(second.Headers.Contains("Idempotent-Replayed"));
-        var firstBody = await first.Content.ReadFromJsonAsync<MakeContributionResponse>();
-        var secondBody = await second.Content.ReadFromJsonAsync<MakeContributionResponse>();
-        Assert.Equal(firstBody!.ContributionId, secondBody!.ContributionId);
+        var firstBody = await first.Content.ReadFromJsonAsync<MakePledgeResponse>();
+        var secondBody = await second.Content.ReadFromJsonAsync<MakePledgeResponse>();
+        Assert.Equal(firstBody!.PledgeId, secondBody!.PledgeId);
         Assert.Equal(1, await CountPledgesAsync(campaignId));
     }
 
@@ -113,7 +113,7 @@ public sealed class PledgeIdempotencyE2ETests
         var ids = new HashSet<Guid>();
         foreach (var response in responses)
         {
-            ids.Add((await response.Content.ReadFromJsonAsync<MakeContributionResponse>())!.ContributionId);
+            ids.Add((await response.Content.ReadFromJsonAsync<MakePledgeResponse>())!.PledgeId);
         }
 
         Assert.Single(ids);
@@ -207,15 +207,15 @@ public sealed class PledgeIdempotencyE2ETests
     {
         var campaignId = await CreatePublishedCampaignAsync("after-fail");
         var token = await NewBackerTokenAsync("after-fail-backer");
-        var first = await (await PledgeAsync(campaignId, token, 100m, key: null)).Content.ReadFromJsonAsync<MakeContributionResponse>();
+        var first = await (await PledgeAsync(campaignId, token, 100m, key: null)).Content.ReadFromJsonAsync<MakePledgeResponse>();
 
         var adminEmail = ApiTestExtensions.UniqueEmail("after-fail-admin");
         await AdminSeeder.RunAsync(_factory.Services, adminEmail, ApiTestExtensions.DefaultPassword, "Admin");
         using var admin = _factory.CreateClient();
         admin.SetBearerToken(await admin.LoginUserAsync(adminEmail));
         (await admin.PostAsJsonAsync(
-            $"/api/campaigns/{campaignId}/contributions/{first!.ContributionId}/fail-payment",
-            new FailContributionPaymentRequest("card declined"))).EnsureSuccessStatusCode();
+            $"/api/campaigns/{campaignId}/pledges/{first!.PledgeId}/fail-payment",
+            new FailPledgePaymentRequest("card declined"))).EnsureSuccessStatusCode();
 
         var again = await PledgeAsync(campaignId, token, 100m, key: null);
 

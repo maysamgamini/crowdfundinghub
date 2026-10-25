@@ -5,7 +5,7 @@ Contains foundational, shared, cross-cutting primitives, abstractions, value obj
 
 ## Architecture & Boundaries
 To maintain strict clean architecture and domain isolation:
-- **Zero Module Dependencies**: Building block libraries never reference any business module (`Campaigns`, `Contributions`, `Identity`, etc.).
+- **Zero Module Dependencies**: Building block libraries never reference any business module (`Campaigns`, `Pledges`, `Identity`, etc.).
 - **Strict Inward Dependency Flow**:
   - `CrowdFunding.BuildingBlocks.Domain` has zero external dependencies.
   - `CrowdFunding.BuildingBlocks.Application` references only `BuildingBlocks.Domain`.

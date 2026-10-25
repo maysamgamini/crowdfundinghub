@@ -40,12 +40,12 @@ graph today.
 | **Validation** | Manual `if` | `FluentValidation`, dispatched before the write | `FluentValidation`, wired through `ModelState` |
 | **Decomposition effort** | Zero — owns its own `rosetta` schema already | Zero — owns its own `rosetta` schema already | Zero — contracts, events, and the transaction boundary are already extracted (see TICKET-029) |
 | **Audit / outbox guarantee** | None — a lost write after `SaveChangesAsync` is just gone | None — same as Tier 1 | Guaranteed at-least-once delivery: `CampaignCreatedDomainEvent` → outbox row committed in the *same* transaction as the row it describes |
-| **Concurrency defense** | None needed — single-writer insert, no shared mutable state | None needed — same reason | `xmin` optimistic concurrency + `pg_advisory_xact_lock` on later commands (`AddContribution`, `Publish`, `Cancel`) that mutate this same row |
+| **Concurrency defense** | None needed — single-writer insert, no shared mutable state | None needed — same reason | `xmin` optimistic concurrency + `pg_advisory_xact_lock` on later commands (`AddPledge`, `Publish`, `Cancel`) that mutate this same row |
 | **When to choose this tier** | Config, lookups, prototypes, anything with no downstream consumers | Standard CRUD with validation but no cross-module consequences | Financial ledgers, multi-step lifecycles, anything another module's outbox subscriber depends on |
 
 **Note on the 960-line Tier 3 total**: the controller, the `Campaign` aggregate, the repository,
 and the transaction executor are *shared* across every Campaigns write use case (Publish,
-Cancel, AddContribution, ...), not exclusive to `CreateCampaign`. The 14-file, 960-line total is
+Cancel, AddPledge, ...), not exclusive to `CreateCampaign`. The 14-file, 960-line total is
 what a reader has to open and understand to trace one request end to end — that cognitive cost
 is real and is exactly what this ticket exists to make visible — but the code you'd actually
 *write* for one more command in an already-justified Tier 3 module is much smaller than 960

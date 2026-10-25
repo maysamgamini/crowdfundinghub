@@ -45,7 +45,7 @@ Verified clean (no finding): all 21 Stage 2 and 23 Stage 1 front matters have sl
 ### F6: Glossary says the reference code has no pledge key; divergence and Stage 2 say the key half is built
 - Severity: P1
 - Where: content/source/data/glossary.yaml:84 vs data/divergence.yaml:94 (Double-click protection, "Partly built") and stage2/04-one-request.md:518-526.
-- Evidence: glossary: "The reference code has no pledge key yet." Divergence: "The key half is built. POST /api/campaigns/{id}/contributions reads an optional Idempotency-Key header ...". docs/reference-pin.md itself lists "rewrite the 'no pledge key' statements" as a to-do.
+- Evidence: glossary: "The reference code has no pledge key yet." Divergence: "The key half is built. POST /api/campaigns/{id}/pledges reads an optional Idempotency-Key header ...". docs/reference-pin.md itself lists "rewrite the 'no pledge key' statements" as a to-do.
 - Fix: Replace the glossary sentence with "The reference code has the key half (optional header, 409 on a different body); it has no one-live-pledge rule."
 - Acceptance: grep for `no pledge key` / `no idempotency key` across content/source returns 0; tie the sentence to the divergence entry id.
 
@@ -147,9 +147,9 @@ Verified clean (no finding): all 21 Stage 2 and 23 Stage 1 front matters have sl
 - Fix: Replace the status block.
 - Acceptance: none needed beyond review.
 
-### F21: Walkthrough SQL page and cast/ownership: the close job is shown touching Contributions' tables while "Contributions never decides"
+### F21: Walkthrough SQL page and cast/ownership: the close job is shown touching Pledges' tables while "Pledges never decides"
 - Severity: P3 (ambiguity, acknowledged elsewhere)
-- Where: content/source/data/cast.yaml (close job: `touches: [campaigns, pledge_ledger, pledges]`; webhook: `touches ... pledge_ledger, reward_tiers`) vs data/ownership.yaml (`pledges` owned by Contributions, `pledge_ledger`/`reward_tiers` by Campaigns) and stage1/26-step-6.md:379 ("The ownership page does not list it yet").
+- Where: content/source/data/cast.yaml (close job: `touches: [campaigns, pledge_ledger, pledges]`; webhook: `touches ... pledge_ledger, reward_tiers`) vs data/ownership.yaml (`pledges` owned by Pledges, `pledge_ledger`/`reward_tiers` by Campaigns) and stage1/26-step-6.md:379 ("The ownership page does not list it yet").
 - Evidence: the cross-module writes are real in the step SQL and ownership.yaml `splitCosts` explains three of them, but the close job's write of `pledges` and the sentence "We assume the settlement job belongs to the Campaigns module" are only in step 6, and 26-step-6.md:379 says the ownership page does not list it while cast.yaml lists the close job.
 - Fix: Add a `jobs` list with the owning module to ownership.yaml and delete the "does not list it yet" sentence.
 - Acceptance: a test that every actor of kind "code" in cast.yaml appears in ownership.yaml with a module.

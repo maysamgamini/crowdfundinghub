@@ -1,0 +1,14 @@
+namespace CrowdFunding.Modules.Pledges.Domain.Aggregates;
+
+/// <summary>Names of database indexes the application code needs to recognise by name.</summary>
+public static class PledgeIndexes
+{
+    /// <summary>Unique per (backer, idempotency key) where a key was sent.</summary>
+    public const string IdempotencyKey = "UX_pledges_BackerId_IdempotencyKey";
+
+    /// <summary>Unique per (campaign, backer) among live pledges (Pending or Succeeded): one live pledge per backer per campaign.</summary>
+    public const string OneLivePledge = "UX_pledges_one_live_pledge_per_backer";
+
+    /// <summary>Unique per pledge: a pledge is activated at most once.</summary>
+    public const string OneActivationPerPledge = "UX_pledge_activations_one_per_pledge";
+}

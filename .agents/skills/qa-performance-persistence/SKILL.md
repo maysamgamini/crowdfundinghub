@@ -14,8 +14,8 @@ This skill guides the QA engineer/agent in reviewing database schemas, indexing 
 
 ### 1. Database Indexing & Query Plans
 - **Foreign Key & Filter Indexes**:
-  - Audit all foreign keys in entity configurations (`CampaignId`, `ContributorId`, `UserId`, `OwnerId`). Every foreign key used in `WHERE` or `JOIN` clauses must have a supporting B-tree index.
-  - Check frequently filtered columns: e.g. `contributions.campaign_id`, `contributions.status`, `outbox_messages.status`, `outbox_messages.created_at_utc`.
+  - Audit all foreign keys in entity configurations (`CampaignId`, `BackerId`, `UserId`, `OwnerId`). Every foreign key used in `WHERE` or `JOIN` clauses must have a supporting B-tree index.
+  - Check frequently filtered columns: e.g. `pledges.campaign_id`, `pledges.status`, `outbox_messages.status`, `outbox_messages.created_at_utc`.
   - Detect missing indexes that cause sequential table scans on high-traffic endpoints.
 
 ### 2. Multi-Module Migration Isolation

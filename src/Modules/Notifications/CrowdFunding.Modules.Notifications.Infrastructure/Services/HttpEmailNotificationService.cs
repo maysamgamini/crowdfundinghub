@@ -9,7 +9,7 @@ namespace CrowdFunding.Modules.Notifications.Infrastructure.Services;
 /// external email API (SendGrid/AWS SES-shaped — POST a JSON payload, Bearer auth), registered as
 /// a typed <c>HttpClient</c> with .NET's standard resilience handler (retry + circuit breaker +
 /// timeout), the same pattern <c>OpenMeterClient</c> uses. Every request carries an
-/// <c>X-Message-Id</c> idempotency header derived from the natural business key (contribution
+/// <c>X-Message-Id</c> idempotency header derived from the natural business key (pledge
 /// id) so a retried delivery — either this handler's own resilience-handler retry, or the outbox
 /// worker retrying the whole event after a transient failure — is recognizable by the receiving
 /// email API as a duplicate rather than a second, distinct send.
@@ -38,23 +38,23 @@ public sealed class HttpEmailNotificationService : IEmailNotificationService
         _preferenceRepository = preferenceRepository;
     }
 
-    public Task SendContributionReceiptAsync(
+    public Task SendPledgeReceiptAsync(
         Guid recipientUserId,
         Guid campaignId,
-        Guid contributionId,
+        Guid pledgeId,
         decimal amount,
         string currency,
         CancellationToken cancellationToken = default)
-        => SendAsync("ContributionReceipt", $"contribution-{contributionId}", recipientUserId, campaignId, amount, currency, isCommercial: false, cancellationToken);
+        => SendAsync("PledgeReceipt", $"pledge-{pledgeId}", recipientUserId, campaignId, amount, currency, isCommercial: false, cancellationToken);
 
     public Task SendCampaignCancellationAlertAsync(
         Guid recipientUserId,
         Guid campaignId,
-        Guid contributionId,
+        Guid pledgeId,
         decimal refundedAmount,
         string currency,
         CancellationToken cancellationToken = default)
-        => SendAsync("CampaignCancellationAlert", $"cancellation-{contributionId}", recipientUserId, campaignId, refundedAmount, currency, isCommercial: false, cancellationToken);
+        => SendAsync("CampaignCancellationAlert", $"cancellation-{pledgeId}", recipientUserId, campaignId, refundedAmount, currency, isCommercial: false, cancellationToken);
 
     public async Task SendCampaignUpdateAlertAsync(
         Guid recipientUserId,

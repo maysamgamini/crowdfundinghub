@@ -4,7 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using CrowdFunding.API.Contracts.Campaigns;
-using CrowdFunding.API.Contracts.Contributions;
+using CrowdFunding.API.Contracts.Pledges;
 using CrowdFunding.API.Contracts.Moderation;
 using CrowdFunding.API.Migrations;
 
@@ -60,8 +60,8 @@ public sealed class PaymentGatewayWebhookReconciliationE2ETests
         return await client.SendAsync(request);
     }
 
-    private async Task<(Guid CampaignId, Guid ContributionId, string PaymentIntentId, string CreatorToken, string BackerToken)>
-        CreatePendingContributionAsync(HttpClient client, string label)
+    private async Task<(Guid CampaignId, Guid PledgeId, string PaymentIntentId, string CreatorToken, string BackerToken)>
+        CreatePendingPledgeAsync(HttpClient client, string label)
     {
         var (_, creatorToken) = await client.RegisterAndLoginAsync(ApiTestExtensions.UniqueEmail($"{label}-creator"));
         client.SetBearerToken(creatorToken);
@@ -92,38 +92,38 @@ public sealed class PaymentGatewayWebhookReconciliationE2ETests
 
         var (_, backerToken) = await client.RegisterAndLoginAsync(ApiTestExtensions.UniqueEmail($"{label}-backer"));
         client.SetBearerToken(backerToken);
-        var contributeResponse = await client.PostAsJsonAsync(
-            $"/api/campaigns/{campaignId}/contributions", new MakeContributionRequest(100m, "USD"));
-        contributeResponse.EnsureSuccessStatusCode();
-        var contributionId = (await contributeResponse.Content.ReadFromJsonAsync<MakeContributionResponse>())!.ContributionId;
+        var pledgeResponse = await client.PostAsJsonAsync(
+            $"/api/campaigns/{campaignId}/pledges", new MakePledgeRequest(100m, "USD"));
+        pledgeResponse.EnsureSuccessStatusCode();
+        var pledgeId = (await pledgeResponse.Content.ReadFromJsonAsync<MakePledgeResponse>())!.PledgeId;
 
-        var getResponse = await client.GetAsync($"/api/campaigns/{campaignId}/contributions/{contributionId}");
+        var getResponse = await client.GetAsync($"/api/campaigns/{campaignId}/pledges/{pledgeId}");
         getResponse.EnsureSuccessStatusCode();
-        var contribution = await getResponse.Content.ReadFromJsonAsync<GetContributionByIdResponse>();
+        var pledge = await getResponse.Content.ReadFromJsonAsync<GetPledgeByIdResponse>();
 
-        return (campaignId, contributionId, contribution!.ExternalPaymentIntentId!, creatorToken, backerToken);
+        return (campaignId, pledgeId, pledge!.ExternalPaymentIntentId!, creatorToken, backerToken);
     }
 
     [Fact]
-    public async Task ValidWebhook_ShouldConfirmThePendingContribution()
+    public async Task ValidWebhook_ShouldConfirmThePendingPledge()
     {
         using var client = _factory.CreateClient();
-        var (campaignId, contributionId, paymentIntentId, _, backerToken) = await CreatePendingContributionAsync(client, "confirm");
+        var (campaignId, pledgeId, paymentIntentId, _, backerToken) = await CreatePendingPledgeAsync(client, "confirm");
 
         var response = await PostWebhookAsync(client, $"evt_{Guid.NewGuid():N}", paymentIntentId, "payment_intent.succeeded");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         client.SetBearerToken(backerToken);
-        var getResponse = await client.GetAsync($"/api/campaigns/{campaignId}/contributions/{contributionId}");
-        var contribution = await getResponse.Content.ReadFromJsonAsync<GetContributionByIdResponse>();
-        Assert.Equal("Succeeded", contribution!.Status);
+        var getResponse = await client.GetAsync($"/api/campaigns/{campaignId}/pledges/{pledgeId}");
+        var pledge = await getResponse.Content.ReadFromJsonAsync<GetPledgeByIdResponse>();
+        Assert.Equal("Succeeded", pledge!.Status);
     }
 
     [Fact]
     public async Task RedeliveredWebhook_WithTheSameEventId_ShouldBeIgnoredNotReapplied()
     {
         using var client = _factory.CreateClient();
-        var (campaignId, contributionId, paymentIntentId, _, backerToken) = await CreatePendingContributionAsync(client, "idempotent");
+        var (campaignId, pledgeId, paymentIntentId, _, backerToken) = await CreatePendingPledgeAsync(client, "idempotent");
         var eventId = $"evt_{Guid.NewGuid():N}";
 
         var first = await PostWebhookAsync(client, eventId, paymentIntentId, "payment_intent.succeeded");
@@ -135,16 +135,16 @@ public sealed class PaymentGatewayWebhookReconciliationE2ETests
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
 
         client.SetBearerToken(backerToken);
-        var getResponse = await client.GetAsync($"/api/campaigns/{campaignId}/contributions/{contributionId}");
-        var contribution = await getResponse.Content.ReadFromJsonAsync<GetContributionByIdResponse>();
-        Assert.Equal("Succeeded", contribution!.Status);
+        var getResponse = await client.GetAsync($"/api/campaigns/{campaignId}/pledges/{pledgeId}");
+        var pledge = await getResponse.Content.ReadFromJsonAsync<GetPledgeByIdResponse>();
+        Assert.Equal("Succeeded", pledge!.Status);
     }
 
     [Fact]
     public async Task WebhookWithoutASignature_ShouldBeRejected()
     {
         using var client = _factory.CreateClient();
-        var (_, _, paymentIntentId, _, _) = await CreatePendingContributionAsync(client, "unsigned");
+        var (_, _, paymentIntentId, _, _) = await CreatePendingPledgeAsync(client, "unsigned");
 
         var response = await PostWebhookAsync(client, $"evt_{Guid.NewGuid():N}", paymentIntentId, "payment_intent.succeeded", signed: false);
 
@@ -155,7 +155,7 @@ public sealed class PaymentGatewayWebhookReconciliationE2ETests
     public async Task WebhookWithAnInvalidSignature_ShouldBeRejected()
     {
         using var client = _factory.CreateClient();
-        var (_, _, paymentIntentId, _, _) = await CreatePendingContributionAsync(client, "tampered");
+        var (_, _, paymentIntentId, _, _) = await CreatePendingPledgeAsync(client, "tampered");
 
         var payload = JsonSerializer.Serialize(new
         {
@@ -179,7 +179,7 @@ public sealed class PaymentGatewayWebhookReconciliationE2ETests
     public async Task ClientConfirmCall_AfterWebhookAlreadyConfirmedIt_ShouldSucceedGracefully()
     {
         using var client = _factory.CreateClient();
-        var (campaignId, contributionId, paymentIntentId, _, _) = await CreatePendingContributionAsync(client, "out-of-order");
+        var (campaignId, pledgeId, paymentIntentId, _, _) = await CreatePendingPledgeAsync(client, "out-of-order");
 
         // The webhook arrives first (e.g. before the customer's browser redirects back).
         var webhookResponse = await PostWebhookAsync(client, $"evt_{Guid.NewGuid():N}", paymentIntentId, "payment_intent.succeeded");
@@ -191,13 +191,13 @@ public sealed class PaymentGatewayWebhookReconciliationE2ETests
         client.SetBearerToken(adminToken);
 
         // The client's own /confirm-payment call arrives after — must not throw
-        // "Only pending contributions can be confirmed."
+        // "Only pending pledges can be confirmed."
         var confirmResponse = await client.PostAsJsonAsync(
-            $"/api/campaigns/{campaignId}/contributions/{contributionId}/confirm-payment",
-            new ConfirmContributionPaymentRequest("client-side-confirmation"));
+            $"/api/campaigns/{campaignId}/pledges/{pledgeId}/confirm-payment",
+            new ConfirmPledgePaymentRequest("client-side-confirmation"));
 
         Assert.Equal(HttpStatusCode.OK, confirmResponse.StatusCode);
-        var result = await confirmResponse.Content.ReadFromJsonAsync<ConfirmContributionPaymentResponse>();
+        var result = await confirmResponse.Content.ReadFromJsonAsync<ConfirmPledgePaymentResponse>();
         Assert.Equal("Succeeded", result!.Status);
     }
 
@@ -205,11 +205,11 @@ public sealed class PaymentGatewayWebhookReconciliationE2ETests
     public async Task WebhookArrivingAfterCampaignCancellation_ShouldConfirmThenImmediatelyRefund()
     {
         using var client = _factory.CreateClient();
-        var (campaignId, contributionId, paymentIntentId, creatorToken, backerToken) =
-            await CreatePendingContributionAsync(client, "midflight-cancel");
+        var (campaignId, pledgeId, paymentIntentId, creatorToken, backerToken) =
+            await CreatePendingPledgeAsync(client, "midflight-cancel");
 
         // The campaign is cancelled while the payment is still "in flight" at the gateway (the
-        // contribution is still Pending here — no payment has been confirmed yet).
+        // pledge is still Pending here — no payment has been confirmed yet).
         client.SetBearerToken(creatorToken);
         var cancelResponse = await client.PostAsync($"/api/campaigns/{campaignId}/cancel", content: null);
         cancelResponse.EnsureSuccessStatusCode();
@@ -220,11 +220,11 @@ public sealed class PaymentGatewayWebhookReconciliationE2ETests
         webhookResponse.EnsureSuccessStatusCode();
 
         client.SetBearerToken(backerToken);
-        var getResponse = await client.GetAsync($"/api/campaigns/{campaignId}/contributions/{contributionId}");
-        var contribution = await getResponse.Content.ReadFromJsonAsync<GetContributionByIdResponse>();
+        var getResponse = await client.GetAsync($"/api/campaigns/{campaignId}/pledges/{pledgeId}");
+        var pledge = await getResponse.Content.ReadFromJsonAsync<GetPledgeByIdResponse>();
 
         // Never left stuck as "Succeeded" against a campaign that no longer exists to fulfil it —
         // charged and immediately refunded in the same reconciliation.
-        Assert.Equal("Refunded", contribution!.Status);
+        Assert.Equal("Refunded", pledge!.Status);
     }
 }

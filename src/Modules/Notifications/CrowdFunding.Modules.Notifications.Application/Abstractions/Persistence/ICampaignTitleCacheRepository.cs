@@ -5,7 +5,7 @@ namespace CrowdFunding.Modules.Notifications.Application.Abstractions.Persistenc
 /// State Transfer, populated by <c>ReplicatedCampaignTitleEventHandler</c> reacting to Campaigns'
 /// <c>CampaignCreatedApplicationEvent</c>), so an email receipt/alert can name the campaign
 /// without Notifications ever making a synchronous, in-process, cross-module call into Campaigns
-/// — the same coupling TICKET-023 already eliminated for Contributions. <c>NetArchTest</c>
+/// — the same coupling TICKET-023 already eliminated for Pledges. <c>NetArchTest</c>
 /// (<c>NotificationsModuleDependencyTests.Application_ShouldNotReference_OtherModulesInternals</c>)
 /// enforces that Notifications' Application layer never references another module's Application,
 /// Infrastructure, or Domain assembly — only Contracts events, which is exactly what this cache is

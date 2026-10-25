@@ -1,14 +1,14 @@
 using System.Net;
 using System.Net.Http.Json;
-using CrowdFunding.API.Contracts.Contributions;
+using CrowdFunding.API.Contracts.Pledges;
 using CrowdFunding.API.Migrations;
 using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Persistence;
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Campaigns.Domain.Aggregates;
-using CrowdFunding.Modules.Contributions.Domain.Aggregates;
-using CrowdFunding.Modules.Contributions.Domain.Enums;
-using CrowdFunding.Modules.Contributions.Infrastructure.Persistence.DbContexts;
+using CrowdFunding.Modules.Pledges.Domain.Aggregates;
+using CrowdFunding.Modules.Pledges.Domain.Enums;
+using CrowdFunding.Modules.Pledges.Infrastructure.Persistence.DbContexts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -48,12 +48,12 @@ public sealed class PledgeActivationGuardTests
 
         var (_, backerToken) = await client.RegisterAndLoginAsync(ApiTestExtensions.UniqueEmail($"{label}-backer"), "Backer");
         client.SetBearerToken(backerToken);
-        var made = (await (await client.PostAsJsonAsync($"/api/campaigns/{campaign.Id}/contributions", new MakeContributionRequest(100m, "USD")))
-            .Content.ReadFromJsonAsync<MakeContributionResponse>())!;
+        var made = (await (await client.PostAsJsonAsync($"/api/campaigns/{campaign.Id}/pledges", new MakePledgeRequest(100m, "USD")))
+            .Content.ReadFromJsonAsync<MakePledgeResponse>())!;
 
         var adminEmail = ApiTestExtensions.UniqueEmail($"{label}-admin");
         await AdminSeeder.RunAsync(_factory.Services, adminEmail, ApiTestExtensions.DefaultPassword, "Admin");
-        return (campaign.Id, made.ContributionId, await client.LoginUserAsync(adminEmail));
+        return (campaign.Id, made.PledgeId, await client.LoginUserAsync(adminEmail));
     }
 
     [Fact]
@@ -63,7 +63,7 @@ public sealed class PledgeActivationGuardTests
         var (_, pledgeId, _) = await PendingPledgeAsync("activation-sql", client);
 
         await using var scope = _factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<ContributionsDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<PledgesDbContext>();
         db.PledgeActivations.Add(new PledgeActivation(pledgeId, "pm_ok_first", DateTime.UtcNow));
         await db.SaveChangesAsync();
 
@@ -72,7 +72,7 @@ public sealed class PledgeActivationGuardTests
 
         var postgres = Assert.IsType<PostgresException>(exception.InnerException);
         Assert.Equal(PostgresErrorCodes.UniqueViolation, postgres.SqlState);
-        Assert.Equal(ContributionIndexes.OneActivationPerPledge, postgres.ConstraintName);
+        Assert.Equal(PledgeIndexes.OneActivationPerPledge, postgres.ConstraintName);
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public sealed class PledgeActivationGuardTests
             using var client = _factory.CreateClient();
             client.SetBearerToken(adminToken);
             return await client.PostAsJsonAsync(
-                $"/api/campaigns/{campaignId}/contributions/{pledgeId}/confirm-setup",
+                $"/api/campaigns/{campaignId}/pledges/{pledgeId}/confirm-setup",
                 new ConfirmPledgeSetupRequest("pm_ok_race"));
         }));
 
@@ -95,8 +95,8 @@ public sealed class PledgeActivationGuardTests
         Assert.Contains(responses, r => r.StatusCode == HttpStatusCode.OK);
 
         await using var scope = _factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<ContributionsDbContext>();
-        Assert.Equal(1, await db.PledgeActivations.CountAsync(a => a.ContributionId == pledgeId));
-        Assert.Equal(ContributionStatus.Active, (await db.Contributions.AsNoTracking().SingleAsync(c => c.Id == pledgeId)).Status);
+        var db = scope.ServiceProvider.GetRequiredService<PledgesDbContext>();
+        Assert.Equal(1, await db.PledgeActivations.CountAsync(a => a.PledgeId == pledgeId));
+        Assert.Equal(PledgeStatus.Active, (await db.Pledges.AsNoTracking().SingleAsync(c => c.Id == pledgeId)).Status);
     }
 }

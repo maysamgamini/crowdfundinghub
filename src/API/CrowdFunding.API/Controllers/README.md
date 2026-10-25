@@ -11,7 +11,7 @@ flowchart LR
         Id["IdentityController<br/>api/identity"]
         Ca["CampaignsController<br/>api/campaigns"]
         Rt["RewardTiersController<br/>api/campaigns/{id}/reward-tiers"]
-        Co["ContributionsController<br/>api/campaigns/{id}/contributions"]
+        Co["PledgesController<br/>api/campaigns/{id}/pledges"]
         Wh["CampaignWebhookSubscriptionsController<br/>api/campaigns/{id}/webhook-subscriptions"]
         Mo["ModerationController<br/>api/moderation/reviews"]
         No["NotificationsController<br/>api/notifications"]
@@ -21,7 +21,7 @@ flowchart LR
     Id --> M1["Identity"]
     Ca --> M2["Campaigns"]
     Rt --> M2
-    Co --> M3["Contributions"]
+    Co --> M3["Pledges"]
     Pw --> M3
     Wh --> M4["CampaignUpdates"]
     Mo --> M5["Moderation"]
@@ -34,7 +34,7 @@ flowchart LR
 | `IdentityController` | `POST register`, `login`, `refresh`, `logout`; `GET me`; `POST users/{userId}/roles`, `users/{userId}/permissions`, `users/{userId}/deactivate` |
 | `CampaignsController` | `GET /api/campaigns` (paged, filtered), `POST /api/campaigns`, `GET {id}`, `POST {id}/publish`, `POST {id}/cancel` (owner or admin) |
 | `RewardTiersController` | `POST`, `GET`, `GET {rewardTierId}`, `POST {rewardTierId}/reserve` under a campaign |
-| `ContributionsController` | `GET` and `GET {contributionId}` need a token and are scoped by who is asking (a backer sees their own pledges, the campaign's owner sees the campaign's pledges without payment references, a payments manager sees all; another backer gets 404 or an empty list), `POST` (optional `Idempotency-Key` header: a retry returns the first pledge with `200` and `Idempotent-Replayed: true`, a different request under the same key is `409`, and so is a second live pledge by the same backer on the same campaign), `GET {contributionId}`, `POST {contributionId}/confirm-payment`, `POST {contributionId}/fail-payment` under a campaign |
+| `PledgesController` | `GET` and `GET {pledgeId}` need a token and are scoped by who is asking (a backer sees their own pledges, the campaign's owner sees the campaign's pledges without payment references, a payments manager sees all; another backer gets 404 or an empty list), `POST` (optional `Idempotency-Key` header: a retry returns the first pledge with `200` and `Idempotent-Replayed: true`, a different request under the same key is `409`, and so is a second live pledge by the same backer on the same campaign), `GET {pledgeId}`, `POST {pledgeId}/confirm-payment`, `POST {pledgeId}/fail-payment` under a campaign |
 | `CampaignWebhookSubscriptionsController` | `POST`, `GET`, `GET {subscriptionId}`, `DELETE {subscriptionId}` under a campaign |
 | `ModerationController` | `GET` reviews, `GET {campaignId}`, `POST {campaignId}/approve`, `POST {campaignId}/reject` |
 | `NotificationsController` | `GET preferences`, `PUT preferences`, `POST unsubscribe` (Tier 2 handlers) |

@@ -36,7 +36,7 @@ public sealed class RewardTierConfiguration : IEntityTypeConfiguration<RewardTie
 
         builder.HasIndex(x => x.CampaignId);
 
-        // xmin optimistic concurrency (mirrors CampaignConfiguration/ContributionConfiguration):
+        // xmin optimistic concurrency (mirrors CampaignConfiguration/PledgeConfiguration):
         // defense in depth underneath the advisory lock ReserveRewardTierSlotCommandHandler
         // already takes — belt-and-suspenders against any future write path that forgets to
         // acquire that lock.

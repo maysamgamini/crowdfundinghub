@@ -24,15 +24,15 @@ The goal of architecture is **low coupling and high cohesion**. You can achieve 
 ## 2. "Database Foreign Keys Are Concrete Chains"
 
 When engineers design relational databases in a monolith, their instinct is to link everything with SQL foreign keys:
-`contributions.campaign_id` $\rightarrow$ `campaigns.campaigns.id`.
+`pledges.campaign_id` $\rightarrow$ `campaigns.campaigns.id`.
 
 ```mermaid
 graph LR
     subgraph BadDesign["Anti-Pattern: Cross-Schema Foreign Key"]
-        T1["contributions table"] -->|"SQL FK Constraint (Concrete Chain)"| T2["campaigns table"]
+        T1["pledges table"] -->|"SQL FK Constraint (Concrete Chain)"| T2["campaigns table"]
     end
     subgraph GoodDesign["Pattern: Primitive Identifier Decoupling"]
-        T3["contributions table<br/>(campaign_id UUID)"] -. "Scalar Value Reference (Zero SQL Chain)" .-> T4["campaigns table<br/>(id UUID)"]
+        T3["pledges table<br/>(campaign_id UUID)"] -. "Scalar Value Reference (Zero SQL Chain)" .-> T4["campaigns table<br/>(id UUID)"]
     end
 ```
 

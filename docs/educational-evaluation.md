@@ -117,7 +117,7 @@ The following areas represent significant **accidental or advanced complexity** 
 
 ### 3.1 Assembly & Project Sprawl (30 .csproj Files)
 The solution contains **30 distinct projects** (32 `.csproj` files exist on disk; the extracted `CrowdFunding.Moderation.Service` and its integration test project are outside the solution):
-- Four modules (Identity, Campaigns, Contributions, Moderation) × 4 projects (`Domain`, `Application`, `Infrastructure`, `Contracts`) = 16 projects
+- Four modules (Identity, Campaigns, Pledges, Moderation) × 4 projects (`Domain`, `Application`, `Infrastructure`, `Contracts`) = 16 projects
 - Two modules (Notifications, CampaignUpdates) × 3 projects (no `Contracts`, because no other module consumes them) = 6 projects
 - BuildingBlocks (`Domain`, `Application`, `Infrastructure`) = 3 projects
 - API Host (`CrowdFunding.API`) = 1 project
@@ -203,16 +203,16 @@ While the project went to extreme lengths on infrastructure and security, **the 
 ### 4.1 The Unfinished Core Crowdfunding Lifecycle (Deadlines & Refunds)
 The quintessential problem in crowdfunding (Kickstarter, Indiegogo) is the **All-or-Nothing Model**:
 1. Creator defines a target ($10,000) and deadline (30 days).
-2. Backers pledge contributions.
+2. Backers make pledges.
 3. If deadline arrives and `RaisedAmount >= GoalAmount`: Campaign transitions to `Successful`; creator can withdraw funds.
 4. If deadline arrives and `RaisedAmount < GoalAmount`: Campaign transitions to `Failed`; **all backers must be refunded**.
 5. If creator cancels campaign: **all backers must be refunded**.
 
 #### The Educational Gap:
 - In the current codebase, **no background worker exists to check campaign deadlines**. A campaign stays in `Published` status forever unless manually cancelled.
-- The `Contribution` aggregate only has states: `Pending`, `Succeeded`, `Failed`. **There is no `Refunded` state**.
+- The `Pledge` aggregate only has states: `Pending`, `Succeeded`, `Failed`. **There is no `Refunded` state**.
 - If a campaign is cancelled, no refund events are processed. The money sits in limbo.
-- **Pedagogical Impact:** Students miss out on the most interesting domain logic in crowdfunding: aggregate state machine transitions, saga/choreography compensation workflows, and domain event reactions between Campaigns and Contributions!
+- **Pedagogical Impact:** Students miss out on the most interesting domain logic in crowdfunding: aggregate state machine transitions, saga/choreography compensation workflows, and domain event reactions between Campaigns and Pledges!
 
 ### 4.2 Absence of Pure Vertical Slice Demonstrations
 If the repository advertises "Vertical Slice Architecture", students will look for features where:
@@ -362,7 +362,7 @@ graph TD
   1. Add a background worker `CampaignExpirationBackgroundService` that queries campaigns where `DeadlineUtc <= DateTime.UtcNow && Status == CampaignStatus.Active`.
   2. If `CurrentBalance >= GoalAmount`, dispatch `CompleteCampaignCommand` (Status: `Successful`).
   3. If `CurrentBalance < GoalAmount`, dispatch `FailCampaignCommand` (Status: `Failed`) and publish `CampaignFailedApplicationEvent`.
-  4. In `Contributions`, handle `CampaignFailedApplicationEvent` and transition contributions to `Refunded`.
+  4. In `Pledges`, handle `CampaignFailedApplicationEvent` and transition pledges to `Refunded`.
 - **Pedagogical Benefit:** Teaches students real-world saga/choreography compensation workflows and aggregate state machines.
 
 ### Recommendation 4: Deliver Containerization & CI Automation
@@ -405,21 +405,21 @@ graph TD
         APIHost["API Host Process (CrowdFunding.API)"]
         subgraph Modules["In-Process Modules (Isolated by Contracts)"]
             CampMod["Campaigns Module"]
-            ContMod["Contributions Module"]
+            ContMod["Pledges Module"]
             IdMod["Identity Module"]
             ModMod["Moderation Module"]
         end
-        SharedPG[("PostgreSQL 16 Instance<br/>(Separated Schemas: campaigns, contributions, identity, moderation)")]
+        SharedPG[("PostgreSQL 16 Instance<br/>(Separated Schemas: campaigns, pledges, identity, moderation)")]
     end
 
     subgraph ExtractionPhase["Phase 2: Extracted Autonomous Microservices"]
         CampSvc["Campaigns Service<br/>(Independent Container)"]
-        ContSvc["Contributions Service<br/>(Independent Container)"]
+        ContSvc["Pledges Service<br/>(Independent Container)"]
         IdSvc["Identity Service<br/>(Independent Container)"]
         ModSvc["Moderation Service<br/>(Independent Container)"]
         Broker["Distributed Message Broker<br/>(Kafka / RabbitMQ / AWS SQS)"]
         DBCamp[("Campaigns DB")]
-        DBCont[("Contributions DB")]
+        DBCont[("Pledges DB")]
         DBId[("Identity DB")]
     end
 
@@ -487,7 +487,7 @@ app.MapPost("/api/campaigns", async (
 
 #### When the Heavy Approach Is Actually Justified:
 Only adopt the 14-file pipeline if campaigns involve **complex, multi-system workflows**:
-- Synchronizing financial state across independent microservices (e.g. updating the campaign balance when an external payment gateway confirms a pledge in the Contributions service).
+- Synchronizing financial state across independent microservices (e.g. updating the campaign balance when an external payment gateway confirms a pledge in the Pledges service).
 - Handling strict eventual consistency where a database failure must trigger compensating sagas or refunds.
 - Triggering asynchronous out-of-band operations across independent domain boundaries (e.g. enqueuing a compliance review in Moderation and dispatching push notifications).
 
@@ -509,43 +509,43 @@ Even with the goal of designing for microservices extraction, several areas over
    - [`CachedCampaignReadService.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Infrastructure/Caching/CachedCampaignReadService.cs) uses `IMemoryCache` in-process.
    - When extracted into multiple container replicas or a dedicated Campaigns microservice, in-memory caching causes split-brain cache inconsistency across replicas. Redis distributed caching should have been the default.
 4. **Third-Party SaaS Metering (OpenMeter CloudEvents)**:
-   - Sending CloudEvents HTTP requests to `openmeter.cloud` during contribution confirmation adds external SaaS dependency that obscures the core architectural lesson of asynchronous event dispatching.
+   - Sending CloudEvents HTTP requests to `openmeter.cloud` during pledge confirmation adds external SaaS dependency that obscures the core architectural lesson of asynchronous event dispatching.
 
 ---
 
 ### 9.3 Where Didn't We Go Far Enough? (The 4 Hidden Decomposition Traps)
 
-If an architect attempts to extract `Campaigns` or `Contributions` into standalone microservices tomorrow, they will hit **four major roadblocks** that the current codebase hides behind in-process convenience:
+If an architect attempts to extract `Campaigns` or `Pledges` into standalone microservices tomorrow, they will hit **four major roadblocks** that the current codebase hides behind in-process convenience:
 
 #### Roadblock 1: Synchronous Inter-Module Query Coupling (The Latency & Availability Trap)
-> **Resolved.** The synchronous reader `ICampaignContributionAvailabilityReader` was removed. [`MakeContributionCommandHandler.cs`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs) now reads the replicated `contributions.active_campaigns_cache`. The text below shows the earlier code and the fix that was built.
+> **Resolved.** The synchronous reader `ICampaignPledgeAvailabilityReader` was removed. [`MakePledgeCommandHandler.cs`](../src/Modules/Pledges/CrowdFunding.Modules.Pledges.Application/Features/Pledges/Commands/MakePledge/MakePledgeCommandHandler.cs) now reads the replicated `pledges.active_campaigns_cache`. The text below shows the earlier code and the fix that was built.
 
-- **The Code Location (earlier code)**: In `MakeContributionCommandHandler`:
+- **The Code Location (earlier code)**: In `MakePledgeCommandHandler`:
   ```csharp
-  var campaignAvailability = await _campaignContributionAvailabilityReader
-      .GetCampaignContributionAvailabilityAsync(
-          new GetCampaignContributionAvailabilityQuery(command.CampaignId), 
+  var campaignAvailability = await _campaignPledgeAvailabilityReader
+      .GetCampaignPledgeAvailabilityAsync(
+          new GetCampaignPledgeAvailabilityQuery(command.CampaignId), 
           cancellationToken);
   ```
-- **The Microservice Gotcha**: In the monolith, this query is a 0.2ms in-process method call. When `Contributions` and `Campaigns` are decomposed into independent microservices, this becomes a synchronous HTTP/gRPC network call.
-- **The Consequence**: If the `Campaigns` service experiences an outage or deployment restart, the `Contributions` service **cannot accept pledges**. You have built a **Distributed Monolith** with cascading point-of-failure coupling.
+- **The Microservice Gotcha**: In the monolith, this query is a 0.2ms in-process method call. When `Pledges` and `Campaigns` are decomposed into independent microservices, this becomes a synchronous HTTP/gRPC network call.
+- **The Consequence**: If the `Campaigns` service experiences an outage or deployment restart, the `Pledges` service **cannot accept pledges**. You have built a **Distributed Monolith** with cascading point-of-failure coupling.
 - **The Architectural Fix to Teach**: Replace synchronous RPC with an **Asynchronous Replicated Read Model (Event-Carried State Transfer)**:
-  - `Contributions` subscribes to `CampaignPublished` and `CampaignCancelled` events.
-  - `Contributions` maintains a local, lightweight lookup table (`contributions.active_campaigns_cache`).
-  - When making a contribution, `Contributions` checks its **own local database**, achieving 100% autonomous availability!
+  - `Pledges` subscribes to `CampaignPublished` and `CampaignCancelled` events.
+  - `Pledges` maintains a local, lightweight lookup table (`pledges.active_campaigns_cache`).
+  - When making a pledge, `Pledges` checks its **own local database**, achieving 100% autonomous availability!
 
 ```mermaid
 sequenceDiagram
     autonumber
     Note over Monolith: Synchronous In-Process Coupling (earlier design, removed)
-    ContributionsModule->>CampaignsModule: Availability reader call (removed interface)
-    CampaignsModule-->>ContributionsModule: CampaignAvailabilityDTO (In-Memory: 0.2ms)
+    PledgesModule->>CampaignsModule: Availability reader call (removed interface)
+    CampaignsModule-->>PledgesModule: CampaignAvailabilityDTO (In-Memory: 0.2ms)
 
     Note over Microservices: The True Decoupled Alternative (Replicated Read Model)
     CampaignsService->>Broker: Publish CampaignPublishedEvent
-    Broker->>ContributionsService: Consume Event
-    ContributionsService->>LocalDB: Update local active_campaigns cache
-    Note over ContributionsService: Pledges validate locally with ZERO network calls!
+    Broker->>PledgesService: Consume Event
+    PledgesService->>LocalDB: Update local active_campaigns cache
+    Note over PledgesService: Pledges validate locally with ZERO network calls!
 ```
 
 #### Roadblock 2: Outbox Poller Coupled to In-Process Memory Dispatcher
@@ -569,18 +569,18 @@ sequenceDiagram
 - **The Code Location**: In [`Program.cs`](../src/API/CrowdFunding.API/Program.cs#L56-L60), all 4 DbContexts are registered with the same connection string:
   ```csharp
   builder.Services.AddCampaignsInfrastructure(builder.Configuration);
-  builder.Services.AddContributionsInfrastructure(builder.Configuration);
+  builder.Services.AddPledgesInfrastructure(builder.Configuration);
   builder.Services.AddIdentityInfrastructure(builder.Configuration);
   builder.Services.AddModerationInfrastructure(builder.Configuration);
   ```
-- **The Microservice Gotcha**: Although schemas are separated (`campaigns`, `contributions`, `identity`, `moderation`), all modules share the exact same physical connection pool (max 100 connections by default in Npgsql).
-- **The Consequence**: A traffic spike on contributions will exhaust the connection pool, taking down authentication and campaign browsing.
+- **The Microservice Gotcha**: Although schemas are separated (`campaigns`, `pledges`, `identity`, `moderation`), all modules share the exact same physical connection pool (max 100 connections by default in Npgsql).
+- **The Consequence**: A traffic spike on pledges will exhaust the connection pool, taking down authentication and campaign browsing.
 - **The Architectural Fix to Teach**: Show students how to configure distinct connection strings per DbContext so that each module can point to its own database server without code modifications:
   ```json
   "ConnectionStrings": {
     "IdentityDb": "Host=identity-db;Database=identity_db;...",
     "CampaignsDb": "Host=campaigns-db;Database=campaigns_db;...",
-    "ContributionsDb": "Host=contributions-db;Database=contributions_db;..."
+    "PledgesDb": "Host=pledges-db;Database=pledges_db;..."
   }
   ```
 
@@ -601,8 +601,8 @@ How ready is each module in `CrowdFundingHub` to be extracted into an autonomous
 | **Identity** | 🟢 **Trivial (1/5)** | Zero. Owns `identity` schema. | None. Pure producer of tokens. | **9.8 / 10** | 1. Create `Identity.Service` Web host.<br/>2. Expose `/.well-known/jwks.json` and auth endpoints.<br/>3. Zero code changes to Domain/Application. |
 | **Moderation** | 🟢 **Trivial (1/5)** | Zero. Owns `moderation` schema. | None. Listens to `CampaignCreated`. | **9.5 / 10** | 1. Create `Moderation.Service` Web host.<br/>2. Point outbox poller to RabbitMQ/Kafka.<br/>3. Route `/api/moderation/reviews` via API Gateway. |
 | **CampaignUpdates** | 🟢 **Trivial (1/5)** | Zero. Owns own schema. | Consumes events. | **9.5 / 10** | 1. Create host.<br/>2. Subscribe to message broker. |
-| **Campaigns** | 🟡 **Moderate (2.5/5)** | Owns `campaigns` schema. Optimistic concurrency & advisory locks. | Receives `AddContributionToCampaign` via outbox. | **8.5 / 10** | 1. Replace in-process event handler with message consumer.<br/>2. Replace in-memory cache with Redis distributed cache. |
-| **Contributions** | 🟠 **Challenging (3.5/5)** | Owns `contributions` schema. | Used to call `ICampaignContributionAvailabilityReader` synchronously (removed; it now reads a replicated read model). | **7.0 / 10** | 1. ~~Eliminate synchronous call~~ (done: replicated read model).<br/>2. Publish `ContributionPaymentConfirmed` to broker. |
+| **Campaigns** | 🟡 **Moderate (2.5/5)** | Owns `campaigns` schema. Optimistic concurrency & advisory locks. | Receives `AddPledgeToCampaign` via outbox. | **8.5 / 10** | 1. Replace in-process event handler with message consumer.<br/>2. Replace in-memory cache with Redis distributed cache. |
+| **Pledges** | 🟠 **Challenging (3.5/5)** | Owns `pledges` schema. | Used to call `ICampaignPledgeAvailabilityReader` synchronously (removed; it now reads a replicated read model). | **7.0 / 10** | 1. ~~Eliminate synchronous call~~ (done: replicated read model).<br/>2. Publish `PledgePaymentConfirmed` to broker. |
 | **Notifications** | 🟢 **Trivial (1/5)** | Pure consumer. | Event consumer. | **9.0 / 10** | 1. Implement broker consumers for notification events. |
 
 ---
@@ -646,11 +646,11 @@ Use this checklist when designing an in-process monolith that must retain the op
 
 - [x] **1. Zero Cross-Module Domain References**: Verified via automated architecture tests (plain xUnit over referenced assemblies).
 - [x] **2. Dedicated Contracts Assemblies**: Inter-module communication uses only lightweight DTOs and interfaces (`*.Contracts.csproj`).
-- [x] **3. Schema-per-Module Isolation**: Tables grouped into database schemas (`identity`, `campaigns`, `contributions`, etc.).
+- [x] **3. Schema-per-Module Isolation**: Tables grouped into database schemas (`identity`, `campaigns`, `pledges`, etc.).
 - [x] **4. Zero Cross-Schema Foreign Keys**: Relationships use scalar primitive identifiers (`Guid CampaignId`), never SQL foreign keys.
 - [x] **5. Transactional Outbox Pattern**: Domain events committed to local outbox tables, eliminating 2PC dual-writes.
 - [x] **6. Asymmetric Cryptography (ES256/JWKS)**: Edge services verify authentication without shared symmetric secrets or database lookups.
-- [x] **7. Asynchronous Replicated Read Models**: Blocking cross-module synchronous queries are eliminated (the removed `ICampaignContributionAvailabilityReader` is replaced by `contributions.active_campaigns_cache`).
+- [x] **7. Asynchronous Replicated Read Models**: Blocking cross-module synchronous queries are eliminated (the removed `ICampaignPledgeAvailabilityReader` is replaced by `pledges.active_campaigns_cache`).
 - [x] **8. Pluggable Messaging Abstraction**: `IMessageBus` swaps the in-process dispatcher for RabbitMQ (publish only; Kafka is not implemented).
 - [x] **9. Independent Connection Strings**: Each DbContext has its own connection string, and the local run uses one database per module.
 - [x] **10. Reference Extraction Spike**: The Moderation module is extracted as `services/CrowdFunding.Moderation.Service`.

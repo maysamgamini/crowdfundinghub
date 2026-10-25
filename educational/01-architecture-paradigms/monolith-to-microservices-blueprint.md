@@ -43,7 +43,7 @@ graph LR
 To extract a microservice from a monolith without rewriting business logic, the monolithic architecture must adhere to **six core disciplines**:
 
 ### 1. Zero Direct Domain Coupling via Dedicated Contracts Assemblies
-- **The Rule:** Module A (`Contributions`) must **never** reference the domain or infrastructure assemblies of Module B (`Campaigns`).
+- **The Rule:** Module A (`Pledges`) must **never** reference the domain or infrastructure assemblies of Module B (`Campaigns`).
 - **The Implementation:** Module B publishes a lightweight contract assembly (`CrowdFunding.Modules.Campaigns.Contracts.csproj`) containing **only**:
   - Request/Response DTO records.
   - Integration event records (`CampaignPublishedApplicationEvent`).
@@ -51,7 +51,7 @@ To extract a microservice from a monolith without rewriting business logic, the 
 - **Why It Matters for Microservices:** When extracting Module B into a microservice, `Campaigns.Contracts` is simply packed as a NuGet package (`dotnet pack`) and published to a private registry. Downstream consumers change their `<ProjectReference>` to a `<PackageReference>` with zero code edits!
 
 ### 2. Physical Database Schema Isolation (Schema-per-Module)
-- **The Rule:** Each module must own a dedicated PostgreSQL schema (`identity`, `campaigns`, `contributions`, `moderation`, `notifications`, `campaignupdates`).
+- **The Rule:** Each module must own a dedicated PostgreSQL schema (`identity`, `campaigns`, `pledges`, `moderation`, `notifications`, `campaignupdates`).
 - **The Implementation:** Each module has its own independent EF Core `DbContext` registered in its own infrastructure layer:
   ```csharp
   // In CampaignsDbContext
@@ -64,17 +64,17 @@ To extract a microservice from a monolith without rewriting business logic, the 
 
 ### 3. Absolute Elimination of Cross-Schema Database Foreign Keys
 - **The Rule:** Foreign key constraints across module boundaries are strictly forbidden.
-- **The Implementation:** In [`ContributionConfiguration.cs`](../../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Infrastructure/Persistence/Configurations/ContributionConfiguration.cs):
+- **The Implementation:** In [`PledgeConfiguration.cs`](../../src/Modules/Pledges/CrowdFunding.Modules.Pledges.Infrastructure/Persistence/Configurations/PledgeConfiguration.cs):
   ```csharp
   // Stores primitive Guid scalar; NO foreign key to campaigns.campaigns table!
   builder.Property(x => x.CampaignId).IsRequired();
-  builder.Property(x => x.ContributorId).IsRequired();
+  builder.Property(x => x.BackerId).IsRequired();
   ```
-- **Why It Matters for Microservices:** A physical SQL foreign key constraint ties two tables to the same database engine. If `contributions` had a foreign key to `campaigns`, splitting PostgreSQL into two independent database servers would immediately fail.
+- **Why It Matters for Microservices:** A physical SQL foreign key constraint ties two tables to the same database engine. If `pledges` had a foreign key to `campaigns`, splitting PostgreSQL into two independent database servers would immediately fail.
 
 ### 4. Asynchronous Event-Driven Decoupling via the Transactional Outbox
 - **The Rule:** Cross-module state changes must be propagated asynchronously via domain events, never through distributed transactions.
-- **The Implementation:** When a payment confirms in `Contributions`, the event is saved to `contributions.contributions_outbox_messages` in the **same database transaction** as the entity mutation.
+- **The Implementation:** When a payment confirms in `Pledges`, the event is saved to `pledges.pledges_outbox_messages` in the **same database transaction** as the entity mutation.
 - **Why It Matters for Microservices:** Two-Phase Commit (2PC) does not scale and is unsupported across cloud databases. The outbox pattern guarantees **At-Least-Once Delivery** without dual-write race conditions. When extracted to microservices, the outbox table could be tailed by Debezium to stream into Apache Kafka (not built here; the repository ships the polling outbox with `InProcess` and `RabbitMQ` transports).
 
 ### 5. Asymmetric Cryptography (ES256 ECDSA + RFC 7517 JWKS Discovery)
@@ -111,7 +111,7 @@ graph TD
     
     subgraph DecomposedSystem["System Deployment"]
         Gateway -- "Route /api/campaigns/*" --> Monolith["Monolith Host"]
-        Gateway -- "Route /api/campaigns/{id}/contributions/*" --> Monolith
+        Gateway -- "Route /api/campaigns/{id}/pledges/*" --> Monolith
         Gateway -- "Route /api/moderation/* (Strangled)" --> ModService["Extracted Moderation Microservice"]
     end
 

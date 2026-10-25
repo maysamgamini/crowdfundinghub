@@ -158,7 +158,7 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Migrations
                     b.ToTable("campaigns", (string)null);
                 });
 
-            modelBuilder.Entity("CrowdFunding.Modules.Campaigns.Domain.Aggregates.ContributionLedgerEntry", b =>
+            modelBuilder.Entity("CrowdFunding.Modules.Campaigns.Domain.Aggregates.PledgeLedgerEntry", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
@@ -170,7 +170,7 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("CampaignId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("ContributionId")
+                    b.Property<Guid>("PledgeId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("Currency")
@@ -185,11 +185,11 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("CampaignId");
 
-                    b.HasIndex("ContributionId")
+                    b.HasIndex("PledgeId")
                         .IsUnique()
-                        .HasDatabaseName("uq_campaign_contributions_ledger_contribution_id");
+                        .HasDatabaseName("uq_campaign_pledges_ledger_pledge_id");
 
-                    b.ToTable("campaign_contributions_ledger", (string)null);
+                    b.ToTable("campaign_pledges_ledger", (string)null);
                 });
 
             modelBuilder.Entity("CrowdFunding.Modules.Campaigns.Domain.Aggregates.Campaign", b =>
@@ -249,7 +249,7 @@ namespace CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("CrowdFunding.Modules.Campaigns.Domain.Aggregates.ContributionLedgerEntry", b =>
+            modelBuilder.Entity("CrowdFunding.Modules.Campaigns.Domain.Aggregates.PledgeLedgerEntry", b =>
                 {
                     b.HasOne("CrowdFunding.Modules.Campaigns.Domain.Aggregates.Campaign", null)
                         .WithMany()

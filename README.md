@@ -46,7 +46,7 @@ flowchart TB
         direction LR
         Identity["Identity"]
         Campaigns["Campaigns"]
-        Contributions["Contributions"]
+        Pledges["Pledges"]
         Moderation["Moderation"]
         Notifications["Notifications"]
         Updates["CampaignUpdates"]
@@ -54,7 +54,7 @@ flowchart TB
     Host --> Modules
     Identity --- IdDb[("identity_db<br/>schema identity")]
     Campaigns --- CaDb[("campaigns_db<br/>schema campaigns")]
-    Contributions --- CoDb[("contributions_db<br/>schema contributions")]
+    Pledges --- CoDb[("pledges_db<br/>schema pledges")]
     Moderation --- MoDb[("moderation_db<br/>schema moderation")]
     Notifications --- NoDb[("notifications_db<br/>schema notifications")]
     Updates --- UpDb[("campaignupdates_db<br/>schema campaignupdates")]
@@ -66,14 +66,14 @@ flowchart TB
 
 ```mermaid
 sequenceDiagram
-    participant Co as Contributions
-    participant CoDb as contributions outbox
+    participant Co as Pledges
+    participant CoDb as pledges outbox
     participant W as Outbox worker
     participant Ca as Campaigns handler
     participant CaDb as campaigns inbox + ledger
     Co->>CoDb: change state + event row, one transaction
     W->>CoDb: claim batch (FOR UPDATE SKIP LOCKED)
-    W->>Ca: publish ContributionPaymentConfirmed (contract type)
+    W->>Ca: publish PledgePaymentConfirmed (contract type)
     Ca->>CaDb: credit ledger (ON CONFLICT DO NOTHING)
     Ca->>CaDb: record in inbox
     Note over Ca,CaDb: Crash between credit and inbox record = handler runs once more, and the ledger's unique key makes that harmless
@@ -109,7 +109,7 @@ The extraction is demonstrated in [`services/CrowdFunding.Moderation.Service`](.
 Every line of code in this repository adheres to 6 core architectural guardrails:
 
 1. **Contract Assembly Isolation:** Modules communicate *exclusively* through lightweight `*.Contracts` assemblies containing DTOs, query definitions, and integration events. Modules never reference another module's `Application`, `Domain`, or `Infrastructure` layers.
-2. **PostgreSQL Schema Isolation:** Every one of the six modules owns a PostgreSQL schema (`identity`, `campaigns`, `contributions`, `moderation`, `notifications`, `campaignupdates`) and its own EF Core migrations history table inside it. `ModuleSchemaRulesTests` checks this against a real database. The local stack goes one step further: one database per module.
+2. **PostgreSQL Schema Isolation:** Every one of the six modules owns a PostgreSQL schema (`identity`, `campaigns`, `pledges`, `moderation`, `notifications`, `campaignupdates`) and its own EF Core migrations history table inside it. `ModuleSchemaRulesTests` checks this against a real database. The local stack goes one step further: one database per module.
 3. **Zero Cross-Schema Foreign Keys:** Cross-module references are primitive identifiers (`Guid CampaignId`), never database-level foreign key constraints. Data integrity is enforced via application invariants and eventual consistency sagas.
 4. **Transactional Outbox for Boundary Traversal:** Local database transactions write business events atomically into the module's own outbox table, eliminating distributed dual-write hazards. Consumers record what they have handled in a per-module inbox table, so a redelivered event is not handled twice (the record is written after the handler, so one crash window remains; see `docs/TESTS_THAT_TEACH.md`).
 5. **Decentralized Authentication (Asymmetric ES256 / JWKS):** Identity generates private ECDSA keys and exposes public keys at `/.well-known/jwks.json`. Consuming modules and future microservices validate JWTs offline without calling back to Identity.
@@ -128,7 +128,7 @@ A master curriculum suite is published under [`educational/`](./educational/READ
 
 ### [02. Gap Analysis & Architectural Trade-offs](./educational/02-gap-analysis-and-tradeoffs/)
 - **[`over-engineering-audit.md`](./educational/02-gap-analysis-and-tradeoffs/over-engineering-audit.md)**: Where did we go too far? An unsparing audit of accidental complexity: the 14-file pipeline for basic inserts, project explosion, and triple-mapping ceremonies.
-- **[`under-engineering-audit.md`](./educational/02-gap-analysis-and-tradeoffs/under-engineering-audit.md)**: Where didn't we go far enough? Hidden microservice decomposition roadblocks: synchronous query coupling (the removed `ICampaignContributionAvailabilityReader`, now replaced by a replicated read model), centralized outbox poller coupling, and connection pool starvation.
+- **[`under-engineering-audit.md`](./educational/02-gap-analysis-and-tradeoffs/under-engineering-audit.md)**: Where didn't we go far enough? Hidden microservice decomposition roadblocks: synchronous query coupling (the removed `ICampaignPledgeAvailabilityReader`, now replaced by a replicated read model), centralized outbox poller coupling, and connection pool starvation.
 
 ### [03. Engineering Specifications & Roadmap](./educational/03-engineering-spec-and-roadmap/)
 - **[`transformation-spec.md`](./educational/03-engineering-spec-and-roadmap/transformation-spec.md)**: Sprint-ready engineering specification to evolve the codebase into the benchmark educational reference (Epics 1–5).

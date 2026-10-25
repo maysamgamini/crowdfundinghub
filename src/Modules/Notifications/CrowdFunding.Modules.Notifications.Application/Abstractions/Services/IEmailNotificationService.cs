@@ -13,20 +13,20 @@ namespace CrowdFunding.Modules.Notifications.Application.Abstractions.Services;
 public interface IEmailNotificationService
 {
     /// <summary>Sends a backer their pledge/payment confirmation receipt.</summary>
-    /// <param name="recipientUserId">The contributor's user id — resolving this to an actual
+    /// <param name="recipientUserId">The backer's user id — resolving this to an actual
     /// mailbox address is an infrastructure-implementation concern (see remarks on
     /// <see cref="CrowdFunding.Modules.Notifications.Application.Abstractions.Persistence.ICampaignTitleCacheRepository"/>
     /// for why Notifications never queries Identity directly for it).</param>
     /// <param name="campaignId">The campaign the pledge was made against.</param>
-    /// <param name="contributionId">The contribution id — the natural idempotency key for this
-    /// notification, since a contribution is confirmed exactly once.</param>
+    /// <param name="pledgeId">The pledge id — the natural idempotency key for this
+    /// notification, since a pledge is confirmed exactly once.</param>
     /// <param name="amount">The pledged amount.</param>
     /// <param name="currency">The three-letter ISO 4217 currency code.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    Task SendContributionReceiptAsync(
+    Task SendPledgeReceiptAsync(
         Guid recipientUserId,
         Guid campaignId,
-        Guid contributionId,
+        Guid pledgeId,
         decimal amount,
         string currency,
         CancellationToken cancellationToken = default);
@@ -35,14 +35,14 @@ public interface IEmailNotificationService
     /// was refunded.</summary>
     /// <param name="recipientUserId">The affected backer's user id.</param>
     /// <param name="campaignId">The cancelled campaign.</param>
-    /// <param name="contributionId">The refunded contribution id — the idempotency key.</param>
+    /// <param name="pledgeId">The refunded pledge id — the idempotency key.</param>
     /// <param name="refundedAmount">The amount refunded.</param>
     /// <param name="currency">The three-letter ISO 4217 currency code.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     Task SendCampaignCancellationAlertAsync(
         Guid recipientUserId,
         Guid campaignId,
-        Guid contributionId,
+        Guid pledgeId,
         decimal refundedAmount,
         string currency,
         CancellationToken cancellationToken = default);

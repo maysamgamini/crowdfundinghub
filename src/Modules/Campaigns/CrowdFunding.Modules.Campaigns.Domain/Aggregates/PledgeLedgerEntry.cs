@@ -1,0 +1,37 @@
+using CrowdFunding.Modules.Campaigns.Domain.Enums;
+
+namespace CrowdFunding.Modules.Campaigns.Domain.Aggregates;
+
+/// <summary>
+/// Append-only record of a pledge that has been applied to a campaign's raised amount.
+/// The unique constraint on <see cref="PledgeId"/> is the idempotency guard: at-least-once
+/// delivery of the confirmation event can safely retry recording the same pledge without
+/// double-crediting the campaign balance.
+/// </summary>
+public sealed class PledgeLedgerEntry
+{
+    public Guid Id { get; private set; }
+    public Guid CampaignId { get; private set; }
+    public Guid PledgeId { get; private set; }
+    public LedgerEntryKind Kind { get; private set; }
+
+    /// <summary>Positive for a pledge, negative for a refund. The database refuses any other combination.</summary>
+    public decimal Amount { get; private set; }
+    public string Currency { get; private set; } = string.Empty;
+    public DateTime RecordedAtUtc { get; private set; }
+
+    private PledgeLedgerEntry()
+    {
+    }
+
+    public PledgeLedgerEntry(Guid campaignId, Guid pledgeId, LedgerEntryKind kind, decimal amount, string currency, DateTime recordedAtUtc)
+    {
+        Id = Guid.NewGuid();
+        CampaignId = campaignId;
+        PledgeId = pledgeId;
+        Kind = kind;
+        Amount = amount;
+        Currency = currency;
+        RecordedAtUtc = recordedAtUtc;
+    }
+}

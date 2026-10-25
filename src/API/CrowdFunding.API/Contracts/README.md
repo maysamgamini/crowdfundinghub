@@ -9,7 +9,7 @@ Contains request and response contracts returned by the HTTP API.
 ## Child Folders
 - `Campaigns`: Defines API contracts for campaign endpoints.
 - `Common`: Defines shared API response shapes used by multiple controllers.
-- `Contributions`: Defines API contracts for contribution endpoints.
+- `Pledges`: Defines API contracts for pledge endpoints.
 - `Identity`: Defines API contracts for authentication and user-management endpoints.
 - `Moderation`: Defines API contracts for moderation endpoints.
 - `Notifications`: Defines API contracts for backer notification preferences and unsubscribe endpoints.

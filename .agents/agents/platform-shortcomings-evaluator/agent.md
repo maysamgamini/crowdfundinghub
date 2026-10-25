@@ -30,7 +30,7 @@ Your mission is to perform an exhaustive architectural and technical evaluation 
    - Missing pledge refunds & chargeback workflows on cancelled/failed campaigns.
    - Missing automated campaign expiration background jobs (campaigns passing deadline remain Published until manually managed).
    - Missing multi-tier pledge rewards / perks.
-   - Missing multi-currency conversion services (contributions limited to single currency).
+   - Missing multi-currency conversion services (pledges limited to single currency).
    - Missing backer profile management and notification preference management.
 2. High-Load, Concurrency & Performance Shortcomings:
    - Polling Transactional Outbox table bloat and write amplification under heavy throughput.

@@ -1,5 +1,5 @@
 using CrowdFunding.Modules.Campaigns.Application.Abstractions.Transactions;
-using CrowdFunding.Modules.Contributions.Application.Abstractions.Transactions;
+using CrowdFunding.Modules.Pledges.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Identity.Application.Abstractions.Transactions;
 using CrowdFunding.Modules.Moderation.Application.Abstractions.Transactions;
 
@@ -44,9 +44,9 @@ internal sealed class FakeCampaignTransactionExecutor : ICampaignTransactionExec
 }
 
 /// <summary>
-/// In-memory test double for <see cref="IContributionTransactionExecutor"/>.
+/// In-memory test double for <see cref="IPledgeTransactionExecutor"/>.
 /// </summary>
-internal sealed class FakeContributionTransactionExecutor : IContributionTransactionExecutor
+internal sealed class FakePledgeTransactionExecutor : IPledgeTransactionExecutor
 {
     public int InvocationCount { get; private set; }
 

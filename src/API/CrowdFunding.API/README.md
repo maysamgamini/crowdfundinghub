@@ -19,8 +19,8 @@ Following the repository's architectural principles in `DEV_GUIDELINES.md`:
 - `CrowdFunding.API.http`: HTTP scratchpad for exercising API routes with VS Code / Visual Studio REST client tools.
 
 ## Subdirectories
-- `Contracts`: Contains strongly typed request and response DTOs exposed over HTTP, organized by module (`Campaigns`, `Contributions`, `Identity`, `Moderation`, `Notifications`, `Common`).
-- `Controllers`: Houses REST controllers for `Campaigns`, `Contributions`, `Identity`, `Moderation`, and `Notifications`.
+- `Contracts`: Contains strongly typed request and response DTOs exposed over HTTP, organized by module (`Campaigns`, `Pledges`, `Identity`, `Moderation`, `Notifications`, `Common`).
+- `Controllers`: Houses REST controllers for `Campaigns`, `Pledges`, `Identity`, `Moderation`, and `Notifications`.
 - `Mapping`: Mapster configuration profiles mapping HTTP contracts to application commands and DTOs.
 - `Middleware`: Pipeline middleware definitions and extension points.
 - `Migrations`: Database migration execution (`MigrationRunner`) and out-of-band operator admin account seeding (`AdminSeeder`).
@@ -28,8 +28,8 @@ Following the repository's architectural principles in `DEV_GUIDELINES.md`:
 - `Properties`: Local environment launch settings (`launchSettings.json`; the API listens on `http://localhost:5076`).
 - `Validation`, `Documentation`: request validation filters and OpenAPI/Swagger setup.
 
-Outbox and webhook workers are not in the host: each module registers its own background services, for example `CampaignsOutboxBackgroundService`, `ContributionsOutboxBackgroundService` and `WebhookDispatcherBackgroundService`; the shared base class is `ModuleOutboxProcessor` in `BuildingBlocks.Infrastructure`.
-- `RateLimiting`: IP- and user-partitioned rate limiting policies protecting authentication and contribution endpoints (`RateLimitingConfiguration`).
+Outbox and webhook workers are not in the host: each module registers its own background services, for example `CampaignsOutboxBackgroundService`, `PledgesOutboxBackgroundService` and `WebhookDispatcherBackgroundService`; the shared base class is `ModuleOutboxProcessor` in `BuildingBlocks.Infrastructure`.
+- `RateLimiting`: IP- and user-partitioned rate limiting policies protecting authentication and pledge endpoints (`RateLimitingConfiguration`).
 - `RealTime`: SignalR hub (`CampaignHub`) and real-time push notification service (`SignalRCampaignRealtimeNotifier`).
 - `Security`: Bridges HTTP authentication tokens into the domain/application `ICurrentUser` abstraction and exposes public JWKS endpoints (`JwksEndpoint`).
 

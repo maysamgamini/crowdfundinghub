@@ -7,12 +7,12 @@ The Campaign Updates module is the outbound webhook engine: campaign owners regi
 
 ```mermaid
 sequenceDiagram
-    participant Co as Contributions
-    participant H as ContributionPaymentConfirmedActivityHandler
+    participant Co as Pledges
+    participant H as PledgePaymentConfirmedActivityHandler
     participant Db as campaignupdates schema
     participant D as WebhookDispatcherBackgroundService
     participant X as Subscriber URL
-    Co->>H: ContributionPaymentConfirmed (via outbox)
+    Co->>H: PledgePaymentConfirmed (via outbox)
     H->>Db: one WebhookDeliveryTask per active subscription
     D->>Db: claim due tasks (locked until a deadline)
     D->>X: POST with HMAC signature (up to 5 s)

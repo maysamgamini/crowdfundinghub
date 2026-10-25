@@ -10,17 +10,17 @@ Checked and found consistent (no finding): schema + migrations-history table in 
 
 ### F1: Background loops have no top-level exception guard, so one DB error stops the whole host
 - Severity: P1
-- Where: BB/Outbox/ModuleOutboxProcessor.cs:62-64 (loop), :164 (publish catch), :186 (final SaveChanges); M/CampaignUpdates/.../Services/WebhookDispatcherBackgroundService.cs:39-41 (loop), :152 (second UpdateAsync inside the concurrency catch). Affects Campaigns, Contributions, Moderation outbox workers (all three subclasses) and the webhook dispatcher. Contrast: CampaignExpiration, RewardTierReservationScavenger and SigningKeyRefresh services all wrap their iteration in try/catch.
+- Where: BB/Outbox/ModuleOutboxProcessor.cs:62-64 (loop), :164 (publish catch), :186 (final SaveChanges); M/CampaignUpdates/.../Services/WebhookDispatcherBackgroundService.cs:39-41 (loop), :152 (second UpdateAsync inside the concurrency catch). Affects Campaigns, Pledges, Moderation outbox workers (all three subclasses) and the webhook dispatcher. Contrast: CampaignExpiration, RewardTierReservationScavenger and SigningKeyRefresh services all wrap their iteration in try/catch.
 - Evidence: `while (!stoppingToken.IsCancellationRequested) { var claimed = await ProcessBatchCoreAsync(stoppingToken); ...` with no try/catch; Program.cs sets no `BackgroundServiceExceptionBehavior`, so an escaped exception stops the host (.NET default StopHost). Triggers: any Npgsql blip in the claim query or in the final `SaveChangesAsync`; a `DbUpdateConcurrencyException` when the final SaveChanges deletes a row another worker already reclaimed and deleted (see F12); the dispatcher's retry `UpdateAsync(current)` after a second concurrent change.
 - Fix: wrap each loop iteration in try/catch (log, back off with Task.Delay, rethrow only on cancellation); in the dispatcher guard `ClaimDueBatchAsync` and both `UpdateAsync` calls.
 - Acceptance: integration test that makes the claim query throw once (e.g. drop connection / stub DbContext) and asserts the worker keeps running and delivers the next message; same for a forced `DbUpdateConcurrencyException` in the dispatcher.
 
-### F2: Contribution list and detail endpoints are anonymous and return payment data
+### F2: Pledge list and detail endpoints are anonymous and return payment data
 - Severity: P1
-- Where: src/API/CrowdFunding.API/Controllers/ContributionsController.cs:63 (GET list), :156 (GET by id); no class-level or method `[Authorize]` (every other mutating endpoint has one). Contracts: API/Contracts/Contributions/ListContributionsResponse.cs, GetContributionByIdResponse.cs.
-- Evidence: list returns `ContributorId, Amount, Status, PaymentReference, FailureReason` for every pledge and accepts `?contributorId=` as a filter; by-id additionally returns `ExternalPaymentIntentId`. XML docs list only 200/404, no 401.
-- Fix: require authentication; show a public view (count/total, no contributor id, no payment fields) to anonymous callers and the full row only to the contributor, the campaign owner, or `contributions.payments.manage`.
-- Acceptance: E2E test: anonymous GET returns 401 (or the redacted shape); contributor B cannot read contributor A's pledge by id.
+- Where: src/API/CrowdFunding.API/Controllers/PledgesController.cs:63 (GET list), :156 (GET by id); no class-level or method `[Authorize]` (every other mutating endpoint has one). Contracts: API/Contracts/Pledges/ListPledgesResponse.cs, GetPledgeByIdResponse.cs.
+- Evidence: list returns `BackerId, Amount, Status, PaymentReference, FailureReason` for every pledge and accepts `?backerId=` as a filter; by-id additionally returns `ExternalPaymentIntentId`. XML docs list only 200/404, no 401.
+- Fix: require authentication; show a public view (count/total, no backer id, no payment fields) to anonymous callers and the full row only to the backer, the campaign owner, or `pledges.payments.manage`.
+- Acceptance: E2E test: anonymous GET returns 401 (or the redacted shape); backer B cannot read backer A's pledge by id.
 
 ### F3: Extracted Moderation service lets any authenticated token read any review
 - Severity: P1
@@ -32,7 +32,7 @@ Checked and found consistent (no finding): schema + migrations-history table in 
 ### F4: With `Messaging:Provider = RabbitMQ` nothing consumes events, so no handler ever runs
 - Severity: P1
 - Where: BB/Messaging/RabbitMqMessageBus.cs (publish only; no consumer anywhere: grep for BasicConsume/AsyncEventingBasicConsumer in src and services finds only the test); BB/Messaging/MessagingDependencyInjection.cs:16-22; docker-compose.microservices.yml:62-66 and :86-88 set RabbitMQ for both hosts; services/CrowdFunding.Moderation.Service/README.md:18.
-- Evidence: the outbox worker publishes only via `IMessageBus` (ModuleOutboxProcessor.cs:140 region). In RabbitMQ mode `ServiceProviderEventPublisher` is never called, so in the monolith the Contributions->Campaigns credit, refund saga, Notifications, CampaignUpdates and Moderation CampaignCreated handler all stop; outbox rows are deleted as "delivered". The extracted service therefore never creates a review (Approve returns 404 for every real campaign). Smoke test uses `Messaging:Provider=InProcess` and seeds the review by hand, which hides it. `Source` is also hard-coded `urn:crowdfunding:monolith` even when published by the service (RabbitMqMessageBus.cs:38).
+- Evidence: the outbox worker publishes only via `IMessageBus` (ModuleOutboxProcessor.cs:140 region). In RabbitMQ mode `ServiceProviderEventPublisher` is never called, so in the monolith the Pledges->Campaigns credit, refund saga, Notifications, CampaignUpdates and Moderation CampaignCreated handler all stop; outbox rows are deleted as "delivered". The extracted service therefore never creates a review (Approve returns 404 for every real campaign). Smoke test uses `Messaging:Provider=InProcess` and seeds the review by hand, which hides it. `Source` is also hard-coded `urn:crowdfunding:monolith` even when published by the service (RabbitMqMessageBus.cs:38).
 - Fix: add a consumer hosted service that reads the exchange and calls `IEventPublisher.PublishAsync` (with the CloudEvent id as `InboxMessageContext.MessageId`), or make RabbitMQ mode publish in addition to in-process delivery; correct the README claim until then.
 - Acceptance: compose-level or Testcontainers test: create campaign in monolith with RabbitMQ provider, assert a review row appears in the Moderation service; pledge confirmed raises `RaisedAmount`.
 
@@ -50,9 +50,9 @@ Checked and found consistent (no finding): schema + migrations-history table in 
 - Fix: require a signed, per-user unsubscribe token (HMAC over user id) or an authenticated caller; apply the webhook/auth rate-limit policy.
 - Acceptance: test: anonymous POST with another user's id and no valid token returns 400/401 and leaves preferences unchanged.
 
-### F7: Moderation reviews have no concurrency token or concurrency translation (deviates from Campaigns, Contributions, Identity)
+### F7: Moderation reviews have no concurrency token or concurrency translation (deviates from Campaigns, Pledges, Identity)
 - Severity: P2
-- Where: M/Moderation/.../Persistence/Configurations/CampaignReviewConfiguration.cs (no `xmin`; every other aggregate has one at e.g. ContributionConfiguration.cs:98); M/Moderation/.../Transactions/ModerationTransactionExecutor.cs (only a bare `catch`, no `DbUpdateConcurrencyException` -> `ConcurrencyConflictException`, unlike Identity/Campaigns/Contributions executors).
+- Where: M/Moderation/.../Persistence/Configurations/CampaignReviewConfiguration.cs (no `xmin`; every other aggregate has one at e.g. PledgeConfiguration.cs:98); M/Moderation/.../Transactions/ModerationTransactionExecutor.cs (only a bare `catch`, no `DbUpdateConcurrencyException` -> `ConcurrencyConflictException`, unlike Identity/Campaigns/Pledges executors).
 - Evidence: two moderators (or a moderator and the media-analysis webhook) can load the same Pending review; both pass `EnsurePending`, last write wins, and both `CampaignReviewApproved` and `CampaignReviewRejected` events are written to the outbox, so downstream modules (Notifications, CampaignUpdates, Campaigns publish gate) see contradictory outcomes.
 - Fix: add `xmin` token + migration, translate the exception in the executor, document 409 on approve/reject.
 - Acceptance: concurrent approve+reject integration test yields exactly one success and one 409, and exactly one event in the outbox.
@@ -66,28 +66,28 @@ Checked and found consistent (no finding): schema + migrations-history table in 
 
 ### F9: Media-analysis webhook skips its own validator; out-of-range scores overflow numeric(3,2)
 - Severity: P2
-- Where: src/API/CrowdFunding.API/Controllers/ModerationWebhooksController.cs:76-79 (sends command without validating); validator exists and is registered: M/Moderation/.../RecordMediaAnalysisCommandValidator.cs (0..1); column `HasPrecision(3,2)` in CampaignReviewConfiguration.cs:40-43. Same pattern: `ReconcilePaymentWebhookCommandValidator` is registered (ContributionsApplicationDependencyInjection) but PaymentWebhooksController.cs:87 never calls it.
+- Where: src/API/CrowdFunding.API/Controllers/ModerationWebhooksController.cs:76-79 (sends command without validating); validator exists and is registered: M/Moderation/.../RecordMediaAnalysisCommandValidator.cs (0..1); column `HasPrecision(3,2)` in CampaignReviewConfiguration.cs:40-43. Same pattern: `ReconcilePaymentWebhookCommandValidator` is registered (PledgesApplicationDependencyInjection) but PaymentWebhooksController.cs:87 never calls it.
 - Evidence: a signed payload with `toxicityScore: 12.5` passes the controller, the domain accepts it (CampaignReview.cs:103-110 has no range check), and the save fails with a Postgres numeric overflow, a `DbUpdateException` that is not a unique violation, so 500 and the cloud function retries forever.
 - Fix: call the validators in both webhook controllers (400 on failure) or enforce the range in the aggregate.
 - Acceptance: webhook test with score 12.5 returns 400 and writes nothing.
 
 ### F10: Refund saga can finish "successfully" after a cancellation, losing the rest of the refunds
 - Severity: P2
-- Where: M/Contributions/.../Events/CampaignTerminationRefundHandler.cs:49 (`while (!cancellationToken.IsCancellationRequested)`).
-- Evidence: if the token is cancelled between two batches the loop just exits and `Handle` returns normally; the outbox then deletes the message and the inbox marks the handler done, so remaining Succeeded contributions (batches of 100) are never refunded. Idempotence only helps if the event is redelivered.
+- Where: M/Pledges/.../Events/CampaignTerminationRefundHandler.cs:49 (`while (!cancellationToken.IsCancellationRequested)`).
+- Evidence: if the token is cancelled between two batches the loop just exits and `Handle` returns normally; the outbox then deletes the message and the inbox marks the handler done, so remaining Succeeded pledges (batches of 100) are never refunded. Idempotence only helps if the event is redelivered.
 - Fix: `cancellationToken.ThrowIfCancellationRequested()` inside the loop instead of a silent exit.
-- Acceptance: unit test cancels after the first batch of a 250-contribution campaign and asserts the handler throws (message stays pending).
+- Acceptance: unit test cancels after the first batch of a 250-pledge campaign and asserts the handler throws (message stays pending).
 
 ### F11: Outbox lease (30 s) is shorter than a worst-case batch, and shutdown consumes retry attempts
 - Severity: P2
 - Where: BB/Outbox/ModuleOutboxProcessor.cs:30 (`LockDuration` 30 s), BatchSize 20 processed sequentially (:113-170) with one `SaveChangesAsync` at the end (:186); catch at :164 treats every exception, including `OperationCanceledException` on host stop, as a failed attempt (`MarkFailed`).
-- Evidence: handlers run inline (advisory locks, concurrency retries with delays in AddContributionToCampaign); 20 slow messages can exceed 30 s, so a second worker reclaims rows still being processed (duplicate delivery; inbox is written after the handler, so side effects can repeat) and the first worker's final delete hits already-deleted rows (see F1). Each deployment that interrupts a batch adds an attempt; 5 restarts dead-letter a healthy message.
+- Evidence: handlers run inline (advisory locks, concurrency retries with delays in AddPledgeToCampaign); 20 slow messages can exceed 30 s, so a second worker reclaims rows still being processed (duplicate delivery; inbox is written after the handler, so side effects can repeat) and the first worker's final delete hits already-deleted rows (see F1). Each deployment that interrupts a batch adds an attempt; 5 restarts dead-letter a healthy message.
 - Fix: renew the lease per message or save after each message; skip `MarkFailed` when the token is cancelled.
 - Acceptance: test with a handler that sleeps longer than the lease asserts single delivery; test that cancelling mid-batch leaves `Attempts` unchanged.
 
 ### F12: Pledge accepts any reward-tier reservation id (not bound to backer or campaign)
 - Severity: P2
-- Where: M/Contributions/.../MakeContributionCommandHandler.cs (builds `Contribution.Create(..., command.RewardTierReservationId, ...)` with no check); M/Campaigns/.../AddContributionToCampaignCommandHandler.cs `ConfirmRewardTierReservationAsync` (checks only `Status == Reserved`, not `reservation.CampaignId == command.CampaignId` or the backer); release handlers ContributionPaymentFailedRewardTierHandler / ContributionRefundedRewardTierHandler act on the id carried by the event.
+- Where: M/Pledges/.../MakePledgeCommandHandler.cs (builds `Pledge.Create(..., command.RewardTierReservationId, ...)` with no check); M/Campaigns/.../AddPledgeToCampaignCommandHandler.cs `ConfirmRewardTierReservationAsync` (checks only `Status == Reserved`, not `reservation.CampaignId == command.CampaignId` or the backer); release handlers PledgePaymentFailedRewardTierHandler / PledgeRefundedRewardTierHandler act on the id carried by the event.
 - Evidence: a pledge to campaign Y can confirm or, when it fails, release a reservation held by another backer or for campaign X; an expired reservation silently gives the backer no reward while the pledge is credited.
 - Fix: verify campaign id and backer id on the reservation in the Campaigns handler and ignore (log) mismatches.
 - Acceptance: test: pledge carrying another user's reservation id leaves that reservation Reserved and the tier count unchanged.
@@ -115,28 +115,28 @@ Checked and found consistent (no finding): schema + migrations-history table in 
 
 ### F16: Raw SQL hard-codes schemas while the rest of the code reads them from the model
 - Severity: P3
-- Where: M/CampaignUpdates/.../WebhookDeliveryTaskRepository.cs:41,48 (`campaignupdates.webhook_delivery_tasks`); M/Campaigns/.../ContributionLedger.cs:35 (`campaigns.campaign_contributions_ledger`). OutboxClaimQuery.cs and EfInbox.cs read the schema from the EF model.
+- Where: M/CampaignUpdates/.../WebhookDeliveryTaskRepository.cs:41,48 (`campaignupdates.webhook_delivery_tasks`); M/Campaigns/.../PledgeLedger.cs:35 (`campaigns.campaign_pledges_ledger`). OutboxClaimQuery.cs and EfInbox.cs read the schema from the EF model.
 - Evidence: a schema rename would break these two statements at runtime only.
 - Fix: resolve the qualified table name from the model as OutboxClaimQuery does.
 - Acceptance: ModuleSchemaRulesTests-style test that renames nothing but asserts the statements run against a context configured with a different default schema.
 
 ### F17: Injected clock bypassed in several places
 - Severity: P3
-- Where: M/CampaignUpdates/.../Events/CampaignActivityEventHandlers.cs:32 and WebhookDispatcherBackgroundService.cs:59,108 (module has `ICampaignUpdatesDateTimeProvider`); M/Notifications/.../ReplicatedCampaignTitleEventHandler.cs:23 (`INotificationsDateTimeProvider` exists); M/Campaigns/.../ContributionLedger.cs:36; M/Campaigns/.../CreateCampaignCommandValidator.cs:37; Campaigns/Contributions/Moderation executors use `DateTime.UtcNow` for `OutboxMessage.Create` (CampaignTransactionExecutor.cs:186-198, ContributionTransactionExecutor.cs:141-160, ModerationTransactionExecutor.cs:98-101) although each module owns a provider.
+- Where: M/CampaignUpdates/.../Events/CampaignActivityEventHandlers.cs:32 and WebhookDispatcherBackgroundService.cs:59,108 (module has `ICampaignUpdatesDateTimeProvider`); M/Notifications/.../ReplicatedCampaignTitleEventHandler.cs:23 (`INotificationsDateTimeProvider` exists); M/Campaigns/.../PledgeLedger.cs:36; M/Campaigns/.../CreateCampaignCommandValidator.cs:37; Campaigns/Pledges/Moderation executors use `DateTime.UtcNow` for `OutboxMessage.Create` (CampaignTransactionExecutor.cs:186-198, PledgeTransactionExecutor.cs:141-160, ModerationTransactionExecutor.cs:98-101) although each module owns a provider.
 - Evidence: tests that fake the module clock still get real timestamps in these rows. The outbox claim also uses `DateTime.UtcNow` (intentional, same application clock), so mixing a faked executor clock with the real claim clock would make due-date logic inconsistent if someone fixes only one side.
 - Fix: inject the module provider (executors can take it via constructor); keep the outbox claim and writer on the same source.
 - Acceptance: unit test with a fixed provider asserts `OccurredOnUtc`/`UpdatedAtUtc` equal the fake time.
 
 ### F18: Index and table naming conventions are mixed
 - Severity: P3
-- Where: snapshots: `ix_*` lower snake (outbox, `ix_active_campaigns_cache_lookup`), `uq_campaign_contributions_ledger_contribution_id`, `UX_contributions_ContributorId_IdempotencyKey` (PascalCase), EF defaults `IX_...` elsewhere; `identity_signing_keys` is the only table carrying a module prefix inside its schema (others: `users`, `refresh_tokens`), while inbox/outbox tables carry the prefix in all modules.
-- Evidence: Contributions/Domain/Aggregates/ContributionIndexes.cs defines the idempotency index name; the executor matches it by name, so renaming for style would break the translation unless both change together.
+- Where: snapshots: `ix_*` lower snake (outbox, `ix_active_campaigns_cache_lookup`), `uq_campaign_pledges_ledger_pledge_id`, `UX_pledges_BackerId_IdempotencyKey` (PascalCase), EF defaults `IX_...` elsewhere; `identity_signing_keys` is the only table carrying a module prefix inside its schema (others: `users`, `refresh_tokens`), while inbox/outbox tables carry the prefix in all modules.
+- Evidence: Pledges/Domain/Aggregates/PledgeIndexes.cs defines the idempotency index name; the executor matches it by name, so renaming for style would break the translation unless both change together.
 - Fix: pick one convention for hand-named indexes and add an architecture test listing allowed names; rename `identity_signing_keys` -> `signing_keys` with a migration if desired.
 - Acceptance: test that scans the model for `HasDatabaseName` values and matches the regex.
 
 ### F19: Dead or stale code and comments
 - Severity: P3
-- Where: `CompleteCampaignCommandValidator` and `FailCampaignCommandValidator` exist but are not registered in CampaignsApplicationDependencyInjection (only five Campaigns + two RewardTier validators are); M/Moderation DI registers handlers explicitly although `AddRequestHandlersFromAssemblies` already scans them (and omits `ListCampaignReviewsQueryHandler`, which works only because of the scan); src/API/.../Program.cs TICKET-036 comment says "(when wired up) account deactivation" but DeactivateUserCommandHandler already revokes the stamp; the BOM + duplicated `using` blocks at the top of Campaigns/Contributions/Moderation DI files.
+- Where: `CompleteCampaignCommandValidator` and `FailCampaignCommandValidator` exist but are not registered in CampaignsApplicationDependencyInjection (only five Campaigns + two RewardTier validators are); M/Moderation DI registers handlers explicitly although `AddRequestHandlersFromAssemblies` already scans them (and omits `ListCampaignReviewsQueryHandler`, which works only because of the scan); src/API/.../Program.cs TICKET-036 comment says "(when wired up) account deactivation" but DeactivateUserCommandHandler already revokes the stamp; the BOM + duplicated `using` blocks at the top of Campaigns/Pledges/Moderation DI files.
 - Evidence: see files; no behaviour impact today.
 - Fix: delete or register; update comments.
 - Acceptance: build with `IDE0005` as warning and a test that every `AbstractValidator<T>` is registered.

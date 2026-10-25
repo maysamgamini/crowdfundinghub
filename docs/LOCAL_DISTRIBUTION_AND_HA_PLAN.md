@@ -17,11 +17,11 @@ owner:
 
 | Fact | Evidence |
 |---|---|
-| Every module reads its own connection string and falls back to the shared one | `GetRequiredModuleConnectionString("CampaignsDb")` and the same for Contributions, Identity, Moderation, Notifications, CampaignUpdates, Audit |
+| Every module reads its own connection string and falls back to the shared one | `GetRequiredModuleConnectionString("CampaignsDb")` and the same for Pledges, Identity, Moderation, Notifications, CampaignUpdates, Audit |
 | Locally each module has its own database | `appsettings.Development.json` has a connection string per module (eight databases: the six modules, Audit and the Rosetta Stone sample); `docker-compose.yml` starts one PostgreSQL container that creates them (`deploy/postgres/init-module-databases.sh`) and one Redis. `DefaultConnection` in `appsettings.json` is only the fallback |
 | A test runs one module (Campaigns) in a separate database | `MultiDatabaseConnectionDecouplingTests` |
 | Modules already live in their own schemas, with no foreign key crossing a schema | `ModuleSchemaRulesTests` |
-| Each module that publishes events (Campaigns, Contributions, Moderation) has its own outbox and worker, and every module except Identity has an inbox, so no transaction spans two modules | `ModuleOutboxProcessor`, `EfInbox` |
+| Each module that publishes events (Campaigns, Pledges, Moderation) has its own outbox and worker, and every module except Identity has an inbox, so no transaction spans two modules | `ModuleOutboxProcessor`, `EfInbox` |
 
 So the code is shaped for one database per module. The work was infrastructure, migration
 and failure handling, not a rewrite.
@@ -55,7 +55,7 @@ tests).
 flowchart LR
   subgraph API["CrowdFunding.API (one process)"]
     C[Campaigns]
-    K[Contributions]
+    K[Pledges]
     I[Identity]
     M[Moderation]
     N[Notifications]
@@ -63,8 +63,8 @@ flowchart LR
   end
   C --> CP[(campaigns primary)]
   CP -. sync replication .-> CS[(campaigns standby)]
-  K --> KP[(contributions primary)]
-  KP -. sync replication .-> KS[(contributions standby)]
+  K --> KP[(pledges primary)]
+  KP -. sync replication .-> KS[(pledges standby)]
   I --> IP[(identity primary)]
   IP -. sync replication .-> IS[(identity standby)]
   M --> MP[(moderation primary)] -. sync replication .-> MS[(moderation standby)]

@@ -8,7 +8,7 @@ namespace CrowdFunding.Modules.Identity.Infrastructure.Transactions;
 
 /// <summary>
 /// Executes the surrounding module write operation inside a transaction boundary. Mirrors
-/// CampaignTransactionExecutor/ContributionTransactionExecutor/ModerationTransactionExecutor,
+/// CampaignTransactionExecutor/PledgeTransactionExecutor/ModerationTransactionExecutor,
 /// minus outbox/domain-event harvesting — the Identity module doesn't raise domain events today.
 /// </summary>
 public sealed class IdentityTransactionExecutor : IIdentityTransactionExecutor
@@ -58,7 +58,7 @@ public sealed class IdentityTransactionExecutor : IIdentityTransactionExecutor
 
             // Translated to an infrastructure-agnostic exception so application-layer handlers
             // can catch and retry without taking a dependency on Entity Framework Core. Mirrors
-            // CampaignTransactionExecutor/ContributionTransactionExecutor.
+            // CampaignTransactionExecutor/PledgeTransactionExecutor.
             throw new ConcurrencyConflictException(
                 "The entity was modified by another transaction. Retry with a fresh read.", ex);
         }

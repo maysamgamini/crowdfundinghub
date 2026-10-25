@@ -7,4 +7,4 @@ Groups contract-level commands exposed by the Campaigns module.
 - No direct files live in this folder; it primarily organizes child folders.
 
 ## Child Folders
-- `AddContributionToCampaign`: Contains source files related to Add Contribution To Campaign.
+- `AddPledgeToCampaign`: Contains source files related to Add Pledge To Campaign.

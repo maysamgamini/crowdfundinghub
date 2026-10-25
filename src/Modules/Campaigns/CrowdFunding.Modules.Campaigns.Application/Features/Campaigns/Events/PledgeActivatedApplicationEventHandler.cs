@@ -1,7 +1,7 @@
 using CrowdFunding.BuildingBlocks.Application.Events;
 using CrowdFunding.BuildingBlocks.Application.Messaging;
-using CrowdFunding.Modules.Campaigns.Contracts.Commands.AddContributionToCampaign;
-using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPledgeActivated;
+using CrowdFunding.Modules.Campaigns.Contracts.Commands.AddPledgeToCampaign;
+using CrowdFunding.Modules.Pledges.Contracts.Events.PledgeActivated;
 
 namespace CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Events;
 
@@ -9,7 +9,7 @@ namespace CrowdFunding.Modules.Campaigns.Application.Features.Campaigns.Events;
 /// A pledge's card was saved, so the pledge counts toward the campaign. In the save-then-charge funding model the
 /// promise is what counts at the deadline, not the money (that is only taken after the campaign is funded).
 /// </summary>
-public sealed class PledgeActivatedApplicationEventHandler : IEventHandler<ContributionPledgeActivatedApplicationEvent>
+public sealed class PledgeActivatedApplicationEventHandler : IEventHandler<PledgeActivatedApplicationEvent>
 {
     private readonly ICommandDispatcher _commandDispatcher;
 
@@ -18,12 +18,12 @@ public sealed class PledgeActivatedApplicationEventHandler : IEventHandler<Contr
         _commandDispatcher = commandDispatcher;
     }
 
-    public async Task Handle(ContributionPledgeActivatedApplicationEvent notification, CancellationToken cancellationToken)
+    public async Task Handle(PledgeActivatedApplicationEvent notification, CancellationToken cancellationToken)
     {
-        await _commandDispatcher.SendAsync<AddContributionToCampaignResult>(
-            new AddContributionToCampaignCommand(
+        await _commandDispatcher.SendAsync<AddPledgeToCampaignResult>(
+            new AddPledgeToCampaignCommand(
                 notification.CampaignId,
-                notification.ContributionId,
+                notification.PledgeId,
                 notification.Amount,
                 notification.Currency,
                 notification.RewardTierReservationId),

@@ -6,7 +6,7 @@ namespace CrowdFunding.API.RateLimiting;
 
 /// <summary>
 /// Rate limiting policies (improvement.md §2.8/§3.8) — previously absent everywhere, leaving
-/// login, registration, and contribution endpoints open to brute-force credential attacks, Sybil
+/// login, registration, and pledge endpoints open to brute-force credential attacks, Sybil
 /// account creation, and payment-card testing.
 /// </summary>
 public static class RateLimitingConfiguration
@@ -47,7 +47,7 @@ public static class RateLimitingConfiguration
                     Window = TimeSpan.FromSeconds(authWindowSeconds),
                 }));
 
-            // Contribution endpoints are authenticated, so partition per user when available and
+            // Pledge endpoints are authenticated, so partition per user when available and
             // fall back to IP only for the rare case a request reaches this policy unauthenticated.
             options.AddPolicy(PaymentPolicy, httpContext => RateLimitPartition.GetFixedWindowLimiter(
                 partitionKey: httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier)

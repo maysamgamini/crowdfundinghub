@@ -2,9 +2,9 @@ using CrowdFunding.BuildingBlocks.Domain.ValueObjects;
 using CrowdFunding.Modules.Campaigns.Application.Features.RewardTiers.Events;
 using CrowdFunding.Modules.Campaigns.Domain.Aggregates;
 using CrowdFunding.Modules.Campaigns.Domain.Enums;
-using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPaymentConfirmed;
-using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionPaymentFailed;
-using CrowdFunding.Modules.Contributions.Contracts.Events.ContributionRefunded;
+using CrowdFunding.Modules.Pledges.Contracts.Events.PledgePaymentConfirmed;
+using CrowdFunding.Modules.Pledges.Contracts.Events.PledgePaymentFailed;
+using CrowdFunding.Modules.Pledges.Contracts.Events.PledgeRefunded;
 
 namespace CrowdFunding.UnitTests;
 
@@ -141,10 +141,10 @@ public sealed class RewardTierTests
     public void Reservation_Refund_ShouldTransitionStatusToReleased_WhenConfirmed()
     {
         var reservation = RewardTierReservation.Create(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), DateTime.UtcNow);
-        var contributionId = Guid.NewGuid();
-        reservation.Confirm(contributionId);
+        var pledgeId = Guid.NewGuid();
+        reservation.Confirm(pledgeId);
         Assert.Equal(RewardTierReservationStatus.Confirmed, reservation.Status);
-        Assert.Equal(contributionId, reservation.ContributionId);
+        Assert.Equal(pledgeId, reservation.PledgeId);
 
         reservation.Refund();
         Assert.Equal(RewardTierReservationStatus.Released, reservation.Status);
@@ -158,7 +158,7 @@ public sealed class RewardTierTests
     }
 
     [Fact]
-    public async Task ContributionRefundedRewardTierHandler_ShouldReleaseClaimAndRefundReservation_WhenReservationIsConfirmed()
+    public async Task PledgeRefundedRewardTierHandler_ShouldReleaseClaimAndRefundReservation_WhenReservationIsConfirmed()
     {
         var tier = CreateTier(totalCapacity: 5);
         tier.ReserveSlot();
@@ -166,16 +166,16 @@ public sealed class RewardTierTests
 
         var campaignId = Guid.NewGuid();
         var reservation = RewardTierReservation.Create(tier.Id, campaignId, Guid.NewGuid(), DateTime.UtcNow);
-        var contributionId = Guid.NewGuid();
-        reservation.Confirm(contributionId);
+        var pledgeId = Guid.NewGuid();
+        reservation.Confirm(pledgeId);
 
         var tierRepo = new FakeRewardTierRepository(tier);
         var reservationRepo = new FakeRewardTierReservationRepository(reservation);
         var txExecutor = new FakeCampaignTransactionExecutor();
-        var handler = new ContributionRefundedRewardTierHandler(reservationRepo, tierRepo, txExecutor);
+        var handler = new PledgeRefundedRewardTierHandler(reservationRepo, tierRepo, txExecutor);
 
-        var @event = new ContributionRefundedApplicationEvent(
-            contributionId,
+        var @event = new PledgeRefundedApplicationEvent(
+            pledgeId,
             campaignId,
             Guid.NewGuid(),
             199m,
@@ -190,7 +190,7 @@ public sealed class RewardTierTests
     }
 
     [Fact]
-    public async Task ContributionRefundedRewardTierHandler_ShouldBeIdempotent_WhenReservationAlreadyReleased()
+    public async Task PledgeRefundedRewardTierHandler_ShouldBeIdempotent_WhenReservationAlreadyReleased()
     {
         var tier = CreateTier(totalCapacity: 5);
         tier.ReserveSlot();
@@ -198,18 +198,18 @@ public sealed class RewardTierTests
 
         var campaignId = Guid.NewGuid();
         var reservation = RewardTierReservation.Create(tier.Id, campaignId, Guid.NewGuid(), DateTime.UtcNow);
-        var contributionId = Guid.NewGuid();
-        reservation.Confirm(contributionId);
+        var pledgeId = Guid.NewGuid();
+        reservation.Confirm(pledgeId);
         reservation.Refund();
         tier.ReleaseClaim();
 
         var tierRepo = new FakeRewardTierRepository(tier);
         var reservationRepo = new FakeRewardTierReservationRepository(reservation);
         var txExecutor = new FakeCampaignTransactionExecutor();
-        var handler = new ContributionRefundedRewardTierHandler(reservationRepo, tierRepo, txExecutor);
+        var handler = new PledgeRefundedRewardTierHandler(reservationRepo, tierRepo, txExecutor);
 
-        var @event = new ContributionRefundedApplicationEvent(
-            contributionId,
+        var @event = new PledgeRefundedApplicationEvent(
+            pledgeId,
             campaignId,
             Guid.NewGuid(),
             199m,
@@ -223,14 +223,14 @@ public sealed class RewardTierTests
     }
 
     [Fact]
-    public async Task ContributionRefundedRewardTierHandler_ShouldDoNothing_WhenReservationIdIsNull()
+    public async Task PledgeRefundedRewardTierHandler_ShouldDoNothing_WhenReservationIdIsNull()
     {
         var tierRepo = new FakeRewardTierRepository();
         var reservationRepo = new FakeRewardTierReservationRepository();
         var txExecutor = new FakeCampaignTransactionExecutor();
-        var handler = new ContributionRefundedRewardTierHandler(reservationRepo, tierRepo, txExecutor);
+        var handler = new PledgeRefundedRewardTierHandler(reservationRepo, tierRepo, txExecutor);
 
-        var @event = new ContributionRefundedApplicationEvent(
+        var @event = new PledgeRefundedApplicationEvent(
             Guid.NewGuid(),
             Guid.NewGuid(),
             Guid.NewGuid(),
@@ -242,7 +242,7 @@ public sealed class RewardTierTests
     }
 
     [Fact]
-    public async Task ContributionPaymentFailedRewardTierHandler_ShouldReleaseReservationImmediately_WhenReservationIsReserved()
+    public async Task PledgePaymentFailedRewardTierHandler_ShouldReleaseReservationImmediately_WhenReservationIsReserved()
     {
         var tier = CreateTier(totalCapacity: 5);
         tier.ReserveSlot();
@@ -253,9 +253,9 @@ public sealed class RewardTierTests
         var tierRepo = new FakeRewardTierRepository(tier);
         var reservationRepo = new FakeRewardTierReservationRepository(reservation);
         var txExecutor = new FakeCampaignTransactionExecutor();
-        var handler = new ContributionPaymentFailedRewardTierHandler(reservationRepo, tierRepo, txExecutor);
+        var handler = new PledgePaymentFailedRewardTierHandler(reservationRepo, tierRepo, txExecutor);
 
-        var @event = new ContributionPaymentFailedApplicationEvent(
+        var @event = new PledgePaymentFailedApplicationEvent(
             Guid.NewGuid(),
             campaignId,
             Guid.NewGuid(),
@@ -272,7 +272,7 @@ public sealed class RewardTierTests
     }
 
     [Fact]
-    public async Task ContributionPaymentFailedRewardTierHandler_ShouldBeIdempotent_WhenReservationAlreadyReleased()
+    public async Task PledgePaymentFailedRewardTierHandler_ShouldBeIdempotent_WhenReservationAlreadyReleased()
     {
         var tier = CreateTier(totalCapacity: 5);
         tier.ReserveSlot();
@@ -285,9 +285,9 @@ public sealed class RewardTierTests
         var tierRepo = new FakeRewardTierRepository(tier);
         var reservationRepo = new FakeRewardTierReservationRepository(reservation);
         var txExecutor = new FakeCampaignTransactionExecutor();
-        var handler = new ContributionPaymentFailedRewardTierHandler(reservationRepo, tierRepo, txExecutor);
+        var handler = new PledgePaymentFailedRewardTierHandler(reservationRepo, tierRepo, txExecutor);
 
-        var @event = new ContributionPaymentFailedApplicationEvent(
+        var @event = new PledgePaymentFailedApplicationEvent(
             Guid.NewGuid(),
             campaignId,
             Guid.NewGuid(),
@@ -303,14 +303,14 @@ public sealed class RewardTierTests
     }
 
     [Fact]
-    public async Task ContributionPaymentFailedRewardTierHandler_ShouldDoNothing_WhenReservationIdIsNull()
+    public async Task PledgePaymentFailedRewardTierHandler_ShouldDoNothing_WhenReservationIdIsNull()
     {
         var tierRepo = new FakeRewardTierRepository();
         var reservationRepo = new FakeRewardTierReservationRepository();
         var txExecutor = new FakeCampaignTransactionExecutor();
-        var handler = new ContributionPaymentFailedRewardTierHandler(reservationRepo, tierRepo, txExecutor);
+        var handler = new PledgePaymentFailedRewardTierHandler(reservationRepo, tierRepo, txExecutor);
 
-        var @event = new ContributionPaymentFailedApplicationEvent(
+        var @event = new PledgePaymentFailedApplicationEvent(
             Guid.NewGuid(),
             Guid.NewGuid(),
             Guid.NewGuid(),

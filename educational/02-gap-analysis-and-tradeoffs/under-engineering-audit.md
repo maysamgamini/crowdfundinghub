@@ -14,7 +14,7 @@ While `CrowdFundingHub` enforces excellent static boundary checks via plain xUni
 ```mermaid
 graph TD
     subgraph Roadblocks["4 Hidden Decomposition Roadblocks"]
-        RB1["Roadblock 1: Synchronous Inter-Module Query Coupling<br/>(Contributions calls Campaigns synchronously)"]
+        RB1["Roadblock 1: Synchronous Inter-Module Query Coupling<br/>(Pledges calls Campaigns synchronously)"]
         RB2["Roadblock 2: Outbox Poller Coupled to In-Process Memory<br/>(OutboxProcessor dispatches via IServiceProvider)"]
         RB3["Roadblock 3: Shared Connection Pool & Physical DB<br/>(All DbContexts share max 100 Postgres connections)"]
         RB4["Roadblock 4: Shared BuildingBlocks Kernel<br/>(Binary coupling across all module assemblies)"]
@@ -30,31 +30,31 @@ graph TD
 
 ### Roadblock 1: Synchronous Inter-Module Query Coupling (The Cascading Failure Trap)
 
-In [`MakeContributionCommandHandler.cs`](../../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs#L42-L44):
+In [`MakePledgeCommandHandler.cs`](../../src/Modules/Pledges/CrowdFunding.Modules.Pledges.Application/Features/Pledges/Commands/MakePledge/MakePledgeCommandHandler.cs#L42-L44):
 ```csharp
-var campaignAvailability = await _campaignContributionAvailabilityReader
-    .GetCampaignContributionAvailabilityAsync(
-        new GetCampaignContributionAvailabilityQuery(command.CampaignId), 
+var campaignAvailability = await _campaignPledgeAvailabilityReader
+    .GetCampaignPledgeAvailabilityAsync(
+        new GetCampaignPledgeAvailabilityQuery(command.CampaignId), 
         cancellationToken);
 ```
 
 #### The Architectural Trap:
-In the monolith, `_campaignContributionAvailabilityReader` executes an in-process query taking **0.2 milliseconds**.
+In the monolith, `_campaignPledgeAvailabilityReader` executes an in-process query taking **0.2 milliseconds**.
 
-When `Contributions` and `Campaigns` are separated into distinct microservices over a network:
+When `Pledges` and `Campaigns` are separated into distinct microservices over a network:
 1. This becomes a synchronous HTTP or gRPC call across the cluster.
-2. If `Campaigns` suffers an outage, network partition, or deployment restart, `Contributions` **fails to accept pledges**.
+2. If `Campaigns` suffers an outage, network partition, or deployment restart, `Pledges` **fails to accept pledges**.
 3. Pledges are blocked by campaign read availability, violating autonomous service availability.
 
 #### The Architectural Solution to Teach:
 Replace synchronous RPC with **Asynchronous Replicated Read Models (Event-Carried State Transfer)**:
-- The `Contributions` service subscribes to `CampaignPublishedApplicationEvent` and `CampaignCancelledApplicationEvent`.
-- `Contributions` maintains a local, lightweight lookup table (`contributions.active_campaigns_cache`).
-- When a contribution arrives, `Contributions` verifies campaign status against its **own local database**, achieving **100% autonomous uptime** even if the Campaigns service is down!
+- The `Pledges` service subscribes to `CampaignPublishedApplicationEvent` and `CampaignCancelledApplicationEvent`.
+- `Pledges` maintains a local, lightweight lookup table (`pledges.active_campaigns_cache`).
+- When a pledge arrives, `Pledges` verifies campaign status against its **own local database**, achieving **100% autonomous uptime** even if the Campaigns service is down!
 
 > [!NOTE]
 > **Resolved in Reference Codebase (`TICKET-023`):**  
-> `ICampaignContributionAvailabilityReader` was eliminated. The `Contributions` module now replicates campaign state into `contributions.active_campaigns_cache`, achieving 100% local query autonomy.
+> `ICampaignPledgeAvailabilityReader` was eliminated. The `Pledges` module now replicates campaign state into `pledges.active_campaigns_cache`, achieving 100% local query autonomy.
 
 ---
 
@@ -82,10 +82,10 @@ Introduce a pluggable **Message Bus Abstraction** (`IMessageBus`) or leverage Ma
 
 ### Roadblock 3: Shared PostgreSQL Host & Connection Pool Contention
 
-All DbContexts (`CampaignsDbContext`, `ContributionsDbContext`, `IdentityDbContext`, `ModerationDbContext`) are registered in [`Program.cs`](../../src/API/CrowdFunding.API/Program.cs) using the exact same connection string.
+All DbContexts (`CampaignsDbContext`, `PledgesDbContext`, `IdentityDbContext`, `ModerationDbContext`) are registered in [`Program.cs`](../../src/API/CrowdFunding.API/Program.cs) using the exact same connection string.
 
 #### The Architectural Trap:
-Although schemas are isolated (`campaigns`, `contributions`, etc.), all modules share a single physical connection pool (default: 100 connections). A surge of pledges in `Contributions` will exhaust all available connections, starving authentication (`Identity`) and moderation queries.
+Although schemas are isolated (`campaigns`, `pledges`, etc.), all modules share a single physical connection pool (default: 100 connections). A surge of pledges in `Pledges` will exhaust all available connections, starving authentication (`Identity`) and moderation queries.
 
 #### The Architectural Solution to Teach:
 Demonstrate independent connection string configurations per module, proving that each DbContext can point to a separate physical database container with zero code modifications:
@@ -93,7 +93,7 @@ Demonstrate independent connection string configurations per module, proving tha
 "ConnectionStrings": {
   "IdentityDb": "Host=identity-db;Database=identity;...",
   "CampaignsDb": "Host=campaigns-db;Database=campaigns;...",
-  "ContributionsDb": "Host=contributions-db;Database=contributions;..."
+  "PledgesDb": "Host=pledges-db;Database=pledges;..."
 }
 ```
 
@@ -143,17 +143,17 @@ stateDiagram-v2
 1. **Automated Campaign Expiration Background Worker:**
    - There is no background service checking `DeadlineUtc <= DateTime.UtcNow`. Campaigns stay `Active` forever unless manually cancelled.
 2. **Backer Refund State Machine:**
-   - In `Contribution.cs`, the state machine only supports `Pending`, `Succeeded`, and `Failed`. **There is no `Refunded` state**.
+   - In `Pledge.cs`, the state machine only supports `Pending`, `Succeeded`, and `Failed`. **There is no `Refunded` state**.
    - If a campaign fails or is cancelled, backers are never refunded.
 
 ### Pedagogical Impact:
 The single best real-world demonstration of **Sagas, Event Choreography, and Compensating Transactions** in a microservice system is the **Crowdfunding Refund Workflow**:
 - `Campaigns` service emits `CampaignFailedEvent`.
-- `Contributions` service consumes event, loads all confirmed pledges, mutates state to `RefundInitiated`, and dispatches commands to the payment gateway.
-- Payment gateway webhook confirms refund $\rightarrow$ contribution transitions to `Refunded`.
+- `Pledges` service consumes event, loads all confirmed pledges, mutates state to `RefundInitiated`, and dispatches commands to the payment gateway.
+- Payment gateway webhook confirms refund $\rightarrow$ pledge transitions to `Refunded`.
 
 Leaving this unimplemented deprives architects of seeing how distributed sagas handle eventual consistency in failure scenarios!
 
 > [!NOTE]
 > **Resolved in Reference Codebase (`TICKET-027`):**  
-> Both the `CampaignExpirationBackgroundService` (handling `CompleteAsSuccessful` and `ExpireAsFailed`) and the backer refund event choreography (`ContributionStatus.Refunded` and compensation saga) are fully implemented and verified in the codebase.
+> Both the `CampaignExpirationBackgroundService` (handling `CompleteAsSuccessful` and `ExpireAsFailed`) and the backer refund event choreography (`PledgeStatus.Refunded` and compensation saga) are fully implemented and verified in the codebase.

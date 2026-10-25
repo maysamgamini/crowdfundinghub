@@ -27,8 +27,8 @@ public sealed class SwaggerTagDescriptionsDocumentFilter : IDocumentFilter
             },
             new OpenApiTag
             {
-                Name = "Contributions",
-                Description = "Financial contributions and pledges to campaigns, payment gateway confirmation, and failure management."
+                Name = "Pledges",
+                Description = "Financial pledges and pledges to campaigns, payment gateway confirmation, and failure management."
             },
             new OpenApiTag
             {

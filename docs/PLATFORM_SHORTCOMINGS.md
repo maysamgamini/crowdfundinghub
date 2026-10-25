@@ -7,7 +7,7 @@
 **Document Status:** Dated snapshot of the September 8, 2026 evaluation, not updated since. Several findings have since been built (see the notes in each section and the checklist in section 8).  
 
 > [!NOTE]
-> **Status banner.** This is a point-in-time evaluation. Since it was written: `.github/workflows/ci.yml` and Dockerfiles (`src/API/CrowdFunding.API/Dockerfile`, `services/CrowdFunding.Moderation.Service/Dockerfile`) exist; refunds and campaign expiry exist (refunds go through a fake payment provider); the outbox worker is `ModuleOutboxProcessor<TDbContext>` in BuildingBlocks (woken by a commit signal, claims again at once after a full batch, deletes a row on success, reclaims expired leases); the notification handlers are no longer all stubs (receipt and refund handlers and notification preferences exist); and `Contributions` reads a replicated campaign read model instead of the removed `ICampaignContributionAvailabilityReader`. Sections 3 (notifications), 4.1, 4.2 and 4.3 describe the earlier state and carry a note where the code has changed. Current gaps are listed in [`TRADE_OFFS_AND_LIMITATIONS.md`](TRADE_OFFS_AND_LIMITATIONS.md) (Known Gaps) and [`TESTS_THAT_TEACH.md`](TESTS_THAT_TEACH.md). The `TICKET-0xx` names are the work items behind each change; the ticket text itself is not kept in this repository.
+> **Status banner.** This is a point-in-time evaluation. Since it was written: `.github/workflows/ci.yml` and Dockerfiles (`src/API/CrowdFunding.API/Dockerfile`, `services/CrowdFunding.Moderation.Service/Dockerfile`) exist; refunds and campaign expiry exist (refunds go through a fake payment provider); the outbox worker is `ModuleOutboxProcessor<TDbContext>` in BuildingBlocks (woken by a commit signal, claims again at once after a full batch, deletes a row on success, reclaims expired leases); the notification handlers are no longer all stubs (receipt and refund handlers and notification preferences exist); and `Pledges` reads a replicated campaign read model instead of the removed `ICampaignPledgeAvailabilityReader`. Sections 3 (notifications), 4.1, 4.2 and 4.3 describe the earlier state and carry a note where the code has changed. Current gaps are listed in [`TRADE_OFFS_AND_LIMITATIONS.md`](TRADE_OFFS_AND_LIMITATIONS.md) (Known Gaps) and [`TESTS_THAT_TEACH.md`](TESTS_THAT_TEACH.md). The `TICKET-0xx` names are the work items behind each change; the ticket text itself is not kept in this repository.
 
 ---
 
@@ -61,15 +61,15 @@ The table below provides an executive summary of the 14 shortcomings, ranked by 
 
 | # | Domain | Finding / Shortcoming | Severity | Root Location | Remediation Ticket | Blast Radius / Business Impact |
 | :---: | :--- | :--- | :---: | :--- | :---: | :--- |
-| **1** | Financial Domain | Missing pledge refund & chargeback workflows when campaigns fail or are cancelled | 🔴 **P0 Critical** | [`Contribution.cs`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Domain/Aggregates/Contribution.cs) | `TICKET-027` & `TICKET-033` | Pledged funds become unrefundable; creators can abscond with funds; massive card network chargeback fines. |
-| **2** | Domain Lifecycle | Automated campaign deadline expiration background workers completely absent | 🔴 **P0 Critical** | [`Campaign.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs) | `TICKET-027` | Campaigns remain `Published` forever; `Successful`/`Failed` states never triggered; expired campaigns accept contributions. |
+| **1** | Financial Domain | Missing pledge refund & chargeback workflows when campaigns fail or are cancelled | 🔴 **P0 Critical** | [`Pledge.cs`](../src/Modules/Pledges/CrowdFunding.Modules.Pledges.Domain/Aggregates/Pledge.cs) | `TICKET-027` & `TICKET-033` | Pledged funds become unrefundable; creators can abscond with funds; massive card network chargeback fines. |
+| **2** | Domain Lifecycle | Automated campaign deadline expiration background workers completely absent | 🔴 **P0 Critical** | [`Campaign.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs) | `TICKET-027` | Campaigns remain `Published` forever; `Successful`/`Failed` states never triggered; expired campaigns accept pledges. |
 | **3** | Security & Auth | Missing refresh token rotation (RTR) and session revocation mechanisms | 🔴 **P0 Critical** | [`JwtAccessTokenProvider.cs`](../src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Services/JwtAccessTokenProvider.cs) | `TICKET-036` | Stateless 60-minute JWTs cannot be revoked upon account compromise, password reset, or admin deactivation. |
 | **4** | Security & Audit | Zero audit logging / change history on administrative and moderation actions | 🔴 **P0 Critical** | [`CampaignReview.cs`](../src/Modules/Moderation/CrowdFunding.Modules.Moderation.Domain/Aggregates/CampaignReview.cs) | `TICKET-039` | Administrative actions lack non-repudiation; no IP, context, or before/after diff captured; fails SOC 2/PCI-DSS. |
 | **5** | Performance | Multi-DbContext competition for physical PostgreSQL connection pool | 🟠 **P1 High** | [`Program.cs`](../src/API/CrowdFunding.API/Program.cs#L56-L60) | `TICKET-026` | Cross-module requests check out multiple connections simultaneously, causing rapid pool exhaustion under peak load. |
 | **6** | Performance | Polling Outbox MVCC table bloat and write amplification under heavy throughput | 🟠 **P1 High** | [`OutboxClaimQuery.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Persistence/OutboxClaimQuery.cs) | `TICKET-038` | Mutable row status (`Pending -> Processing -> Processed`) creates 3+ tuple versions per event; autovacuum starvation. |
 | **7** | Performance | In-process single-thread `PeriodicTimer` outbox processor vs distributed broker | 🟠 **P1 High** | [`ModuleOutboxProcessor.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Outbox/ModuleOutboxProcessor.cs) | `TICKET-024` & `TICKET-025` | Hard throughput ceiling of ~4 msgs/sec per module (20 msgs / 5s); outbox takes minutes to drain during funding spikes. |
 | **8** | Performance | In-memory key caching and lack of distributed cache invalidation across replicas | 🟠 **P1 High** | [`EfSigningKeyStore.cs`](../src/Modules/Identity/CrowdFunding.Modules.Identity.Infrastructure/Services/EfSigningKeyStore.cs#L19-L57) | `TICKET-037` | Multi-replica deployments face split-brain key caches; pre-commit Redis invalidation causes stale cache repopulation. |
-| **9** | Functional Domain | Hard single-currency limitation with no currency conversion services | 🟠 **P1 High** | [`Money.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Domain/ValueObjects/Money.cs#L52-L63) | *Pedagogical Scope (Non-Decomp)* | Platform rejects contributions in any currency differing from the campaign currency; prevents international backing. |
+| **9** | Functional Domain | Hard single-currency limitation with no currency conversion services | 🟠 **P1 High** | [`Money.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Domain/ValueObjects/Money.cs#L52-L63) | *Pedagogical Scope (Non-Decomp)* | Platform rejects pledges in any currency differing from the campaign currency; prevents international backing. |
 | **10** | Functional Domain | Lack of pledge reward tiers / perks with limited inventory | 🟠 **P1 High** | [`Campaign.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs) | `TICKET-034` | Cannot offer tiered incentives (Early Bird, VIP); cannot track reward quotas, fulfillment, or shipping information. |
 | **11** | DevOps | Missing containerization Dockerfiles for API services (snapshot; Dockerfiles now exist) | 🟠 **P1 High** | [`docker-compose.yml`](../docker-compose.yml) | `TICKET-029` | Cannot deploy API to container runtimes (Kubernetes/ECS); inconsistent environments between local and staging. |
 | **12** | DevOps | Complete absence of CI/CD workflow automation (snapshot; `ci.yml` now exists) | 🟠 **P1 High** | Repository Root (`.github/workflows/ci.yml` now exists) | `TICKET-040` | No automated build/test validation, architecture rule enforcement, linting, image packaging, or deployment. |
@@ -83,20 +83,20 @@ The table below provides an executive summary of the 14 shortcomings, ranked by 
 ### 3.1 Missing Pledge Refunds & Chargeback Workflows on Cancelled/Failed Campaigns
 
 #### Architectural Flaw & Codebase Analysis
-In [`ContributionStatus.cs`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Domain/Enums/ContributionStatus.cs#L6-L11), the contribution lifecycle is constrained to three states:
+In [`PledgeStatus.cs`](../src/Modules/Pledges/CrowdFunding.Modules.Pledges.Domain/Enums/PledgeStatus.cs#L6-L11), the pledge lifecycle is constrained to three states:
 ```csharp
-public enum ContributionStatus
+public enum PledgeStatus
 {
     Pending = 1,
     Succeeded = 2,
     Failed = 3
 }
 ```
-In [`Contribution.cs`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Domain/Aggregates/Contribution.cs#L76-L111), once `ConfirmPayment` is executed, the aggregate moves permanently to `Succeeded`. **There is no domain method or state for `Refund`, `Dispute`, or `Chargeback`**.
+In [`Pledge.cs`](../src/Modules/Pledges/CrowdFunding.Modules.Pledges.Domain/Aggregates/Pledge.cs#L76-L111), once `ConfirmPayment` is executed, the aggregate moves permanently to `Succeeded`. **There is no domain method or state for `Refund`, `Dispute`, or `Chargeback`**.
 
-> *Status update:* a refund saga now exists (`CampaignTerminationRefundHandler`, `Contribution.Refund`, covered by `RefundSagaE2ETests`), and refunds now go through the payment provider (a fake one, with idempotency keys per attempt) and are booked in the campaign ledger as negative compensating entries. There is no real payment provider, no card saving and no creator payout yet.
+> *Status update:* a refund saga now exists (`CampaignTerminationRefundHandler`, `Pledge.Refund`, covered by `RefundSagaE2ETests`), and refunds now go through the payment provider (a fake one, with idempotency keys per attempt) and are booked in the campaign ledger as negative compensating entries. There is no real payment provider, no card saving and no creator payout yet.
 
-Furthermore, when a campaign is cancelled in [`CancelCampaignCommandHandler.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Application/Features/Campaigns/Commands/CancelCampaign/CancelCampaignCommandHandler.cs#L46), the domain publishes a [`CampaignCancelledApplicationEvent`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Contracts/Events/CampaignCancelled/CampaignCancelledApplicationEvent.cs). Across the entire codebase, **no handler exists in the Contributions module to process this event**. Pledged funds remain marked as `Succeeded` indefinitely.
+Furthermore, when a campaign is cancelled in [`CancelCampaignCommandHandler.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Application/Features/Campaigns/Commands/CancelCampaign/CancelCampaignCommandHandler.cs#L46), the domain publishes a [`CampaignCancelledApplicationEvent`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Contracts/Events/CampaignCancelled/CampaignCancelledApplicationEvent.cs). Across the entire codebase, **no handler exists in the Pledges module to process this event**. Pledged funds remain marked as `Succeeded` indefinitely.
 
 ```mermaid
 sequenceDiagram
@@ -104,9 +104,9 @@ sequenceDiagram
     actor Creator as Campaign Owner / Admin
     participant CampAPI as Campaigns Module
     participant Outbox as Transactional Outbox
-    participant ContribAPI as Contributions Module (MISSING)
+    participant ContribAPI as Pledges Module (MISSING)
     participant Gateway as Payment Gateway (Stripe/Adyen)
-    actor Backer as Backer / Contributor
+    actor Backer as Backer / Backer
 
     Creator->>CampAPI: Cancel Campaign
     CampAPI->>CampAPI: Status = Cancelled
@@ -123,9 +123,9 @@ sequenceDiagram
 - **Card Scheme Penalties:** Disgruntled backers will file chargebacks directly with issuing banks. If a platform's dispute ratio exceeds **0.9%** (Visa/Mastercard thresholds), the platform faces fines of $25–$100 per chargeback and eventual revocation of payment processing facilities.
 
 #### Remediation Guidance
-1. **Extend Contribution State Machine:** Add `Refunding`, `Refunded`, `Disputed`, and `ChargedBack` to [`ContributionStatus`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Domain/Enums/ContributionStatus.cs).
-2. **Implement Contribution Refund Domain Methods:** Add `InitiateRefund()`, `ConfirmRefund()`, and `RecordChargeback()` to [`Contribution.cs`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Domain/Aggregates/Contribution.cs).
-3. **Refund Process Manager (Saga):** Implement `CampaignCancellationRefundSaga` subscribing to [`CampaignCancelledApplicationEvent`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Contracts/Events/CampaignCancelled/CampaignCancelledApplicationEvent.cs) and `CampaignFailedApplicationEvent`. The saga queries all `Succeeded` contributions for the campaign, dispatches idempotent refund commands to the payment gateway adapter, records ledger reversals in `IContributionLedger`, and marks contributions as `Refunded`.
+1. **Extend Pledge State Machine:** Add `Refunding`, `Refunded`, `Disputed`, and `ChargedBack` to [`PledgeStatus`](../src/Modules/Pledges/CrowdFunding.Modules.Pledges.Domain/Enums/PledgeStatus.cs).
+2. **Implement Pledge Refund Domain Methods:** Add `InitiateRefund()`, `ConfirmRefund()`, and `RecordChargeback()` to [`Pledge.cs`](../src/Modules/Pledges/CrowdFunding.Modules.Pledges.Domain/Aggregates/Pledge.cs).
+3. **Refund Process Manager (Saga):** Implement `CampaignCancellationRefundSaga` subscribing to [`CampaignCancelledApplicationEvent`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Contracts/Events/CampaignCancelled/CampaignCancelledApplicationEvent.cs) and `CampaignFailedApplicationEvent`. The saga queries all `Succeeded` pledges for the campaign, dispatches idempotent refund commands to the payment gateway adapter, records ledger reversals in `IPledgeLedger`, and marks pledges as `Refunded`.
 4. **Webhook Ingestion Pipeline:** Create an authenticated payment webhook endpoint (built since as `/api/webhooks/payments/stripe`) to receive Stripe/Adyen `charge.dispute.created` and `charge.refunded` events.
 
 ---
@@ -146,11 +146,11 @@ public enum CampaignStatus
 ```
 However, grep inspection across the entire solution reveals that **`CampaignStatus.Successful` and `CampaignStatus.Failed` are NEVER set anywhere in the codebase**.
 
-In [`Campaign.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs#L113-L129), `ApplyConfirmedContribution` checks:
+In [`Campaign.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs#L113-L129), `ApplyConfirmedPledge` checks:
 ```csharp
 if (Status != CampaignStatus.Published)
 {
-    throw new InvalidOperationException($"Cannot apply contributions to campaign in status '{Status}'. Only Published campaigns can accept funds.");
+    throw new InvalidOperationException($"Cannot apply pledges to campaign in status '{Status}'. Only Published campaigns can accept funds.");
 }
 ```
 **It does NOT check whether `DateTime.UtcNow > DeadlineUtc`!** Furthermore, there is no background worker or recurring scheduler (such as Quartz.NET, Hangfire, or ASP.NET Core `IHostedService`) that queries expired campaigns.
@@ -159,12 +159,12 @@ if (Status != CampaignStatus.Published)
 
 #### Impact & Severity: 🔴 P0 Critical
 - **Perpetual "Zombie" Campaigns:** Campaigns whose deadlines elapsed weeks or months ago remain in `Published` status indefinitely until an admin intervenes.
-- **Zombie Pledges:** Backers can continue pledging funds to campaigns whose deadlines have passed because `ApplyConfirmedContribution` only checks `Status == Published`.
+- **Zombie Pledges:** Backers can continue pledging funds to campaigns whose deadlines have passed because `ApplyConfirmedPledge` only checks `Status == Published`.
 - **Payout & Settlement Paralysis:** Creators of funded campaigns can never receive payouts because the campaign never reaches the `Successful` terminal state; underfunded campaigns never transition to `Failed` to release backer pledges.
 
 #### Remediation Guidance
 1. **Domain State Transitions:** Add domain methods `CompleteAsSuccessful(DateTime currentUtc)` and `ExpireAsFailed(DateTime currentUtc)` to [`Campaign.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs), asserting `currentUtc >= DeadlineUtc` and raising `CampaignSuccessfulDomainEvent` and `CampaignFailedDomainEvent` respectively.
-2. **Deadline Invariant Enforcement:** In `ApplyConfirmedContribution` and [`MakeContributionCommandHandler.cs`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs), strictly reject any contribution where `_dateTimeProvider.UtcNow > campaign.DeadlineUtc`.
+2. **Deadline Invariant Enforcement:** In `ApplyConfirmedPledge` and [`MakePledgeCommandHandler.cs`](../src/Modules/Pledges/CrowdFunding.Modules.Pledges.Application/Features/Pledges/Commands/MakePledge/MakePledgeCommandHandler.cs), strictly reject any pledge where `_dateTimeProvider.UtcNow > campaign.DeadlineUtc`.
 3. **Automated Expiration Worker:** Implement `CampaignExpirationBackgroundService` (or a Quartz.NET cron job running every 60 seconds):
 ```csharp
 var expiredCampaigns = await dbContext.Campaigns
@@ -186,9 +186,9 @@ foreach (var campaign in expiredCampaigns)
 ### 3.3 Missing Multi-Tier Pledge Rewards & Perks
 
 #### Architectural Flaw & Codebase Analysis
-The current domain models in [`CrowdFunding.Modules.Campaigns.Domain`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain) and [`CrowdFunding.Modules.Contributions.Domain`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Domain) treat all contributions as generic, untargeted amounts:
+The current domain models in [`CrowdFunding.Modules.Campaigns.Domain`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain) and [`CrowdFunding.Modules.Pledges.Domain`](../src/Modules/Pledges/CrowdFunding.Modules.Pledges.Domain) treat all pledges as generic, untargeted amounts:
 - [`Campaign.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs) has only `GoalAmount` and `RaisedAmount`. There is no collection of reward tiers or perk items.
-- [`Contribution.cs`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Domain/Aggregates/Contribution.cs) records only `Money`, `CampaignId`, and `ContributorId`. There is no reference to a `RewardTierId`, quantity claimed, shipping address, or reward fulfillment status.
+- [`Pledge.cs`](../src/Modules/Pledges/CrowdFunding.Modules.Pledges.Domain/Aggregates/Pledge.cs) records only `Money`, `CampaignId`, and `BackerId`. There is no reference to a `RewardTierId`, quantity claimed, shipping address, or reward fulfillment status.
 
 #### Impact & Severity: 🟠 P1 High
 - **Product Viability Block:** Crowdfunding platforms (Kickstarter, Indiegogo) thrive on reward tiers (e.g., "$25 Early Bird", "$100 VIP Bundle"). Without reward tiers, campaign creators cannot offer incentives, reducing pledge conversion rates by up to 80%.
@@ -209,8 +209,8 @@ public sealed class RewardTier : BaseEntity
     public bool RequiresShipping { get; private set; }
 }
 ```
-2. **Pledge Reservation Workflow:** When calling `MakeContributionCommand`, allow an optional `RewardTierId`. If provided, validate that `Amount >= RewardTier.MinimumAmount` and atomically decrement inventory inside the transaction executor with optimistic concurrency tokens.
-3. **Fulfillment Tracking:** Add a `FulfillmentStatus` (`Unfulfilled`, `Processing`, `Shipped`, `Delivered`) and `ShippingAddress` value object to `Contribution`.
+2. **Pledge Reservation Workflow:** When calling `MakePledgeCommand`, allow an optional `RewardTierId`. If provided, validate that `Amount >= RewardTier.MinimumAmount` and atomically decrement inventory inside the transaction executor with optimistic concurrency tokens.
+3. **Fulfillment Tracking:** Add a `FulfillmentStatus` (`Unfulfilled`, `Processing`, `Shipped`, `Delivered`) and `ShippingAddress` value object to `Pledge`.
 
 ---
 
@@ -228,26 +228,26 @@ private void EnsureSameCurrency(Money other)
     }
 }
 ```
-In [`MakeContributionCommandHandler.cs`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs#L61-L65):
+In [`MakePledgeCommandHandler.cs`](../src/Modules/Pledges/CrowdFunding.Modules.Pledges.Application/Features/Pledges/Commands/MakePledge/MakePledgeCommandHandler.cs#L61-L65):
 ```csharp
 if (!string.Equals(campaignAvailability.Currency, command.Currency, StringComparison.OrdinalIgnoreCase))
 {
     throw new InvalidOperationException(
-        $"Contribution currency '{command.Currency}' does not match campaign currency '{campaignAvailability.Currency}'.");
+        $"Pledge currency '{command.Currency}' does not match campaign currency '{campaignAvailability.Currency}'.");
 }
 ```
 The platform explicitly enforces a strict, single-currency policy. A backer residing in Europe with a EUR card cannot back a USD campaign, even if their card issuer would convert it.
 
 #### Impact & Severity: 🟠 P1 High
 - **Geographic Fragmentation:** Campaign creators are cut off from global backers. International backers are turned away at checkout with a 400 Bad Request error.
-- **Fatal Poison Message Risk:** If a payment gateway accepts an alternate currency and fires a webhook, `Money.Add` throws inside [`AddContributionToCampaignCommandHandler.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Application/Features/Campaigns/Commands/AddContributionToCampaign/AddContributionToCampaignCommandHandler.cs#L89), dead-lettering the outbox message and leaving the backer's card charged without updating the campaign total.
+- **Fatal Poison Message Risk:** If a payment gateway accepts an alternate currency and fires a webhook, `Money.Add` throws inside [`AddPledgeToCampaignCommandHandler.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Application/Features/Campaigns/Commands/AddPledgeToCampaign/AddPledgeToCampaignCommandHandler.cs#L89), dead-lettering the outbox message and leaving the backer's card charged without updating the campaign total.
 
 #### Remediation Guidance
-1. **Multi-Currency Value Representation:** Separate the contributed currency from the campaign base currency:
+1. **Multi-Currency Value Representation:** Separate the pledged currency from the campaign base currency:
 ```csharp
-public sealed class Contribution : BaseEntity
+public sealed class Pledge : BaseEntity
 {
-    public Money ContributedAmount { get; private set; } // e.g. 50.00 EUR
+    public Money PledgedAmount { get; private set; } // e.g. 50.00 EUR
     public Money SettledAmount { get; private set; }     // e.g. 54.20 USD (in campaign currency)
     public decimal ExchangeRate { get; private set; }   // e.g. 1.0840
     public DateTime ExchangeRateLockedAtUtc { get; private set; }
@@ -372,7 +372,7 @@ Processed messages are **never deleted**. The table grows indefinitely.
 
 #### Impact & Severity: 🟠 P1 High
 - **Autovacuum Starvation:** At 500 events/sec across 3 outbox tables, the database generates 1,500 dead tuples/sec. Autovacuum cannot keep pace, causing table pages to fragment and table size to bloat by 5x–10x.
-- **Buffer Pool Eviction:** Queries scanning `WHERE "Status" = 1` must inspect bloated index leaf pages, evicting active business tables (Campaigns, Contributions) from `shared_buffers`.
+- **Buffer Pool Eviction:** Queries scanning `WHERE "Status" = 1` must inspect bloated index leaf pages, evicting active business tables (Campaigns, Pledges) from `shared_buffers`.
 
 #### Remediation Guidance
 1. **Short-Term: Partitioning & Retention:** Implement PostgreSQL declarative range partitioning by date (`PARTITION BY RANGE (OccurredOnUtc)`) on outbox tables. Drop expired partitions daily (`DROP TABLE campaigns_outbox_messages_2026_09_01`), which releases disk space instantaneously without triggering vacuum overhead.
@@ -387,7 +387,7 @@ Processed messages are **never deleted**. The table grows indefinitely.
 In [`Program.cs`](../src/API/CrowdFunding.API/Program.cs#L56-L60) and the module infrastructure registrations:
 ```csharp
 services.AddDbContext<CampaignsDbContext>(...);
-services.AddDbContext<ContributionsDbContext>(...);
+services.AddDbContext<PledgesDbContext>(...);
 services.AddDbContext<IdentityDbContext>(...);
 services.AddDbContext<ModerationDbContext>(...);
 ```
@@ -397,30 +397,30 @@ Each module uses a separate `DbContext` instance pointing to the same PostgreSQL
 In Npgsql, connection pooling is managed per unique connection string, with a default `MaxPoolSize = 100`.
 
 > [!NOTE]
-> **Superseded in part.** `ICampaignContributionAvailabilityReader` was removed. `MakeContributionCommandHandler` now reads `contributions.active_campaigns_cache`, a replicated read model in its own database, so the first connection in the example below is gone from the write path. The pool-sharing concern itself still applies to the other module contexts.
+> **Superseded in part.** `ICampaignPledgeAvailabilityReader` was removed. `MakePledgeCommandHandler` now reads `pledges.active_campaigns_cache`, a replicated read model in its own database, so the first connection in the example below is gone from the write path. The pool-sharing concern itself still applies to the other module contexts.
 
 #### The Multi-Context Contention Mechanism
-In [`MakeContributionCommandHandler.cs`](../src/Modules/Contributions/CrowdFunding.Modules.Contributions.Application/Features/Contributions/Commands/MakeContribution/MakeContributionCommandHandler.cs#L41-L75):
+In [`MakePledgeCommandHandler.cs`](../src/Modules/Pledges/CrowdFunding.Modules.Pledges.Application/Features/Pledges/Commands/MakePledge/MakePledgeCommandHandler.cs#L41-L75):
 ```csharp
 // 1. Checks availability by querying CampaignsDbContext (Connection #1 checked out)
-var campaignAvailability = await _campaignContributionAvailabilityReader.GetCampaignContributionAvailabilityAsync(...);
+var campaignAvailability = await _campaignPledgeAvailabilityReader.GetCampaignPledgeAvailabilityAsync(...);
 
-// 2. Starts transaction on ContributionsDbContext (Connection #2 checked out)
+// 2. Starts transaction on PledgesDbContext (Connection #2 checked out)
 await _transactionExecutor.ExecuteAsync(async ct => {
-    await _contributionRepository.AddAsync(contribution, ct);
+    await _pledgeRepository.AddAsync(pledge, ct);
     ...
 });
 ```
 During a single HTTP request, **two separate physical connections are checked out and held concurrently**.
 Simultaneously:
-- [`ModuleOutboxProcessor.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Outbox/ModuleOutboxProcessor.cs) (one instance per module) checks out connections for `CampaignsDbContext`, `ContributionsDbContext`, and `ModerationDbContext`.
+- [`ModuleOutboxProcessor.cs`](../src/BuildingBlocks/CrowdFunding.BuildingBlocks.Infrastructure/Outbox/ModuleOutboxProcessor.cs) (one instance per module) checks out connections for `CampaignsDbContext`, `PledgesDbContext`, and `ModerationDbContext`.
 - Health checks ([`DbContextHealthCheck.cs`](../src/API/CrowdFunding.API/Observability/DbContextHealthCheck.cs)) check out 4 connections concurrently every 10 seconds.
 
 ```mermaid
 graph TD
     Client["Concurrent HTTP Clients (50 Requests)"] --> API[CrowdFunding API]
     API -->|Req 1..50| ConnCamp[CampaignsDbContext: 50 Connections]
-    API -->|Req 1..50| ConnContrib[ContributionsDbContext: 50 Connections]
+    API -->|Req 1..50| ConnContrib[PledgesDbContext: 50 Connections]
     API -->|Background Worker| ConnWorker[Outbox Worker: 3 Connections]
     API -->|Health Check| ConnHealth[Health Checks: 4 Connections]
     
@@ -436,7 +436,7 @@ graph TD
 - **Connection Starvation:** With 50 concurrent pledge requests, the application attempts to open 100+ connections simultaneously. Once the 100-connection limit is reached, incoming requests queue for up to 15 seconds before failing with `NpgsqlException: The connection pool has been exhausted`, causing a cascading HTTP 500/503 outage.
 
 #### Remediation Guidance
-1. **Decouple Cross-Module Availability Checks (done):** The earlier reader (`ICampaignContributionAvailabilityReader`, removed) queried `CampaignsDbContext` directly. `Contributions` now queries a lightweight replicated read model in its own database, so connection #1 is eliminated from the write path.
+1. **Decouple Cross-Module Availability Checks (done):** The earlier reader (`ICampaignPledgeAvailabilityReader`, removed) queried `CampaignsDbContext` directly. `Pledges` now queries a lightweight replicated read model in its own database, so connection #1 is eliminated from the write path.
 2. **Connection Pooling Proxy (PgBouncer):** Deploy PgBouncer in front of PostgreSQL using `transaction` pooling mode. Hundreds of application-level connections are multiplexed over a tight pool of 20-30 physical database connections.
 3. **Explicit Pool Sizing:** Configure explicit pool limits per context in connection strings (`MaxPoolSize=30;MinPoolSize=5;ConnectionIdleLifetime=30;`).
 
@@ -466,7 +466,7 @@ protected override async Task ExecuteAsync(CancellationToken stoppingToken)
 In `ProcessOutboxBatchAsync`:
 ```csharp
 await ProcessModuleOutboxAsync<CampaignsDbContext>(services, "campaigns_outbox_messages", cancellationToken);
-await ProcessModuleOutboxAsync<ContributionsDbContext>(services, "contributions_outbox_messages", cancellationToken);
+await ProcessModuleOutboxAsync<PledgesDbContext>(services, "pledges_outbox_messages", cancellationToken);
 await ProcessModuleOutboxAsync<ModerationDbContext>(services, "moderation_outbox_messages", cancellationToken);
 ```
 
@@ -844,13 +844,13 @@ gantt
 
 ### Phase 1: Financial Correctness & Security Governance
 - [x] **Fixed (`TICKET-027`):** Implement `CampaignExpirationBackgroundService` and add `CompleteAsSuccessful` / `ExpireAsFailed` to [`Campaign.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Domain/Aggregates/Campaign.cs).
-- [x] **Fixed (`TICKET-027`):** Implement `ContributionRefundSaga` and refund event choreography for cancelled/failed campaigns.
+- [x] **Fixed (`TICKET-027`):** Implement `PledgeRefundSaga` and refund event choreography for cancelled/failed campaigns.
 - [x] **Built (TICKET-036: `RefreshTokenRotationE2ETests`):** Implement Refresh Token Rotation (RTR), session revocation store, and shorten access token TTL to 15 minutes.
 - [x] **Built (TICKET-039: `AuditLoggingE2ETests`, `BuildingBlocks.Infrastructure/Audit`):** Create append-only `audit_records` table and `AuditLoggingPipelineBehavior` for administrative operations.
 
 ### Phase 2: Domain Evolution & High-Concurrency Performance
 - [x] **Fixed (`TICKET-023` & `TICKET-026`):** Decouple cross-module availability readers to resolve multi-DbContext connection pool starvation; hierarchical connection string fallback.
-- [x] **Built (TICKET-034: `RewardTiersController`, `RewardTierConcurrencyE2ETests`):** Add `RewardTier` entities to Campaigns and transactional perk reservation in Contributions.
+- [x] **Built (TICKET-034: `RewardTiersController`, `RewardTierConcurrencyE2ETests`):** Add `RewardTier` entities to Campaigns and transactional perk reservation in Pledges.
 - [ ] **Pedagogical Evaluation:** `ICurrencyConversionService` with spot exchange rate locking on pledges.
 - [x] **Fixed (`TICKET-024` & `TICKET-025`):** Pluggable `IMessageBus` and autonomous per-module outbox processors (MVCC delete-on-success tracked in `TICKET-038`).
 - [x] **Built (TICKET-037: `DistributedCacheInvalidationSubscriber`, `SigningKeyMultiReplicaInvalidationE2ETests`):** Implement Redis Pub/Sub distributed cache synchronization and post-commit eviction hooks.

@@ -1,4 +1,4 @@
-using CrowdFunding.Modules.Campaigns.Contracts.Events.LateContributionRejected;
+using CrowdFunding.Modules.Campaigns.Contracts.Events.LatePledgeRejected;
 using CrowdFunding.BuildingBlocks.Application.Outbox;
 using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Domain.Common;
@@ -194,8 +194,8 @@ public sealed class CampaignTransactionExecutor : ICampaignTransactionExecutor
             CampaignSucceededDomainEvent @event => OutboxMessage.Create(
                 new CampaignSucceededApplicationEvent(@event.CampaignId, @event.OwnerId, @event.RaisedAmount, @event.Currency, @event.OccurredOnUtc),
                 DateTime.UtcNow),
-            LateContributionRejectedDomainEvent @event => OutboxMessage.Create(
-                new LateContributionRejectedApplicationEvent(@event.CampaignId, @event.ContributionId, @event.Amount, @event.Currency, @event.CampaignStatus, @event.OccurredOnUtc),
+            LatePledgeRejectedDomainEvent @event => OutboxMessage.Create(
+                new LatePledgeRejectedApplicationEvent(@event.CampaignId, @event.PledgeId, @event.Amount, @event.Currency, @event.CampaignStatus, @event.OccurredOnUtc),
                 DateTime.UtcNow),
             CampaignFailedDomainEvent @event => OutboxMessage.Create(
                 new CampaignFailedApplicationEvent(@event.CampaignId, @event.OwnerId, @event.RaisedAmount, @event.GoalAmount, @event.Currency, @event.OccurredOnUtc),

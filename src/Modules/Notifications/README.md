@@ -12,14 +12,14 @@ flowchart TB
         H1 --> Db1[("NotificationsDbContext<br/>INSERT ... ON CONFLICT")]
     end
     subgraph T3["Event-driven: receipts and alerts"]
-        Ev["Events from Contributions and Campaigns"] --> H2["NotificationEventHandlers"]
+        Ev["Events from Pledges and Campaigns"] --> H2["NotificationEventHandlers"]
         H2 --> Mail["Email provider (logging by default)"]
     end
 ```
 
 ## Event subscriptions
-- `ContributionPaymentConfirmedApplicationEvent`: sends the pledge receipt (idempotency through an `X-Message-Id` header).
-- `ContributionRefundedApplicationEvent`: sends the refund alert.
+- `PledgePaymentConfirmedApplicationEvent`: sends the pledge receipt (idempotency through an `X-Message-Id` header).
+- `PledgeRefundedApplicationEvent`: sends the refund alert.
 - `CampaignPublishedApplicationEvent`, `CampaignCancelledApplicationEvent`, `CampaignReviewApprovedApplicationEvent`, `CampaignReviewRejectedApplicationEvent`: handlers exist but are **empty stubs** today. No email is sent when a campaign succeeds or fails.
 - `ReplicatedCampaignTitleEventHandler` keeps a local copy of campaign titles so the module needs no call to Campaigns.
 

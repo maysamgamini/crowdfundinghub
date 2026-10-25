@@ -17,7 +17,7 @@ Read-only. Paths: CF = crowdfunding-reclaim/src/BuildingBlocks/CrowdFunding.Buil
 | Debezium / CDC | none | 4 connector json files, but README says removed | HT files, docs contradict |
 | Health checks | /health/live + /health/ready, per-DbContext | /health, Postgres + Broker check, timeout tests | HT (broker, timeout) / CF (live vs ready) |
 | Observability | ActivitySource only, no exporter registered | full OpenTelemetry + OTLP + collector | HT |
-| Concurrency token | xmin on Contribution, RefreshToken, WebhookSubscription + ConcurrencyConflictException | IsRowVersion on StudentBalance, retry loops in EfEconomyStore | CF (translated to 409) |
+| Concurrency token | xmin on Pledge, RefreshToken, WebhookSubscription + ConcurrencyConflictException | IsRowVersion on StudentBalance, retry loops in EfEconomyStore | CF (translated to 409) |
 | Tests for outbox | OutboxReclaimE2E (4), WakeUpLatencyE2E, LeanTable, InboxRetry, OutboxTests, OutboxSignalTests | LiveTests (4), EventDeliveryReliability (1000 deliveries), InProcessDispatchReliability, ChannelOutboxSignalTests | different strengths |
 
 ## Findings (ranked)
@@ -48,7 +48,7 @@ Read-only. Paths: CF = crowdfunding-reclaim/src/BuildingBlocks/CrowdFunding.Buil
 
 ### F4: HT signals before the commit (Coaching) and after SaveChanges without a transaction guarantee
 - Severity: P2
-- Repos and files: HT Modules/Coaching/.../Events/CoachingEventPublisher.cs:25-32 (adds row, calls Trigger() immediately; caller saves later); HT Curriculum CurriculumEventPublisher.cs:39-40 (signals after SaveChanges; OK only if no outer transaction). CF ContributionTransactionExecutor.cs:62-72 ("Waking before the commit would let the worker look, find nothing").
+- Repos and files: HT Modules/Coaching/.../Events/CoachingEventPublisher.cs:25-32 (adds row, calls Trigger() immediately; caller saves later); HT Curriculum CurriculumEventPublisher.cs:39-40 (signals after SaveChanges; OK only if no outer transaction). CF PledgeTransactionExecutor.cs:62-72 ("Waking before the commit would let the worker look, find nothing").
 - Evidence: Coaching's trigger fires before the row is visible; the worker sweeps an empty table and sleeps 5 s.
 - Direction: port CF to HT
 - Fix: signal from the unit-of-work after commit, not from the publisher.
@@ -189,7 +189,7 @@ Read-only. Paths: CF = crowdfunding-reclaim/src/BuildingBlocks/CrowdFunding.Buil
 ### F23: Test coverage differences for the same component
 - Severity: P2
 - Claim query / reclaim: CF OutboxReclaimE2ETests (4 tests: expired lease reclaimed, live lease left alone, repeat killer dead-lettered, lease on app clock); HT none (grep "LockedUntil|Processing" in tests: 0 hits).
-- Concurrency of two processors: HT ProcessBatchAsync_TwoConcurrentProcessors_NeverBothDispatchTheSameMessage (LiveTests:105); CF: no equivalent two-worker test found by name (ContributionAndOutboxE2ETests/OutboxLeanTable not checked line by line).
+- Concurrency of two processors: HT ProcessBatchAsync_TwoConcurrentProcessors_NeverBothDispatchTheSameMessage (LiveTests:105); CF: no equivalent two-worker test found by name (PledgeAndOutboxE2ETests/OutboxLeanTable not checked line by line).
 - Soak: HT EventDeliveryReliabilityTests.OneThousandDeliveries... (:47) and unrecognized-type dead-letter (:101); CF none of that scale.
 - Signal: CF OutboxSignalTests (5) + OutboxWakeUpLatencyE2ETests (latency); HT ChannelOutboxSignalTests (6, incl. concurrent bursts) but no latency/per-module test.
 - Inbox: CF InboxRetryTests (3); HT none for IdempotentConsumer.

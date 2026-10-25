@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using CrowdFunding.API.Contracts.Campaigns;
 using CrowdFunding.API.Contracts.Common;
-using CrowdFunding.API.Contracts.Contributions;
+using CrowdFunding.API.Contracts.Pledges;
 using CrowdFunding.API.Contracts.Identity;
 using CrowdFunding.API.Contracts.Moderation;
 using CrowdFunding.API.Migrations;
@@ -58,7 +58,7 @@ public sealed class CoverageGapE2ETests
         Assert.NotNull(body);
         Assert.Equal("Healthy", body!.Status);
         Assert.Contains(body.Checks, check => check.Name == "campaigns-db" && check.Status == "Healthy");
-        Assert.Contains(body.Checks, check => check.Name == "contributions-db" && check.Status == "Healthy");
+        Assert.Contains(body.Checks, check => check.Name == "pledges-db" && check.Status == "Healthy");
         Assert.Contains(body.Checks, check => check.Name == "identity-db" && check.Status == "Healthy");
         Assert.Contains(body.Checks, check => check.Name == "moderation-db" && check.Status == "Healthy");
     }
@@ -88,20 +88,20 @@ public sealed class CoverageGapE2ETests
     }
 
     [Fact]
-    public async Task ListContributionsByCampaign_ShouldReturnPagedResponseContainingMadeContribution()
+    public async Task ListPledgesByCampaign_ShouldReturnPagedResponseContainingMadePledge()
     {
         using var client = _factory.CreateClient();
-        var (_, token) = await client.RegisterAndLoginAsync(ApiTestExtensions.UniqueEmail("list-contributions-owner"));
+        var (_, token) = await client.RegisterAndLoginAsync(ApiTestExtensions.UniqueEmail("list-pledges-owner"));
         client.SetBearerToken(token);
 
-        var createResponse = await client.PostAsJsonAsync("/api/campaigns", ValidCampaignRequest("Campaign With Contributions"));
+        var createResponse = await client.PostAsJsonAsync("/api/campaigns", ValidCampaignRequest("Campaign With Pledges"));
         createResponse.EnsureSuccessStatusCode();
         var campaignId = (await createResponse.Content.ReadFromJsonAsync<CreateCampaignResponse>())!.CampaignId;
 
         await _factory.ProcessOutboxMessagesAsync();
 
-        var adminEmail = ApiTestExtensions.UniqueEmail("list-contributions-admin");
-        await AdminSeeder.RunAsync(_factory.Services, adminEmail, ApiTestExtensions.DefaultPassword, "List Contributions Admin");
+        var adminEmail = ApiTestExtensions.UniqueEmail("list-pledges-admin");
+        await AdminSeeder.RunAsync(_factory.Services, adminEmail, ApiTestExtensions.DefaultPassword, "List Pledges Admin");
         var adminToken = await client.LoginUserAsync(adminEmail);
         client.SetBearerToken(adminToken);
         var approveResponse = await client.PostAsJsonAsync($"/api/moderation/reviews/{campaignId}/approve", new ReviewCampaignRequest(Notes: "Approved."));
@@ -113,20 +113,20 @@ public sealed class CoverageGapE2ETests
 
         await _factory.ProcessOutboxMessagesAsync();
 
-        var (_, backerToken) = await client.RegisterAndLoginAsync(ApiTestExtensions.UniqueEmail("list-contributions-backer"));
+        var (_, backerToken) = await client.RegisterAndLoginAsync(ApiTestExtensions.UniqueEmail("list-pledges-backer"));
         client.SetBearerToken(backerToken);
 
         var makeResponse = await client.PostAsJsonAsync(
-            $"/api/campaigns/{campaignId}/contributions", new MakeContributionRequest(100m, "USD"));
+            $"/api/campaigns/{campaignId}/pledges", new MakePledgeRequest(100m, "USD"));
         makeResponse.EnsureSuccessStatusCode();
-        var contribution = await makeResponse.Content.ReadFromJsonAsync<MakeContributionResponse>();
+        var pledge = await makeResponse.Content.ReadFromJsonAsync<MakePledgeResponse>();
 
-        var listResponse = await client.GetAsync($"/api/campaigns/{campaignId}/contributions?pageNumber=1&pageSize=50");
+        var listResponse = await client.GetAsync($"/api/campaigns/{campaignId}/pledges?pageNumber=1&pageSize=50");
         listResponse.EnsureSuccessStatusCode();
 
-        var page = await listResponse.Content.ReadFromJsonAsync<PagedResponse<ListContributionsResponse>>();
+        var page = await listResponse.Content.ReadFromJsonAsync<PagedResponse<ListPledgesResponse>>();
         Assert.NotNull(page);
-        Assert.Contains(page!.Items, item => item.Id == contribution!.ContributionId);
+        Assert.Contains(page!.Items, item => item.Id == pledge!.PledgeId);
     }
 
     [Fact]
@@ -147,12 +147,24 @@ public sealed class CoverageGapE2ETests
         var moderatorToken = await client.LoginUserAsync(moderatorEmail);
         client.SetBearerToken(moderatorToken);
 
-        var listResponse = await client.GetAsync("/api/moderation/reviews?pageNumber=1&pageSize=50");
-        listResponse.EnsureSuccessStatusCode();
+        // Every test shares one database and reviews are listed oldest first, so the new review may be on a later
+        // page; walk the pages instead of assuming it is on the first.
+        var found = false;
+        for (var pageNumber = 1; pageNumber <= 100 && !found; pageNumber++)
+        {
+            var listResponse = await client.GetAsync($"/api/moderation/reviews?pageNumber={pageNumber}&pageSize=50");
+            listResponse.EnsureSuccessStatusCode();
 
-        var page = await listResponse.Content.ReadFromJsonAsync<PagedResponse<CampaignReviewResponse>>();
-        Assert.NotNull(page);
-        Assert.Contains(page!.Items, item => item.CampaignId == campaignId);
+            var page = await listResponse.Content.ReadFromJsonAsync<PagedResponse<CampaignReviewResponse>>();
+            Assert.NotNull(page);
+            found = page!.Items.Any(item => item.CampaignId == campaignId);
+            if (page.Items.Count < 50)
+            {
+                break;
+            }
+        }
+
+        Assert.True(found, "The new review was not listed on any page.");
     }
 
     [Fact]
@@ -261,13 +273,13 @@ public sealed class CoverageGapE2ETests
     }
 
     [Fact]
-    public async Task GetContributionById_WithUnknownId_ShouldReturnNotFound()
+    public async Task GetPledgeById_WithUnknownId_ShouldReturnNotFound()
     {
         using var client = _factory.CreateClient();
-        var (_, token) = await client.RegisterAndLoginAsync(ApiTestExtensions.UniqueEmail("get-contribution-unknown"), "Backer");
+        var (_, token) = await client.RegisterAndLoginAsync(ApiTestExtensions.UniqueEmail("get-pledge-unknown"), "Backer");
         client.SetBearerToken(token);
 
-        var response = await client.GetAsync($"/api/campaigns/{Guid.NewGuid()}/contributions/{Guid.NewGuid()}");
+        var response = await client.GetAsync($"/api/campaigns/{Guid.NewGuid()}/pledges/{Guid.NewGuid()}");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
