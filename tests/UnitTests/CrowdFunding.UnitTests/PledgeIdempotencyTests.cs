@@ -205,6 +205,8 @@ public sealed class PledgeIdempotencyTests
 
     private abstract class FakeContributionRepositoryBase : IContributionRepository
     {
+        public Task AddActivationAsync(PledgeActivation activation, CancellationToken cancellationToken) => Task.CompletedTask;
+
         public Task AddAsync(Contribution contribution, CancellationToken cancellationToken) => Task.CompletedTask;
         public Task<Contribution?> GetByIdAsync(Guid contributionId, CancellationToken cancellationToken) => Task.FromResult<Contribution?>(null);
         public Task<Contribution?> GetByExternalPaymentIntentIdAsync(string externalPaymentIntentId, CancellationToken cancellationToken) => Task.FromResult<Contribution?>(null);

@@ -59,11 +59,28 @@ public sealed class ConfirmPledgeSetupCommandHandler : ICommandHandler<ConfirmPl
             throw new InvalidOperationException("A card can only be saved for a pledge while the campaign is published.");
         }
 
-        await _transactionExecutor.ExecuteAsync(async ct =>
+        try
         {
-            contribution.ActivatePledge(command.PaymentMethodReference, _dateTimeProvider.UtcNow);
-            await _contributionRepository.UpdateAsync(contribution, ct);
-        }, cancellationToken);
+            await _transactionExecutor.ExecuteAsync(async ct =>
+            {
+                var activation = contribution.ActivatePledge(command.PaymentMethodReference, _dateTimeProvider.UtcNow);
+                await _contributionRepository.AddActivationAsync(activation, ct);
+                await _contributionRepository.UpdateAsync(contribution, ct);
+            }, cancellationToken);
+        }
+        catch (PledgeAlreadyActivatedException)
+        {
+            // Two copies of the provider's news got past the status check together and one lost the race at the
+            // activation index. The winner's work stands: report the pledge as it is now (the executor already dropped
+            // the loser's tracked state, so this read is fresh). A lost race at the row's version stays a retryable conflict.
+            var current = await _contributionRepository.GetByIdAsync(command.ContributionId, cancellationToken);
+            if (current?.Status != ContributionStatus.Active)
+            {
+                throw;
+            }
+
+            return new ConfirmPledgeSetupResult(current.Id, current.Status.ToString());
+        }
 
         return new ConfirmPledgeSetupResult(contribution.Id, contribution.Status.ToString());
     }

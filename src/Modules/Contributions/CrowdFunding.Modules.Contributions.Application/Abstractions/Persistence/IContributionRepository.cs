@@ -8,6 +8,9 @@ namespace CrowdFunding.Modules.Contributions.Application.Abstractions.Persistenc
 public interface IContributionRepository
 {
     Task AddAsync(Contribution contribution, CancellationToken cancellationToken);
+
+    /// <summary>Stages the record that a pledge was activated; the database refuses a second one for the same pledge.</summary>
+    Task AddActivationAsync(PledgeActivation activation, CancellationToken cancellationToken);
     Task<Contribution?> GetByIdAsync(Guid contributionId, CancellationToken cancellationToken);
 
     /// <summary>Looks up a contribution by the external payment gateway's own reference — how a

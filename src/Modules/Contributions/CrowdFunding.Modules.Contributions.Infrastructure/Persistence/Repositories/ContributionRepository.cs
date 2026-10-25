@@ -19,6 +19,13 @@ public sealed class ContributionRepository : IContributionRepository
     }
 
     /// <inheritdoc/>
+    public Task AddActivationAsync(PledgeActivation activation, CancellationToken cancellationToken)
+    {
+        _dbContext.PledgeActivations.Add(activation);
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc/>
     public Task AddAsync(Contribution contribution, CancellationToken cancellationToken)
     {
         // Add (not AddAsync) — EF's AddAsync exists only for value generators that need async DB

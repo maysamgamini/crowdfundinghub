@@ -218,7 +218,7 @@ public sealed class Contribution : BaseEntity
     /// (the number goes up, so it gets a new key); a timeout is not recorded here, because a timeout is not an answer.
     /// </summary>
     /// <summary>The backer finished setup: the card is saved, nothing is charged, and the pledge now counts.</summary>
-    public void ActivatePledge(string paymentMethodReference, DateTime processedAtUtc)
+    public PledgeActivation ActivatePledge(string paymentMethodReference, DateTime processedAtUtc)
     {
         if (Status != ContributionStatus.Pending)
         {
@@ -236,6 +236,7 @@ public sealed class Contribution : BaseEntity
         ProcessedAtUtc = processedAtUtc;
         AddDomainEvent(new ContributionPledgeActivatedDomainEvent(
             Id, CampaignId, ContributorId, Money.Amount, Money.Currency, RewardTierReservationId));
+        return new PledgeActivation(Id, PaymentMethodReference, processedAtUtc);
     }
 
     /// <summary>The campaign ended without being funded, or was cancelled: the promise ends and nothing is charged.</summary>

@@ -903,6 +903,9 @@ internal sealed class FakeRefundableContributionRepository : IContributionReposi
         _contributions = contributions;
     }
 
+    public Task AddActivationAsync(PledgeActivation activation, CancellationToken cancellationToken) => Task.CompletedTask;
+
+
     public Task AddAsync(Contribution contribution, CancellationToken cancellationToken)
         => throw new NotSupportedException("Not used by these tests.");
 
@@ -1074,6 +1077,9 @@ internal sealed class FakeContributionRepository : IContributionRepository
 
     public Contribution? SavedContribution { get; private set; }
     public bool WasUpdated { get; private set; }
+
+    public Task AddActivationAsync(PledgeActivation activation, CancellationToken cancellationToken) => Task.CompletedTask;
+
 
     public Task AddAsync(Contribution contribution, CancellationToken cancellationToken)
     {

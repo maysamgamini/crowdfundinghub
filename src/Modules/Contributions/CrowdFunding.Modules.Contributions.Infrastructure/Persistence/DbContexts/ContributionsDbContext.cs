@@ -17,6 +17,8 @@ public sealed class ContributionsDbContext : DbContext
 
     public DbSet<Contribution> Contributions => Set<Contribution>();
     public DbSet<ChargeAttempt> ChargeAttempts => Set<ChargeAttempt>();
+
+    public DbSet<PledgeActivation> PledgeActivations => Set<PledgeActivation>();
     public DbSet<ActiveCampaignCache> ActiveCampaignsCache => Set<ActiveCampaignCache>();
     public DbSet<ProcessedPaymentWebhook> ProcessedPaymentWebhooks => Set<ProcessedPaymentWebhook>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();

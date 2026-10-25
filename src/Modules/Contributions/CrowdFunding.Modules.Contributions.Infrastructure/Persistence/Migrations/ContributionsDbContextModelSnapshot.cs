@@ -293,6 +293,32 @@ namespace CrowdFunding.Modules.Contributions.Infrastructure.Persistence.Migratio
                     b.ToTable("contributions", "contributions");
                 });
 
+            modelBuilder.Entity("CrowdFunding.Modules.Contributions.Domain.Aggregates.PledgeActivation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ActivatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ContributionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PaymentMethodReference")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContributionId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_pledge_activations_one_per_pledge");
+
+                    b.ToTable("pledge_activations", "contributions");
+                });
+
             modelBuilder.Entity("CrowdFunding.Modules.Contributions.Infrastructure.Persistence.ReadModels.ActiveCampaignCache", b =>
                 {
                     b.Property<Guid>("CampaignId")
@@ -376,6 +402,15 @@ namespace CrowdFunding.Modules.Contributions.Infrastructure.Persistence.Migratio
                         });
 
                     b.Navigation("Money")
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("CrowdFunding.Modules.Contributions.Domain.Aggregates.PledgeActivation", b =>
+                {
+                    b.HasOne("CrowdFunding.Modules.Contributions.Domain.Aggregates.Contribution", null)
+                        .WithMany()
+                        .HasForeignKey("ContributionId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 #pragma warning restore 612, 618

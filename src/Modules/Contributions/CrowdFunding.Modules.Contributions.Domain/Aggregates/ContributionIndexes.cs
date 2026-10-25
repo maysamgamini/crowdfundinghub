@@ -8,4 +8,7 @@ public static class ContributionIndexes
 
     /// <summary>Unique per (campaign, backer) among live pledges (Pending or Succeeded): one live pledge per backer per campaign.</summary>
     public const string OneLivePledge = "UX_contributions_one_live_pledge_per_backer";
+
+    /// <summary>Unique per pledge: a pledge is activated at most once.</summary>
+    public const string OneActivationPerPledge = "UX_pledge_activations_one_per_pledge";
 }
