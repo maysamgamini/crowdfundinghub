@@ -31,7 +31,7 @@ Infrastructure projects implement repositories, EF Core contexts, entity configu
 - Use one DbContext per module to preserve boundaries.
 - Pick the tier by two questions: does another module need to react reliably, and can concurrent writes corrupt the data (check every writer of the table)? Tier 1 is one endpoint on the module's DbContext. Tier 2 is a command and handler using only that DbContext, with no aggregate and no repository; Tier 2 handlers live in the module's Infrastructure and are registered with `AddRequestHandlersFromAssemblies`, as in the API `Program.cs`. Tier 3 is aggregate, repository, command dispatcher, outbox, locks and tokens. See `docs/POLY_PATTERN_TIER_ASSIGNMENT.md`.
 - Every module table lives in that module's schema. Add a `MoveTables<Module>Schema` migration when a table is new or moved; `ModuleSchemaRulesTests` fails if a table sits in `public`, a module schema lacks its own migration history, or a foreign key crosses a schema.
-- Event consumers must be idempotent. The inbox records a message after the handler finishes, so a crash between the two re-runs the handler on redelivery.
+- Event consumers must be idempotent. A handler marked `IRecordsInboxInTransaction` (one module transaction) has its inbox row written in that transaction; every other handler is recorded after it finishes, so a crash between the two re-runs it on redelivery.
 
 ## Commands, Queries, and Events
 ### Commands

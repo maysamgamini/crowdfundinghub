@@ -11,7 +11,7 @@ namespace CrowdFunding.Modules.Campaigns.Application.Features.RewardTiers.Events
 /// Immediately releases a held reward tier reservation when payment fails (card declined, fraud check failure)
 /// rather than waiting for the 15-minute scavenger sweep, closing the denial-of-inventory window (TICKET-052).
 /// </summary>
-public sealed class PledgePaymentFailedRewardTierHandler : IEventHandler<PledgePaymentFailedApplicationEvent>
+public sealed class PledgePaymentFailedRewardTierHandler : IEventHandler<PledgePaymentFailedApplicationEvent>, IRecordsInboxInTransaction
 {
     private readonly IRewardTierReservationRepository _reservationRepository;
     private readonly IRewardTierRepository _rewardTierRepository;

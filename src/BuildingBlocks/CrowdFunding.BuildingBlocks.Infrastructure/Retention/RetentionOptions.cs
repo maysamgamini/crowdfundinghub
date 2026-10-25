@@ -17,6 +17,12 @@ public sealed class RetentionOptions
     /// </summary>
     public int InboxDays { get; init; } = 14;
 
+    /// <summary>
+    /// How long the record of an applied payment webhook event id is kept. A payment provider retries a webhook for
+    /// up to 72 hours, so a week is longer than any redelivery that can still arrive.
+    /// </summary>
+    public int PaymentWebhookDays { get; init; } = 7;
+
     /// <summary>How often the cleanup runs.</summary>
     public TimeSpan Interval { get; init; } = TimeSpan.FromHours(1);
 }

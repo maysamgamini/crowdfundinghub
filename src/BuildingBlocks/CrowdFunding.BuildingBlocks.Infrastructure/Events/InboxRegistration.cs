@@ -24,6 +24,7 @@ public static class InboxRegistration
         where TDbContext : DbContext
     {
         services.AddScoped<EfInbox<TDbContext>>();
+        services.AddScoped<InboxRecorder<TDbContext>>();
         services.AddSingleton(new InboxBinding(handlerAssembly, typeof(EfInbox<TDbContext>)));
 
         // The inbox only has to outlive the longest redelivery window, so old rows are pruned on a schedule.

@@ -35,7 +35,8 @@ public sealed class ServiceProviderEventPublisher : IEventPublisher
             static type => type.GetMethod(nameof(IEventHandler<object>.Handle))
                            ?? throw new InvalidOperationException($"Handler type '{type.FullName}' does not expose Handle."));
 
-        var messageId = _serviceProvider.GetService<InboxMessageContext>()?.MessageId;
+        var context = _serviceProvider.GetService<InboxMessageContext>();
+        var messageId = context?.MessageId;
 
         foreach (var handler in handlers)
         {
@@ -48,9 +49,32 @@ public sealed class ServiceProviderEventPublisher : IEventPublisher
                 continue;
             }
 
-            await InvokeAsync(handleMethod, handler, notification, cancellationToken);
+            // A handler that is one transaction gets its inbox row written inside that transaction
+            // by the module's executor; for every other handler the row is written after it ends.
+            var recordInTransaction = inbox is not null && handler is IRecordsInboxInTransaction;
+            if (context is not null)
+            {
+                context.ConsumerToRecordInTransaction = recordInTransaction ? consumer : null;
+                context.RecordedInTransaction = false;
+            }
 
-            if (inbox is not null)
+            try
+            {
+                await InvokeAsync(handleMethod, handler, notification, cancellationToken);
+            }
+            catch (InboxAlreadyRecordedException)
+            {
+                continue;
+            }
+            finally
+            {
+                if (context is not null)
+                {
+                    context.ConsumerToRecordInTransaction = null;
+                }
+            }
+
+            if (inbox is not null && !(context?.RecordedInTransaction ?? false))
             {
                 await inbox.MarkProcessedAsync(messageId!.Value, consumer, DateTime.UtcNow, cancellationToken);
             }

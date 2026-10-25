@@ -76,7 +76,7 @@ sequenceDiagram
     W->>Ca: publish PledgePaymentConfirmed (contract type)
     Ca->>CaDb: credit ledger (ON CONFLICT DO NOTHING)
     Ca->>CaDb: record in inbox
-    Note over Ca,CaDb: Crash between credit and inbox record = handler runs once more, and the ledger's unique key makes that harmless
+    Note over Ca,CaDb: Crash between credit and inbox record = handler runs once more (this handler is not marked to record in its transaction), and the ledger's unique key makes that harmless
 ```
 
 ### From module to microservice

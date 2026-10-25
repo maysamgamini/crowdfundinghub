@@ -36,16 +36,20 @@ public sealed class CampaignTransactionExecutor : ICampaignTransactionExecutor
 
     private readonly IOutboxSignal<CampaignsDbContext>? _outboxSignal;
 
+    private readonly InboxRecorder<CampaignsDbContext>? _inboxRecorder;
+
     public CampaignTransactionExecutor(
         CampaignsDbContext dbContext,
         IDistributedCache cache,
         ILogger<CampaignTransactionExecutor> logger,
-        IOutboxSignal<CampaignsDbContext>? outboxSignal = null)
+        IOutboxSignal<CampaignsDbContext>? outboxSignal = null,
+        InboxRecorder<CampaignsDbContext>? inboxRecorder = null)
     {
         _dbContext = dbContext;
         _cache = cache;
         _logger = logger;
         _outboxSignal = outboxSignal;
+        _inboxRecorder = inboxRecorder;
     }
 
     /// <inheritdoc/>
@@ -103,6 +107,13 @@ public sealed class CampaignTransactionExecutor : ICampaignTransactionExecutor
                 }
 
                 await _dbContext.SaveChangesAsync(cancellationToken);
+
+                // A handler that asked for it gets its inbox row in this same transaction.
+                if (_inboxRecorder is not null)
+                {
+                    await _inboxRecorder.RecordIfRequestedAsync(cancellationToken);
+                }
+
                 DomainEventAccessor.ClearDomainEvents(_dbContext);
 
                 if (transaction is not null)

@@ -51,6 +51,7 @@ public static class PledgesInfrastructureDependencyInjection
         services.AddSingleton<IPledgeDateTimeProvider, SystemDateTimeProvider>();
         services.AddRetention();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IRetentionTask, IdempotencyKeyExpiryTask>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IRetentionTask, PaymentWebhookPruneTask>());
         services.AddOutboxSignal<PledgesDbContext>();
         services.AddHostedService<PledgesOutboxBackgroundService>();
         services.AddHostedService<SettlementBackgroundService>();

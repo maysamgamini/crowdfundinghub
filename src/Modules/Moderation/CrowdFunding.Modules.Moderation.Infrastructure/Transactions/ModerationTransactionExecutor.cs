@@ -19,10 +19,14 @@ public sealed class ModerationTransactionExecutor : IModerationTransactionExecut
 
     private readonly IOutboxSignal<ModerationDbContext>? _outboxSignal;
 
-    public ModerationTransactionExecutor(ModerationDbContext dbContext, IOutboxSignal<ModerationDbContext>? outboxSignal = null)
+    private readonly InboxRecorder<ModerationDbContext>? _inboxRecorder;
+
+    public ModerationTransactionExecutor(ModerationDbContext dbContext, IOutboxSignal<ModerationDbContext>? outboxSignal = null,
+        InboxRecorder<ModerationDbContext>? inboxRecorder = null)
     {
         _dbContext = dbContext;
         _outboxSignal = outboxSignal;
+        _inboxRecorder = inboxRecorder;
     }
 
     public Task ExecuteAsync(Func<CancellationToken, Task> action, CancellationToken cancellationToken)
@@ -53,6 +57,13 @@ public sealed class ModerationTransactionExecutor : IModerationTransactionExecut
                 }
 
                 await _dbContext.SaveChangesAsync(cancellationToken);
+
+                // A handler that asked for it gets its inbox row in this same transaction.
+                if (_inboxRecorder is not null)
+                {
+                    await _inboxRecorder.RecordIfRequestedAsync(cancellationToken);
+                }
+
                 DomainEventAccessor.ClearDomainEvents(_dbContext);
 
                 if (transaction is not null)

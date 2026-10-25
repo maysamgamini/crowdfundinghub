@@ -22,6 +22,7 @@ namespace CrowdFunding.Modules.Pledges.Application.Features.ActiveCampaigns.Even
 /// for "created" to complete.
 /// </summary>
 public sealed class ReplicatedCampaignEventHandlers :
+    IRecordsInboxInTransaction,
     IEventHandler<CampaignCreatedApplicationEvent>,
     IEventHandler<CampaignPublishedApplicationEvent>,
     IEventHandler<CampaignCancelledApplicationEvent>,

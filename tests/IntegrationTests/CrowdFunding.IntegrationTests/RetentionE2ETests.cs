@@ -3,6 +3,7 @@ using CrowdFunding.BuildingBlocks.Infrastructure.Retention;
 using CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.DbContexts;
 using CrowdFunding.Modules.Pledges.Domain.Aggregates;
 using CrowdFunding.Modules.Pledges.Infrastructure.Persistence.DbContexts;
+using CrowdFunding.Modules.Pledges.Infrastructure.Persistence.ReadModels;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -76,5 +77,28 @@ public sealed class RetentionE2ETests
         var check = scope.ServiceProvider.GetRequiredService<CampaignsDbContext>();
         Assert.False(await check.Set<InboxMessage>().AnyAsync(x => x.MessageId == oldId));
         Assert.True(await check.Set<InboxMessage>().AnyAsync(x => x.MessageId == recentId));
+    }
+
+    [Fact]
+    public async Task PaymentWebhookRecordsOlderThanTheWindow_AreDeleted_AndRecentOnesStay()
+    {
+        var oldId = $"evt_old_{Guid.NewGuid():N}";
+        var recentId = $"evt_recent_{Guid.NewGuid():N}";
+
+        await using (var seed = _factory.Services.CreateAsyncScope())
+        {
+            var db = seed.ServiceProvider.GetRequiredService<PledgesDbContext>();
+            db.ProcessedPaymentWebhooks.AddRange(
+                new ProcessedPaymentWebhook { WebhookEventId = oldId, PaymentIntentId = "pi_1", ProcessedAtUtc = DateTime.UtcNow.AddDays(-8) },
+                new ProcessedPaymentWebhook { WebhookEventId = recentId, PaymentIntentId = "pi_2", ProcessedAtUtc = DateTime.UtcNow.AddDays(-1) });
+            await db.SaveChangesAsync();
+        }
+
+        await RunRetentionAsync();
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var check = scope.ServiceProvider.GetRequiredService<PledgesDbContext>();
+        Assert.False(await check.ProcessedPaymentWebhooks.AnyAsync(x => x.WebhookEventId == oldId));
+        Assert.True(await check.ProcessedPaymentWebhooks.AnyAsync(x => x.WebhookEventId == recentId));
     }
 }

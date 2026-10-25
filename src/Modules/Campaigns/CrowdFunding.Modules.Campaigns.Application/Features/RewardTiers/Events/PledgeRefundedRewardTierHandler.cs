@@ -12,7 +12,7 @@ namespace CrowdFunding.Modules.Campaigns.Application.Features.RewardTiers.Events
 /// failure or cancellation saga (TICKET-051). Decrements <see cref="RewardTier.ClaimedCount"/> and
 /// transitions the reservation to Released.
 /// </summary>
-public sealed class PledgeRefundedRewardTierHandler : IEventHandler<PledgeRefundedApplicationEvent>
+public sealed class PledgeRefundedRewardTierHandler : IEventHandler<PledgeRefundedApplicationEvent>, IRecordsInboxInTransaction
 {
     private readonly IRewardTierReservationRepository _reservationRepository;
     private readonly IRewardTierRepository _rewardTierRepository;

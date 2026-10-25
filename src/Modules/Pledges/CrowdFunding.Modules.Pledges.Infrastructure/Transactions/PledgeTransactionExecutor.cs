@@ -26,10 +26,14 @@ public sealed class PledgeTransactionExecutor : IPledgeTransactionExecutor
 
     private readonly IOutboxSignal<PledgesDbContext>? _outboxSignal;
 
-    public PledgeTransactionExecutor(PledgesDbContext dbContext, IOutboxSignal<PledgesDbContext>? outboxSignal = null)
+    private readonly InboxRecorder<PledgesDbContext>? _inboxRecorder;
+
+    public PledgeTransactionExecutor(PledgesDbContext dbContext, IOutboxSignal<PledgesDbContext>? outboxSignal = null,
+        InboxRecorder<PledgesDbContext>? inboxRecorder = null)
     {
         _dbContext = dbContext;
         _outboxSignal = outboxSignal;
+        _inboxRecorder = inboxRecorder;
     }
 
     public Task ExecuteAsync(Func<CancellationToken, Task> action, CancellationToken cancellationToken)
@@ -60,6 +64,13 @@ public sealed class PledgeTransactionExecutor : IPledgeTransactionExecutor
                 }
 
                 await _dbContext.SaveChangesAsync(cancellationToken);
+
+                // A handler that asked for it gets its inbox row in this same transaction.
+                if (_inboxRecorder is not null)
+                {
+                    await _inboxRecorder.RecordIfRequestedAsync(cancellationToken);
+                }
+
                 DomainEventAccessor.ClearDomainEvents(_dbContext);
 
                 if (transaction is not null)

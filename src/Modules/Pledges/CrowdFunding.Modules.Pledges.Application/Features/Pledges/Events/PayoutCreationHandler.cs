@@ -12,7 +12,7 @@ namespace CrowdFunding.Modules.Pledges.Application.Features.Pledges.Events;
 /// known until every pledge has settled, so <see cref="PayoutService"/> does that later. The same event arriving
 /// twice finds the payout already there and does nothing.
 /// </summary>
-public sealed class PayoutCreationHandler : IEventHandler<CampaignSucceededApplicationEvent>
+public sealed class PayoutCreationHandler : IEventHandler<CampaignSucceededApplicationEvent>, IRecordsInboxInTransaction
 {
     private readonly IPayoutStore _payoutStore;
     private readonly IPledgeTransactionExecutor _transactionExecutor;
