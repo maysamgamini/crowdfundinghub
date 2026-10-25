@@ -17,6 +17,10 @@ Findings from a consistency check across the active repositories (crowdfundinghu
 - Pledge list and detail endpoints were anonymous (audit A2-F2): fixed, with unit and end-to-end tests.
 - Outbox claim ignored expired leases, and the lease and due time used different clocks: fixed (reclaim, attempt counting, application clock).
 - Idempotent pledge creation and the outbox wake-up signal: built.
+- Refunds go through a payment provider with an idempotency key per attempt; the save-then-charge funding model (card saved at pledge time, one charge per pledge at the deadline); the pledge activation record with its unique index; creator payouts net of the platform fee: built, against a fake provider.
+- Database rule violations (unique, check, foreign key, trigger) answer `409` with a chosen sentence instead of `500`: built.
+- The code now says pledge and backer where it said contribution and contributor (module, classes, routes, tables).
+- The Pledges module's copy of campaign state no longer depends on event order: fixed, with tests.
 
 ## Tickets
 
@@ -40,8 +44,8 @@ Findings from a consistency check across the active repositories (crowdfundinghu
 | [QA-036](QA-036.md) | P1 | hicleanarch | Schema statements: 'one schema' in a decision option and the cast primer; glossary says no pledge key | Open |
 | [QA-037](QA-037.md) | P1 | hicleanarch | Idempotency-key retention is 7 days in some pages and 30 in others (also across hispeedsystem loops); retry rule described three ways | Open |
 | [QA-038](QA-038.md) | P1 | hicleanarch | Animated 'unsuccessful campaign' trace says 188 backers then shows 250 | Open |
-| [QA-043](QA-043.md) | P1 | hispeedsystem | 'See It Built' in the crowdfunding loop still states things the code does not do, and is missing what it now does | Open |
-| [QA-044](QA-044.md) | P1 | hispeedsystem | Step 1.4 'late card' text contradicts the loop's own state diagram; the close job can strand a campaign in ENDED | Open |
+| [QA-043](QA-043.md) | P1 | hispeedsystem | 'See It Built' in the crowdfunding loop still states things the code does not do, and is missing what it now does | Fixed |
+| [QA-044](QA-044.md) | P1 | hispeedsystem | Step 1.4 'late card' text contradicts the loop's own state diagram; the close job can strand a campaign in ENDED | Fixed |
 | [QA-006](QA-006.md) | P2 | crowdfunding | Moderation reviews have no concurrency token, so concurrent approve and reject can both succeed | Open |
 | [QA-007](QA-007.md) | P2 | crowdfunding | GlobalExceptionHandler leaks raw messages, misses DbUpdateConcurrencyException, has no 503 | Open |
 | [QA-008](QA-008.md) | P2 | crowdfunding | Media-analysis webhook skips its own validator; out-of-range scores return 500 | Open |
@@ -61,8 +65,8 @@ Findings from a consistency check across the active repositories (crowdfundinghu
 | [QA-039](QA-039.md) | P2 | hicleanarch | Glossary lint is self-contradicting; 'resolver' used 37 times against a banned term; two glossary sources | Open |
 | [QA-040](QA-040.md) | P2 | hicleanarch | Walkthrough, status table, cast, concept cards and one quiz need corrections | Open |
 | [QA-041](QA-041.md) | P2 | hicleanarch | Stale line references in the patterns table | Open |
-| [QA-045](QA-045.md) | P2 | hispeedsystem | Cost table not derived; outbox guidance disagrees across loops (CDC-first versus poll plus signal); three claim shapes unexplained | Open |
-| [QA-046](QA-046.md) | P2 | hispeedsystem | Broken links and naming | Open |
+| [QA-045](QA-045.md) | P2 | hispeedsystem | Cost table not derived; outbox guidance disagrees across loops (CDC-first versus poll plus signal); three claim shapes unexplained | Fixed |
+| [QA-046](QA-046.md) | P2 | hispeedsystem | Broken links and naming | Fixed |
 | [QA-047](QA-047.md) | P2 | process | Automate the checks that found these problems | Open |
 | [QA-015](QA-015.md) | P3 | crowdfunding | Code hygiene: hard-coded schemas in raw SQL, bypassed clock, mixed index naming, dead code, test names that promise more than they check | Open |
 | [QA-018](QA-018.md) | P3 | crowdfunding | Ledger lacks entry kind, sign check, trigger and negative refund entries; total is a counter | Fixed |
