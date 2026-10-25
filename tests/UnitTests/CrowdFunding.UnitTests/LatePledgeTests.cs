@@ -95,7 +95,7 @@ public sealed class LatePledgeTests
     }
 
     private static LatePledgeRefundHandler RefundHandler(FakePledgeRepository repository)
-        => new(repository, new PledgeRefunder(repository, new FakePledgeTransactionExecutor(), new FakePledgeDateTimeProvider(Now), new FakePaymentProvider()));
+        => new(repository, new PledgeRefunder(repository, new FakePledgeTransactionExecutor(), new FakePledgeDateTimeProvider(Now), new FakePaymentProvider(), new FakeRefundStore([]), new FakePaymentSettings()));
 
     [Fact]
     public async Task ARejectedPledge_IsRefunded()

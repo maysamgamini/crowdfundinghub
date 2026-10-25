@@ -45,6 +45,9 @@ public sealed class Pledge : BaseEntity
     /// <summary>How many refund attempts the provider has answered with a failure. The next attempt gets the next number, and with it a new idempotency key.</summary>
     public int RefundFailures { get; private set; }
 
+    /// <summary>When the next refund attempt may be made after the provider refused one. Empty means now.</summary>
+    public DateTime? NextRefundAtUtc { get; private set; }
+
     /// <summary>The saved card the provider returned when the backer finished setup. Only a reference: card numbers never reach this system.</summary>
     public string? PaymentMethodReference { get; private set; }
 
@@ -320,7 +323,7 @@ public sealed class Pledge : BaseEntity
         NextChargeAtUtc = nowUtc.Add(retryDelay);
     }
 
-    public void RecordRefundFailure(string failureCode)
+    public void RecordRefundFailure(string failureCode, DateTime? nextRefundAtUtc = null)
     {
         if (Status != PledgeStatus.Succeeded)
         {
@@ -329,6 +332,7 @@ public sealed class Pledge : BaseEntity
 
         RefundFailures++;
         LastRefundFailure = failureCode;
+        NextRefundAtUtc = nextRefundAtUtc;
     }
 
     public void Refund(DateTime processedAtUtc, string? refundReference = null)
@@ -341,6 +345,7 @@ public sealed class Pledge : BaseEntity
         Status = PledgeStatus.Refunded;
         ProcessedAtUtc = processedAtUtc;
         RefundReference = refundReference;
+        NextRefundAtUtc = null;
         AddDomainEvent(new PledgeRefundedDomainEvent(
             Id, CampaignId, BackerId, Money.Amount, Money.Currency, RewardTierReservationId));
     }

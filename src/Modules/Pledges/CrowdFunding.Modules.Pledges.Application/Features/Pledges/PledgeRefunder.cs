@@ -21,17 +21,23 @@ public sealed class PledgeRefunder
     private readonly IPledgeTransactionExecutor _transactionExecutor;
     private readonly IPledgeDateTimeProvider _dateTimeProvider;
     private readonly IPaymentProvider _paymentProvider;
+    private readonly IRefundStore _refundStore;
+    private readonly IPaymentSettings _settings;
 
     public PledgeRefunder(
         IPledgeRepository pledgeRepository,
         IPledgeTransactionExecutor transactionExecutor,
         IPledgeDateTimeProvider dateTimeProvider,
-        IPaymentProvider paymentProvider)
+        IPaymentProvider paymentProvider,
+        IRefundStore refundStore,
+        IPaymentSettings settings)
     {
         _pledgeRepository = pledgeRepository;
         _transactionExecutor = transactionExecutor;
         _dateTimeProvider = dateTimeProvider;
         _paymentProvider = paymentProvider;
+        _refundStore = refundStore;
+        _settings = settings;
     }
 
     /// <summary>
@@ -44,6 +50,9 @@ public sealed class PledgeRefunder
 
     public async Task RefundAsync(Pledge pledge, CancellationToken cancellationToken)
     {
+        var attemptNumber = pledge.RefundFailures + 1;
+        var key = RefundKey(pledge.Id, attemptNumber);
+
         var result = await _paymentProvider.RefundAsync(
             // A pledge charged at the deadline is refunded against the provider's payment (the charge);
             // one paid at confirmation against its payment intent.
@@ -51,16 +60,20 @@ public sealed class PledgeRefunder
                 ?? $"pledge:{pledge.Id:N}",
             pledge.Money.Amount,
             pledge.Money.Currency,
-            RefundKey(pledge.Id, pledge.RefundFailures + 1),
+            key,
             cancellationToken);
 
         if (result.Outcome != RefundOutcome.Succeeded)
         {
-            // The provider answered "no". Remember it, so the next attempt is attempt n + 1 with a new key.
+            // The provider answered "no". Remember it, so the next attempt is attempt n + 1 with a new key, and keep a
+            // record of the attempt and a time before which it is not tried again.
+            var failureCode = result.FailureCode ?? "unknown";
             await _transactionExecutor.ExecuteAsync(async ct =>
             {
-                pledge.RecordRefundFailure(result.FailureCode ?? "unknown");
+                var now = _dateTimeProvider.UtcNow;
+                pledge.RecordRefundFailure(failureCode, now + _settings.RefundRetryDelay);
                 await _pledgeRepository.UpdateAsync(pledge, ct);
+                await _refundStore.AddAttemptAsync(RefundAttempt.Failed(pledge.Id, attemptNumber, key, failureCode, now), ct);
             }, cancellationToken);
 
             throw new PaymentProviderException(
@@ -69,8 +82,10 @@ public sealed class PledgeRefunder
 
         await _transactionExecutor.ExecuteAsync(async ct =>
         {
-            pledge.Refund(_dateTimeProvider.UtcNow, result.ProviderRefundId);
+            var now = _dateTimeProvider.UtcNow;
+            pledge.Refund(now, result.ProviderRefundId);
             await _pledgeRepository.UpdateAsync(pledge, ct);
+            await _refundStore.AddAttemptAsync(RefundAttempt.Succeeded(pledge.Id, attemptNumber, key, result.ProviderRefundId, now), ct);
         }, cancellationToken);
     }
 }

@@ -25,4 +25,13 @@ public interface IPaymentSettings
 
     /// <summary>The wait before a payout the provider refused is tried again.</summary>
     TimeSpan PayoutRetryDelay { get; }
+
+    /// <summary>How many refunds one pass of the refund job may start, across all campaigns. This is the rate limit.</summary>
+    int RefundsPerPass { get; }
+
+    /// <summary>The wait before a refund the provider refused is tried again.</summary>
+    TimeSpan RefundRetryDelay { get; }
+
+    /// <summary>How many refund attempts a pledge gets before the refund job leaves it for a person.</summary>
+    int MaxRefundAttempts { get; }
 }

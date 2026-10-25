@@ -417,7 +417,7 @@ Eventual consistency has a price, and this is the window in which it shows:
 2. **T1 (00:00, a moment later)**: Backer submits a $1,000 pledge for Campaign X before the `CampaignCancelled` event has reached `Pledges`.
 3. **T2**: `Pledges` checks its replicated read model. The local replica still shows `IsActive = true`, so the pledge is accepted.
 4. **T3**: The event arrives and `Pledges` flips the replica to inactive. Further pledges and payment confirmations are rejected.
-5. **Result**: The pledge that slipped in is not lost track of. `CampaignTerminationRefundHandler` refunds every pledge of the campaign that has already succeeded, and `ConfirmPledgePaymentCommandHandler` refuses to confirm a payment once the replica says the campaign is no longer published. The window is milliseconds with the wake-up signal, not the several seconds a fixed polling timer would leave. Refunds go through a fake payment provider today (see Known Gaps).
+5. **Result**: The pledge that slipped in is not lost track of. `CampaignTerminationRefundHandler` opens a refund job that refunds every pledge of the campaign that has already succeeded (a few per pass), and `ConfirmPledgePaymentCommandHandler` refuses to confirm a payment once the replica says the campaign is no longer published. The window is milliseconds with the wake-up signal, not the several seconds a fixed polling timer would leave. Refunds go through a fake payment provider today (see Known Gaps).
 
 > [!NOTE]
 > **Conclusion:** The replicated read model costs a short stale window and a refund path for the pledge that lands inside it. In return, `Pledges` no longer depends on `Campaigns` at runtime, which is what makes extracting it into its own service possible.

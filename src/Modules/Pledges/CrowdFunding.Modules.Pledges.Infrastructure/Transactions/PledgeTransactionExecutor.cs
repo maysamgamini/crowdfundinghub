@@ -135,6 +135,26 @@ public sealed class PledgeTransactionExecutor : IPledgeTransactionExecutor
             _dbContext.ChangeTracker.Clear();
             throw new PledgeAlreadyActivatedException(ex);
         }
+        catch (DbUpdateException ex) when (IsRefundJobViolation(ex))
+        {
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+            }
+
+            _dbContext.ChangeTracker.Clear();
+            throw new RefundJobAlreadyExistsException(ex);
+        }
+        catch (DbUpdateException ex) when (IsRefundAttemptViolation(ex))
+        {
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+            }
+
+            _dbContext.ChangeTracker.Clear();
+            throw new RefundAttemptAlreadyRecordedException(ex);
+        }
         catch (DbUpdateException ex) when (IsPayoutLedgerLineViolation(ex))
         {
             if (transaction is not null)
@@ -185,6 +205,20 @@ public sealed class PledgeTransactionExecutor : IPledgeTransactionExecutor
         {
             SqlState: PostgresErrorCodes.UniqueViolation,
             ConstraintName: PledgeIndexes.OneActivationPerPledge
+        };
+
+    private static bool IsRefundJobViolation(DbUpdateException exception)
+        => exception.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation,
+            ConstraintName: PledgeIndexes.OneRefundJobPerCampaign
+        };
+
+    private static bool IsRefundAttemptViolation(DbUpdateException exception)
+        => exception.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation,
+            ConstraintName: PledgeIndexes.OneRefundAttemptNumberPerPledge
         };
 
     private static bool IsPayoutLedgerLineViolation(DbUpdateException exception)

@@ -65,6 +65,10 @@ public sealed class SettlementBackgroundService : BackgroundService, IOutboxDisp
             await payouts.PayDueAsync(_options.SettlementBatchSize, cancellationToken);
             await payouts.RecordRefundsAfterPayoutAsync(_options.SettlementBatchSize, cancellationToken);
 
+            // Mass refunds run here, a few at a time, so a big campaign cannot flood the provider.
+            await scope.ServiceProvider.GetRequiredService<RefundJobService>()
+                .RefundDueAsync(_options.RefundsPerPass, cancellationToken);
+
             return claimed;
         }
         finally

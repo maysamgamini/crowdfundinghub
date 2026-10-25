@@ -126,13 +126,14 @@ public sealed class RefundThroughProviderE2ETests
             provider.FailRefundsWith(null);
         }
 
-        // The failed delivery was rescheduled a few seconds into the future; make it due now instead of waiting.
+        // The refused refund waits out its retry delay; make it due now instead of waiting a quarter of an hour.
         await using (var scope = _factory.Services.CreateAsyncScope())
         {
-            var campaigns = scope.ServiceProvider.GetRequiredService<CrowdFunding.Modules.Campaigns.Infrastructure.Persistence.DbContexts.CampaignsDbContext>();
-            await campaigns.Database.ExecuteSqlRawAsync(
-                "UPDATE campaigns.campaigns_outbox_messages SET \"ScheduledAtUtc\" = {0} WHERE \"Status\" = 0 AND \"Attempts\" > 0",
-                DateTime.UtcNow.AddMinutes(-1));
+            var pledges = scope.ServiceProvider.GetRequiredService<PledgesDbContext>();
+            await pledges.Database.ExecuteSqlRawAsync(
+                "UPDATE pledges.pledges SET \"NextRefundAtUtc\" = {0} WHERE \"CampaignId\" = {1}",
+                DateTime.UtcNow.AddMinutes(-1),
+                funded.CampaignId);
         }
 
         await _factory.ProcessOutboxMessagesAsync();
@@ -142,5 +143,18 @@ public sealed class RefundThroughProviderE2ETests
         Assert.Equal(1, afterRetry.RefundFailures);
         Assert.StartsWith("re_mock_", afterRetry.RefundReference);
         Assert.Equal(1, provider.RefundsPerformed - before);
+
+        // Both answered attempts are on record: the refusal under key 1, the success under a new key 2.
+        await using var check = _factory.Services.CreateAsyncScope();
+        var db = check.ServiceProvider.GetRequiredService<PledgesDbContext>();
+        var attempts = await db.RefundAttempts.AsNoTracking()
+            .Where(x => x.PledgeId == funded.PledgeIds[0])
+            .OrderBy(x => x.AttemptNumber)
+            .ToListAsync();
+        Assert.Equal(2, attempts.Count);
+        Assert.Equal(CrowdFunding.Modules.Pledges.Domain.Aggregates.RefundAttemptOutcome.Failed, attempts[0].Outcome);
+        Assert.Equal("insufficient_funds", attempts[0].FailureCode);
+        Assert.Equal(CrowdFunding.Modules.Pledges.Domain.Aggregates.RefundAttemptOutcome.Succeeded, attempts[1].Outcome);
+        Assert.NotEqual(attempts[0].IdempotencyKey, attempts[1].IdempotencyKey);
     }
 }

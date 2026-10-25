@@ -788,109 +788,67 @@ public sealed class FailPledgePaymentCommandHandlerTests
 
 public sealed class CampaignTerminationRefundHandlerTests
 {
+    private static (CampaignTerminationRefundHandler Handler, FakeRefundStore Store, FakePledgeTransactionExecutor Executor) Build()
+    {
+        var store = new FakeRefundStore([]);
+        var executor = new FakePledgeTransactionExecutor();
+        var handler = new CampaignTerminationRefundHandler(
+            store, executor, new FakePledgeDateTimeProvider(new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc)));
+        return (handler, store, executor);
+    }
+
     [Fact]
-    public async Task Handle_CampaignFailed_ShouldRefundEverySucceededPledge()
+    public async Task Handle_CampaignFailed_ShouldOpenARefundJobForTheCampaign()
     {
         var campaignId = Guid.NewGuid();
-        var pledgeOne = Pledge.Create(campaignId, Guid.NewGuid(), 100m, "USD", DateTime.UtcNow);
-        pledgeOne.ConfirmPayment("PAY-1", DateTime.UtcNow);
-        var pledgeTwo = Pledge.Create(campaignId, Guid.NewGuid(), 200m, "USD", DateTime.UtcNow);
-        pledgeTwo.ConfirmPayment("PAY-2", DateTime.UtcNow);
-        var repository = new FakeRefundablePledgeRepository([pledgeOne, pledgeTwo]);
-        var transactionExecutor = new FakePledgeTransactionExecutor();
-        var handler = new CampaignTerminationRefundHandler(
-            repository,
-            new PledgeRefunder(
-                repository,
-                transactionExecutor,
-                new FakePledgeDateTimeProvider(new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc)),
-                new FakePaymentProvider()));
+        var (handler, store, _) = Build();
 
         await handler.Handle(
             new CampaignFailedApplicationEvent(campaignId, Guid.NewGuid(), 300m, 1000m, "USD", DateTime.UtcNow),
             CancellationToken.None);
 
-        Assert.Equal(PledgeStatus.Refunded, pledgeOne.Status);
-        Assert.Equal(PledgeStatus.Refunded, pledgeTwo.Status);
-        Assert.Equal(2, transactionExecutor.InvocationCount);
+        var job = Assert.Single(store.Jobs);
+        Assert.Equal(campaignId, job.CampaignId);
+        Assert.Equal(RefundJobStatus.Open, job.Status);
     }
 
     [Fact]
-    public async Task Handle_CampaignCancelled_ShouldRefundEverySucceededPledge()
+    public async Task Handle_CampaignCancelled_ShouldOpenARefundJobForTheCampaign()
     {
         var campaignId = Guid.NewGuid();
-        var pledge = Pledge.Create(campaignId, Guid.NewGuid(), 150m, "USD", DateTime.UtcNow);
-        pledge.ConfirmPayment("PAY-1", DateTime.UtcNow);
-        var repository = new FakeRefundablePledgeRepository([pledge]);
-        var transactionExecutor = new FakePledgeTransactionExecutor();
-        var handler = new CampaignTerminationRefundHandler(
-            repository,
-            new PledgeRefunder(
-                repository,
-                transactionExecutor,
-                new FakePledgeDateTimeProvider(new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc)),
-                new FakePaymentProvider()));
+        var (handler, store, _) = Build();
 
         await handler.Handle(new CampaignCancelledApplicationEvent(campaignId, Guid.NewGuid()), CancellationToken.None);
 
-        Assert.Equal(PledgeStatus.Refunded, pledge.Status);
+        Assert.Equal(campaignId, Assert.Single(store.Jobs).CampaignId);
     }
 
     [Fact]
     public async Task Handle_ShouldBeIdempotent_WhenTheTriggeringEventIsRedelivered()
     {
         var campaignId = Guid.NewGuid();
-        var pledge = Pledge.Create(campaignId, Guid.NewGuid(), 150m, "USD", DateTime.UtcNow);
-        pledge.ConfirmPayment("PAY-1", DateTime.UtcNow);
-        var repository = new FakeRefundablePledgeRepository([pledge]);
-        var transactionExecutor = new FakePledgeTransactionExecutor();
-        var handler = new CampaignTerminationRefundHandler(
-            repository,
-            new PledgeRefunder(
-                repository,
-                transactionExecutor,
-                new FakePledgeDateTimeProvider(new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc)),
-                new FakePaymentProvider()));
+        var (handler, store, executor) = Build();
         var @event = new CampaignFailedApplicationEvent(campaignId, Guid.NewGuid(), 150m, 1000m, "USD", DateTime.UtcNow);
 
         await handler.Handle(@event, CancellationToken.None);
         await handler.Handle(@event, CancellationToken.None);
 
-        // GetSucceededByCampaignIdAsync only ever returns Succeeded rows, so the second delivery
-        // finds nothing left to refund — no exception, no double-refund, no second transaction.
-        Assert.Equal(PledgeStatus.Refunded, pledge.Status);
-        Assert.Equal(1, transactionExecutor.InvocationCount);
+        // The second delivery finds the job: no second job and no second transaction.
+        Assert.Single(store.Jobs);
+        Assert.Equal(1, executor.InvocationCount);
     }
 
     [Fact]
-    public async Task Handle_WithLargeNumberOfPledges_ShouldRefundInBatches()
+    public async Task Handle_ShouldNotRefundAnythingItself_TheJobDoesThat()
     {
         var campaignId = Guid.NewGuid();
-        var pledges = new List<Pledge>();
-        for (int i = 0; i < 250; i++)
-        {
-            var c = Pledge.Create(campaignId, Guid.NewGuid(), 10m, "USD", DateTime.UtcNow);
-            c.ConfirmPayment($"PAY-{i}", DateTime.UtcNow);
-            pledges.Add(c);
-        }
+        var pledge = Pledge.Create(campaignId, Guid.NewGuid(), 150m, "USD", DateTime.UtcNow);
+        pledge.ConfirmPayment("PAY-1", DateTime.UtcNow);
+        var (handler, _, _) = Build();
 
-        var repository = new FakeRefundablePledgeRepository(pledges);
-        var transactionExecutor = new FakePledgeTransactionExecutor();
-        var handler = new CampaignTerminationRefundHandler(
-            repository,
-            new PledgeRefunder(
-                repository,
-                transactionExecutor,
-                new FakePledgeDateTimeProvider(new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc)),
-                new FakePaymentProvider()));
+        await handler.Handle(new CampaignCancelledApplicationEvent(campaignId, Guid.NewGuid()), CancellationToken.None);
 
-        await handler.Handle(
-            new CampaignFailedApplicationEvent(campaignId, Guid.NewGuid(), 2500m, 5000m, "USD", DateTime.UtcNow),
-            CancellationToken.None);
-
-        Assert.All(pledges, c => Assert.Equal(PledgeStatus.Refunded, c.Status));
-        // Each refund is a provider call followed by its own short transaction: 250 pledges, 250 transactions.
-        Assert.Equal(250, transactionExecutor.InvocationCount);
+        Assert.Equal(PledgeStatus.Succeeded, pledge.Status);
     }
 }
 

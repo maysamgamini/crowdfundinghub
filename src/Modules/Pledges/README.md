@@ -37,7 +37,7 @@ sequenceDiagram
 ## Capabilities
 - **Commands:** `MakePledge`, `ConfirmPledgePayment`, `FailPledgePayment`, `ReconcilePaymentWebhook`.
 - **Queries:** `GetPledgeById`, `ListPledgesByCampaign`.
-- **Event handlers:** `PledgeConfirmedMeteringEventHandler` (platform fee and CloudEvent to OpenMeter), `CampaignTerminationRefundHandler` (refunds `Succeeded` pledges, 100 at a time, each through the payment provider), and replicated campaign read-model handlers.
+- **Event handlers:** `PledgeConfirmedMeteringEventHandler` (platform fee and CloudEvent to OpenMeter), `CampaignTerminationRefundHandler` (opens a refund job for a failed or cancelled campaign; `RefundJobService` then refunds its `Succeeded` pledges a few per pass, each through the payment provider), and replicated campaign read-model handlers.
 - **Webhook guard:** signature check, stale-timestamp rejection and dedupe by event id in `processed_payment_webhooks`.
 - **Concurrency:** `xmin` token on `Pledge`, plus a unique key on `(BackerId, IdempotencyKey)` for retried pledges. The advisory lock that serialises crediting a campaign sits in Campaigns.
 
@@ -89,7 +89,7 @@ A retention task clears a pledge's idempotency key after `Retention:IdempotencyK
 
 **Late confirmations are refunded.** A payment confirmed after its campaign ended is refused by Campaigns inside the campaign lock (`LatePledgeRejected`), and `LatePledgeRefundHandler` refunds the pledge.
 
-**Refunds go through the payment provider.** `PledgeRefunder` calls `IPaymentProvider.RefundAsync` outside the database transaction, then marks the pledge `Refunded` and keeps the provider's reference. The idempotency key is per refund attempt (`pledge:<id>:refund:<n>`): a retry reuses it, so a crash between the provider call and the status change cannot refund twice, and the number goes up only after the provider answered "no". The provider is `FakePaymentProvider`, which replays the stored answer for a repeated key like a real one.
+**Refunds go through the payment provider.** `PledgeRefunder` calls `IPaymentProvider.RefundAsync` outside the database transaction, then marks the pledge `Refunded` and keeps the provider's reference. The idempotency key is per refund attempt (`pledge:<id>:refund:<n>`): a retry reuses it, so a crash between the provider call and the status change cannot refund twice, and the number goes up only after the provider answered "no". Mass refunds are a job: a failed or cancelled campaign gets one `RefundJob`, and `RefundJobService` refunds at most `Payments:RefundsPerPass` pledges a pass (rate limited), carries on after any stop (resumable), records every answered attempt in `refund_attempts`, waits `Payments:RefundRetryDelay` after a refusal, and ends the job as `NeedsAttention` when a pledge used up `Payments:MaxRefundAttempts`. The provider is `FakePaymentProvider` (Mocked), which replays the stored answer for a repeated key like a real one.
 
 **Two funding models.** `Payments:FundingModel` picks one. `ChargeNow` (the default) takes the money when the payment is confirmed and refunds if the campaign fails. `SaveThenCharge` saves the card at pledge time (`confirm-setup` makes the pledge `Active`, recorded once in `pledge_activations`), charges nothing while the campaign is open, and charges each saved card once at the deadline if the campaign was funded. A failed or cancelled campaign releases its pledges: nobody is charged and nobody is refunded.
 

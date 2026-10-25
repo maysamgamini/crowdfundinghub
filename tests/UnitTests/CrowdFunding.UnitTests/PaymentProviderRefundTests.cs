@@ -30,7 +30,7 @@ public sealed class PaymentProviderRefundTests
         var provider = new FakePaymentProvider();
         var executor = new FakePledgeTransactionExecutor();
         var repository = new FakePledgeRepository(pledge);
-        return (new PledgeRefunder(repository, executor, new FakePledgeDateTimeProvider(Now), provider), provider, executor, repository);
+        return (new PledgeRefunder(repository, executor, new FakePledgeDateTimeProvider(Now), provider, new FakeRefundStore([pledge]), new FakePaymentSettings()), provider, executor, repository);
     }
 
     [Fact]
@@ -132,7 +132,7 @@ public sealed class PaymentProviderRefundTests
 
         // The retry runs the whole refund again, with the same key.
         var repository = new FakePledgeRepository(pledge);
-        var refunder = new PledgeRefunder(repository, new FakePledgeTransactionExecutor(), new FakePledgeDateTimeProvider(Now), provider);
+        var refunder = new PledgeRefunder(repository, new FakePledgeTransactionExecutor(), new FakePledgeDateTimeProvider(Now), provider, new FakeRefundStore([pledge]), new FakePaymentSettings());
         await refunder.RefundAsync(pledge, CancellationToken.None);
 
         Assert.Equal(PledgeStatus.Refunded, pledge.Status);

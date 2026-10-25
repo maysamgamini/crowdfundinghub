@@ -28,6 +28,7 @@ public static class PledgesApplicationDependencyInjection
         services.AddScoped<PledgeRefunder>();
         services.AddScoped<PledgeChargeService>();
         services.AddScoped<PayoutService>();
+        services.AddScoped<RefundJobService>();
         services.AddScoped<ConfirmPledgeSetupCommandHandler>();
         services.AddScoped<IValidator<ConfirmPledgeSetupCommand>, ConfirmPledgeSetupCommandValidator>();
         services.AddScoped<ReconcilePaymentWebhookCommandHandler>();

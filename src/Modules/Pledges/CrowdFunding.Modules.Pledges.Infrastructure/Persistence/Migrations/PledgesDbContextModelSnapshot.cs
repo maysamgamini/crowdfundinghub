@@ -350,6 +350,9 @@ namespace CrowdFunding.Modules.Pledges.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("NextChargeAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime?>("NextRefundAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("PaymentGateway")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
@@ -443,6 +446,90 @@ namespace CrowdFunding.Modules.Pledges.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("UX_pledge_activations_one_per_pledge");
 
                     b.ToTable("pledge_activations", "pledges");
+                });
+
+            modelBuilder.Entity("CrowdFunding.Modules.Pledges.Domain.Aggregates.RefundAttempt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AttemptNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FailureCode")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("PledgeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ProviderRefundId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PledgeId", "AttemptNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UX_refund_attempts_pledge_attempt");
+
+                    b.ToTable("refund_attempts", "pledges", t =>
+                        {
+                            t.HasCheckConstraint("CK_refund_attempts_failure_code_matches_outcome", "(\"Outcome\" = 'Failed' AND \"FailureCode\" IS NOT NULL) OR (\"Outcome\" = 'Succeeded' AND \"FailureCode\" IS NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("CrowdFunding.Modules.Pledges.Domain.Aggregates.RefundJob", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CampaignId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("FinishedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CampaignId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_refund_jobs_one_per_campaign");
+
+                    b.HasIndex("CreatedAtUtc")
+                        .HasDatabaseName("IX_refund_jobs_open")
+                        .HasFilter("\"Status\" = 'Open'");
+
+                    b.ToTable("refund_jobs", "pledges");
                 });
 
             modelBuilder.Entity("CrowdFunding.Modules.Pledges.Infrastructure.Persistence.ReadModels.ActiveCampaignCache", b =>
@@ -546,6 +633,15 @@ namespace CrowdFunding.Modules.Pledges.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("PledgeId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("CrowdFunding.Modules.Pledges.Domain.Aggregates.RefundAttempt", b =>
+                {
+                    b.HasOne("CrowdFunding.Modules.Pledges.Domain.Aggregates.Pledge", null)
+                        .WithMany()
+                        .HasForeignKey("PledgeId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 #pragma warning restore 612, 618

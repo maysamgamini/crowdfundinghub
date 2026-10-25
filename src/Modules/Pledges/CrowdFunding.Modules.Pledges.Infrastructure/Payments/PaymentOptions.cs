@@ -18,6 +18,15 @@ public sealed class PaymentOptions : IPaymentSettings
     /// <summary>The wait before a payout the provider refused is tried again.</summary>
     public TimeSpan PayoutRetryDelay { get; init; } = TimeSpan.FromHours(1);
 
+    /// <summary>How many refunds one pass of the refund job may start. With a 30 second pass this is the refunds per half minute.</summary>
+    public int RefundsPerPass { get; init; } = 50;
+
+    /// <summary>The wait before a refund the provider refused is tried again.</summary>
+    public TimeSpan RefundRetryDelay { get; init; } = TimeSpan.FromMinutes(15);
+
+    /// <summary>How many refund attempts a pledge gets before the refund job leaves it for a person.</summary>
+    public int MaxRefundAttempts { get; init; } = 5;
+
     /// <summary>How often the settlement worker looks for pledges that are due to be charged.</summary>
     public TimeSpan SettlementPollInterval { get; init; } = TimeSpan.FromSeconds(30);
 

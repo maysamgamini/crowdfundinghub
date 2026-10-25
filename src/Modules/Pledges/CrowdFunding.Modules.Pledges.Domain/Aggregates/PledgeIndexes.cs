@@ -24,6 +24,12 @@ public static class PledgeIndexes
     /// <summary>Each payout ledger kind has its own sign: charges and returned fees are positive, the rest negative.</summary>
     public const string PayoutLedgerSignMatchesKind = "CK_payout_ledger_sign_matches_kind";
 
+    /// <summary>Unique per campaign: a campaign's pledges are refunded by one job.</summary>
+    public const string OneRefundJobPerCampaign = "UX_refund_jobs_one_per_campaign";
+
+    /// <summary>Unique per (pledge, attempt number): each refund attempt is recorded once.</summary>
+    public const string OneRefundAttemptNumberPerPledge = "UX_refund_attempts_pledge_attempt";
+
     /// <summary>The amounts of a payout add up: net is gross less fee, and none is negative.</summary>
     public const string PayoutAmountsAddUp = "CK_payouts_amounts_add_up";
 }
