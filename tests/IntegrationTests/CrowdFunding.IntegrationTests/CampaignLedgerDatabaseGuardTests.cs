@@ -89,6 +89,11 @@ public sealed class CampaignLedgerDatabaseGuardTests
             $"""UPDATE campaigns.campaign_pledges_ledger SET "Amount" = 5000 WHERE "PledgeId" = {pledgeId}"""));
 
         Assert.Contains("append-only", exception.MessageText);
+
+        // The trigger's error reaches a client as a conflict with our own sentence, not the database's text.
+        var answer = CrowdFunding.API.Observability.DatabaseRuleViolation.Translate(exception);
+        Assert.Equal(System.Net.HttpStatusCode.Conflict, answer!.Value.Status);
+        Assert.DoesNotContain("campaign_contributions_ledger", answer.Value.Detail);
     }
 
     [Fact]

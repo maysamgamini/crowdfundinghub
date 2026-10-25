@@ -50,6 +50,11 @@ public sealed class RewardTierDatabaseGuardTests
 
         Assert.Equal(PostgresErrorCodes.CheckViolation, exception.SqlState);
         Assert.Equal("CK_reward_tiers_never_oversold", exception.ConstraintName);
+
+        // And a client hears it as a conflict with a sentence we chose, where it used to be a bare 500.
+        var answer = CrowdFunding.API.Observability.DatabaseRuleViolation.Translate(exception);
+        Assert.Equal(System.Net.HttpStatusCode.Conflict, answer!.Value.Status);
+        Assert.Equal("The reward tier has no slots left.", answer.Value.Detail);
     }
 
     [Fact]
