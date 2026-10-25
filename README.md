@@ -141,7 +141,7 @@ A master curriculum suite is published under [`educational/`](./educational/READ
 
 ## 4. What Is Built, What Is Not
 
-The design says more than the code does in a few places. [`design-to-code-mapping-round1.md`](./educational/03-engineering-spec-and-roadmap/design-to-code-mapping-round1.md) lists every step as MATCHES, SIMPLER VARIANT or NOT BUILT, with the test that guards it.
+The design says more than the code does in a few places. [`design-to-code-mapping-round1.md`](./educational/03-engineering-spec-and-roadmap/design-to-code-mapping-round1.md) lists every step as MATCHES, SIMPLER VARIANT, PARTLY BUILT or NOT BUILT, with the test that guards it.
 
 ```mermaid
 flowchart LR

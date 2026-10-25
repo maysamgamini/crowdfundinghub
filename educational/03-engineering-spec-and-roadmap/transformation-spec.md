@@ -137,7 +137,7 @@ Campaigns never complete or fail, and backer pledges cannot be refunded, leaving
 > [!NOTE]
 > Fully implemented with `CampaignExpirationBackgroundService`, `CampaignCompletedSuccessfulDomainEvent`, `CampaignExpiredFailedDomainEvent`, and `RefundPledgeCommandHandler`.
 >
-> Limits: the payment provider is a fake, so no real money moves, and there is no card saving or creator payout.
+> Limits: the payment provider is a fake, so no real money moves. Card saving, charging at the deadline and creator payouts exist (save-then-charge is opt-in; charge-now is the default).
 
 ---
 

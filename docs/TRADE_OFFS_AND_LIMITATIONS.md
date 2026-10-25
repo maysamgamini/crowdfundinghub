@@ -796,6 +796,6 @@ Prior to promoting CrowdFunding Hub to high-traffic production environments, the
 The detailed lists live in [`TESTS_THAT_TEACH.md`](TESTS_THAT_TEACH.md) ("Gaps") and `educational/03-engineering-spec-and-roadmap/design-to-code-mapping-round1.md` (section 6). In short:
 
 - The ledger lacks an entry kind, a sign check and a trigger.
-- Refunds go through a fake payment provider; there is no real provider, no card saving and no creator payout.
+- Refunds, charges and creator payouts go through a fake payment provider; there is no real provider. Card saving and charge-at-the-deadline exist but are opt-in (`Payments:FundingModel`); charge-now is the default.
 - Success and failure emails are not built.
 - The campaign scavenger is untested, and the inbox crash window has only a note. Outbox crash recovery is covered by `OutboxReclaimE2ETests`.

@@ -91,7 +91,13 @@ A retention task clears a pledge's idempotency key after `Retention:IdempotencyK
 
 **Refunds go through the payment provider.** `PledgeRefunder` calls `IPaymentProvider.RefundAsync` outside the database transaction, then marks the pledge `Refunded` and keeps the provider's reference. The idempotency key is per refund attempt (`pledge:<id>:refund:<n>`): a retry reuses it, so a crash between the provider call and the status change cannot refund twice, and the number goes up only after the provider answered "no". The provider is `FakePaymentProvider`, which replays the stored answer for a repeated key like a real one.
 
-**Not built:** saving a card at pledge time, charge-once settlement at the deadline, creator payouts and a real payment provider. See `educational/03-engineering-spec-and-roadmap/design-to-code-mapping-round1.md`.
+**Two funding models.** `Payments:FundingModel` picks one. `ChargeNow` (the default) takes the money when the payment is confirmed and refunds if the campaign fails. `SaveThenCharge` saves the card at pledge time (`confirm-setup` makes the pledge `Active`, recorded once in `pledge_activations`), charges nothing while the campaign is open, and charges each saved card once at the deadline if the campaign was funded. A failed or cancelled campaign releases its pledges: nobody is charged and nobody is refunded.
+
+**Charging is safe to repeat.** `PledgeChargeService` charges through numbered attempts. The attempt is committed before the provider is called, the provider key is `pledge:<id>:charge:<n>`, a timeout or a dead worker resumes the same attempt with the same key, and a decline starts attempt n + 1 later. The database allows one successful attempt per pledge.
+
+**Creators are paid once.** When a campaign succeeds, a `Payout` is recorded (unique per campaign). `PayoutService` waits until every pledge has settled, fixes gross, fee (`PlatformFeeBps`) and net, then asks the provider to pay out under the key `payout:<campaign>:<n>`. A refused payout is retried later under the next number.
+
+**Not built:** a real payment provider (the provider is `FakePaymentProvider`), a creator-facing payout endpoint, and an event announcing a payout. See `educational/03-engineering-spec-and-roadmap/design-to-code-mapping-round1.md`.
 
 ## Data and messaging
 

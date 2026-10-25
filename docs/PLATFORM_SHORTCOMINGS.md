@@ -94,7 +94,7 @@ public enum PledgeStatus
 ```
 In [`Pledge.cs`](../src/Modules/Pledges/CrowdFunding.Modules.Pledges.Domain/Aggregates/Pledge.cs#L76-L111), once `ConfirmPayment` is executed, the aggregate moves permanently to `Succeeded`. **There is no domain method or state for `Refund`, `Dispute`, or `Chargeback`**.
 
-> *Status update:* a refund saga now exists (`CampaignTerminationRefundHandler`, `Pledge.Refund`, covered by `RefundSagaE2ETests`), and refunds now go through the payment provider (a fake one, with idempotency keys per attempt) and are booked in the campaign ledger as negative compensating entries. There is no real payment provider, no card saving and no creator payout yet.
+> *Status update:* a refund saga now exists (`CampaignTerminationRefundHandler`, `Pledge.Refund`, covered by `RefundSagaE2ETests`), and refunds now go through the payment provider (a fake one, with idempotency keys per attempt) and are booked in the campaign ledger as negative compensating entries. Card saving with a charge at the deadline (`Payments:FundingModel` = `SaveThenCharge`) and creator payouts net of the platform fee now exist too, against the same fake provider. There is no real payment provider yet.
 
 Furthermore, when a campaign is cancelled in [`CancelCampaignCommandHandler.cs`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Application/Features/Campaigns/Commands/CancelCampaign/CancelCampaignCommandHandler.cs#L46), the domain publishes a [`CampaignCancelledApplicationEvent`](../src/Modules/Campaigns/CrowdFunding.Modules.Campaigns.Contracts/Events/CampaignCancelled/CampaignCancelledApplicationEvent.cs). Across the entire codebase, **no handler exists in the Pledges module to process this event**. Pledged funds remain marked as `Succeeded` indefinitely.
 

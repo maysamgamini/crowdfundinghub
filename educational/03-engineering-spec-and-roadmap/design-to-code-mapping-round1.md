@@ -3,7 +3,7 @@
 > **Purpose:** show a learner, step by step, where each Round 1 system-design decision lives in the `CrowdFundingHub` code, which test guards it, and where the code differs from the design.
 > **Design source:** `hispeedsystem/system-design-mastery/interview-loops/04-financial-and-transactional/06-crowdfunding-platform.md` (Round 1, steps 1.0 to 1.6, plus "See It Built").
 > **Method:** read from the code and tests, then re-checked after the inbox, schema and outbox changes (section 6). Line numbers drift as the code changes, so trust file and symbol names over numbers. Test names come from the test sources.
-> **Status tags:** **MATCHES** (code implements the design), **SIMPLER VARIANT** (a smaller version of the design), **NOT BUILT** (no code).
+> **Status tags:** **MATCHES** (code implements the design), **SIMPLER VARIANT** (a smaller version of the design), **PARTLY BUILT** (part of the design exists, part does not), **NOT BUILT** (no code).
 
 Paths are relative to the repo root. `CAMP` = `src/Modules/Campaigns/CrowdFunding.Modules.Campaigns`, `CONT` = `src/Modules/Pledges/CrowdFunding.Modules.Pledges`, `NOTIF` = `src/Modules/Notifications/CrowdFunding.Modules.Notifications`, `BB` = `src/BuildingBlocks/CrowdFunding.BuildingBlocks`.
 
@@ -11,12 +11,12 @@ Paths are relative to the repo root. `CAMP` = `src/Modules/Campaigns/CrowdFundin
 
 | Design step | Module | Status | Guarded by |
 |---|---|---|---|
-| 1.1 Where the money sits for 30 days | Pledges | NOT BUILT (charge-now state model only, payment gateway is a mock) | `PledgeDomainTests` |
+| 1.1 Where the money sits for 30 days | Pledges | PARTLY BUILT (both models exist; charge-now is the default and save-then-charge is selected in configuration; the card is a reference held by a fake provider, no real provider) | `PledgeDomainTests`, `SaveThenChargeE2ETests`, `PledgeActivationGuardTests` |
 | 1.2 Double-click creates two pledges | Pledges | MATCHES (optional `Idempotency-Key` header, unique index per backer and key) | `PledgeIdempotencyTests`, `PledgeIdempotencyE2ETests` |
 | 1.3 The total on the page vs the pledges | Campaigns | SIMPLER VARIANT (idempotency table plus a locked counter) | `CampaignPledgeConcurrencyTests` |
 | 1.4 Limited tier oversold | Campaigns | MATCHES (lock, invariant, 15-minute hold, and a database CHECK constraint) | `RewardTierConcurrencyE2ETests`, `RewardTierDatabaseGuardTests` |
 | 1.5 Pledge after the deadline | Pledges, Campaigns | SIMPLER VARIANT (lock and status check inside Campaigns, plus a refund for a late confirmation; no ENDED state) | `LatePledgeTests`, `LateConfirmationRefundE2ETests` |
-| 1.6 Settlement at the deadline | Campaigns, Pledges | SIMPLER VARIANT (decision; refunds go through a fake payment provider); charge-once settlement NOT BUILT; webhook inbox MATCHES | `CampaignExpirationE2ETests`, `RefundSagaE2ETests`, webhook tests |
+| 1.6 Settlement at the deadline | Campaigns, Pledges | PARTLY BUILT (charge-once settlement exists in the save-then-charge model; refunds, charges and creator payouts go through a fake payment provider); webhook inbox MATCHES | `CampaignExpirationE2ETests`, `RefundSagaE2ETests`, `SaveThenChargeE2ETests`, `PayoutE2ETests`, webhook tests |
 | Outbox, event registry, dead letter | BuildingBlocks | MATCHES | `EventTypeRegistryTests`, `OutboxMessageTests`, `OutboxLeanTableE2ETests` |
 | Consumer inbox | all consumers | MATCHES in part (per-module inbox; written after the handler, so a crash window remains) | `InboxRetryTests` |
 | "Tell people" | Notifications | SIMPLER VARIANT | `EmailNotificationOutboxE2ETests` |
@@ -66,13 +66,15 @@ sequenceDiagram
 
 ## 3. Step by step
 
-### Step 1.1: where the money sits for 30 days: NOT BUILT
+### Step 1.1: where the money sits for 30 days: PARTLY BUILT
 
 - **Design:** save the card at pledge time, charge at the deadline only if funded.
-- **Code:** a pledge is a `Pending` row with a mock payment intent. Confirmation arrives by webhook or a manual endpoint. No payment provider is called anywhere in `src/`.
-- **Where:** `CONT.Application/Features/Pledges/Commands/MakePledge/MakePledgeCommandHandler.cs:37-94` (mock intent at line 86); `CONT.Domain/Aggregates/Pledge.cs` (`Create` 64-97, `ConfirmPayment` 126-144, `Refund` 179-190); `PledgeStatus` is Pending, Succeeded, Failed, Refunded.
-- **Tests:** `PledgeDomainTests`, `MakePledgeCommandHandlerTests`, `PledgeAndOutboxE2ETests`.
-- **Why it differs:** the code uses the charge-now model the design rejects, a deliberate simpler choice that the design's own "See It Built" section acknowledges.
+- **Code:** two funding models, chosen by the setting `Payments:FundingModel`. **Charge-now** (the default): a pledge is `Pending` with a payment intent, and confirmation by webhook or a manual endpoint takes the money. **Save-then-charge**: making a pledge starts a card save at the provider and returns a client secret; `POST .../pledges/{id}/confirm-setup` stores the card reference and the pledge becomes `Active`, which counts toward the campaign but charges nothing. The activation is recorded once per pledge (table `pledge_activations`, unique index `UX_pledge_activations_one_per_pledge`), so two setup confirmations arriving together activate once.
+- **Statuses:** `Pending`, `Succeeded`, `Failed`, `Refunded`, and for save-then-charge `Active`, `ToCharge`, `Charging`, `Released`.
+- **Where:** `Pledges.Domain/Aggregates/Pledge.cs` and `PledgeActivation.cs`; `Pledges.Application/Features/Pledges/Commands/ConfirmPledgeSetup`; `Pledges.Infrastructure/Payments/FakePaymentProvider.cs` (the card is a reference string, and the reference picks the behaviour: `pm_ok`, `pm_decline`, `pm_decline_once`, `pm_auth_required`, `pm_timeout_once`).
+- **Tests:** `PledgeDomainTests`, `SaveThenChargeE2ETests`, `PledgeActivationGuardTests`, `MakePledgeCommandHandlerTests`, `PledgeAndOutboxE2ETests`.
+- **Still missing:** a real payment provider, a card entered in a browser against a real provider's script, and a reward-tier reservation tied to the card setup (a reservation still expires on its own timer).
+- **Why charge-now stays the default:** it is the simpler model and every existing flow works unchanged; the cost is a refund per backer when a campaign fails, which save-then-charge avoids (it releases the promise and calls the provider for nobody).
 
 ### Step 1.2: double-click creates two pledges: MATCHES
 
@@ -96,7 +98,7 @@ sequenceDiagram
 - **Design:** serialise the claim of a limited slot, hold it for a short time.
 - **Code:** a per-tier advisory lock serialises read-check-increment. The aggregate enforces `claimed + reserved <= capacity` (`CAMP.Domain/Aggregates/RewardTier.cs`, `ReserveSlot` 82-92). A reservation lasts 15 minutes (`RewardTierReservation.cs:63`), becomes a claim when payment confirms, and is released by a failure handler or a scavenger (`RewardTierReservationScavengerBackgroundService.cs`).
 - **Database guard:** the same invariant is a CHECK constraint, `CK_reward_tiers_never_oversold` (claimed and reserved never negative, and together never above the capacity), so a write path that forgets the lock still cannot oversell. `RewardTierDatabaseGuardTests` writes around the aggregate and watches the database refuse.
-- **Gaps:** the reservation is not tied to card setup (there is no card saving), and nothing checks that a reservation belongs to the same backer and campaign.
+- **Gaps:** the reservation is not tied to card setup (a saved card does not extend or confirm it), and nothing checks that a reservation belongs to the same backer and campaign.
 - **Tests:** `RewardTierConcurrencyE2ETests.FiftyConcurrentReservations_AgainstFiveRemainingSlots_ShouldYieldExactlyFiveSuccesses`; `RewardTierTests`. The scavenger has no test.
 
 ### Step 1.5: pledge after the deadline: SIMPLER VARIANT (closing fence)
@@ -107,7 +109,7 @@ sequenceDiagram
 - **Differences from the design:** there is no ENDED state, because the decision happens in one step under the lock (Published to Successful or Failed), so a campaign cannot be stranded between closing and deciding. The refusal of a late pledge is compensation after the fact (an event and a refund) instead of a database error at write time, which is the price of two databases.
 - **Tests:** `LatePledgeTests` (unit: rejection, no counting, refund, idempotent redelivery) and `LateConfirmationRefundE2ETests` (a confirmation accepted just as the campaign was cancelled ends refunded, uncounted and with no failed outbox rows).
 
-### Step 1.6: settlement at the deadline: SIMPLER VARIANT
+### Step 1.6: settlement at the deadline: PARTLY BUILT
 
 ```mermaid
 flowchart TD
@@ -121,9 +123,32 @@ flowchart TD
 
 - **Decider:** compares the stored counter with the goal (`CampaignExpirationBackgroundService.cs:76`). The read happens before the lock; the handlers re-validate under it.
 - **Refund saga:** each refund asks the payment provider to return the money (`PledgeRefunder`), then marks the pledge Refunded and keeps the provider's reference. The provider is a fake (`FakePaymentProvider`) that replays the stored answer for a repeated idempotency key. The key is per refund attempt: a retry after a timeout or a crash reuses it, so no refund is issued twice; a new attempt gets a new key only after the provider has answered "no" (a real provider replays a failed answer for a repeated key). The provider call is outside the database transaction. Tests: `PaymentProviderRefundTests`, `RefundThroughProviderE2ETests`, `RefundSagaE2ETests`.
-- **NOT BUILT:** charging each pledge exactly once at settlement (no settlement jobs, no charge attempts, no payment-provider idempotency keys, no charge states).
+- **Charge-once settlement (built, save-then-charge model only).** When a campaign succeeds, `PledgeSettlementHandler` moves its `Active` pledges to `ToCharge` and releases the `Pending` ones; when it fails or is cancelled, every `Pending` and `Active` pledge is `Released` and nobody is charged or refunded. `SettlementBackgroundService` claims due pledges with a lease and `FOR UPDATE SKIP LOCKED`, and `PledgeChargeService` charges each through the provider as a numbered attempt: the attempt row is committed before the provider is called, the key is `pledge:<id>:charge:<n>`, a timeout or a dead worker resumes the SAME attempt with the SAME key, and a decline starts attempt n + 1 later (three attempts, a day apart, then `Failed`). A partial unique index allows one successful attempt per pledge.
+- **Creator payout (built, both models).** When a campaign succeeds, `PayoutCreationHandler` records a `Payout` (one per campaign, unique index `UX_payouts_one_per_campaign`). `PayoutService` waits until no pledge of the campaign is still `Active`, `ToCharge` or `Charging`, sums what was really charged, takes the platform fee (`PlatformFeeBps`, 500 by default, rounded to the cent) and saves gross, fee and net (a check constraint, `CK_payouts_amounts_add_up`, keeps them adding up). Only then does it call `IPaymentProvider.PayoutAsync` with the key `payout:<campaign>:<n>`; a refusal is retried an hour later under the next number. A campaign where every charge failed has nothing to pay.
+
+```mermaid
+sequenceDiagram
+    participant C as Campaigns
+    participant S as Settlement handler
+    participant W as Settlement worker
+    participant P as Payment provider
+    participant Y as Payout service
+    C->>S: CampaignSucceeded (outbox)
+    S->>S: Active pledges become ToCharge, Pending are released
+    S->>Y: a Payout is recorded, status Pending
+    loop each due pledge
+        W->>W: claim with lease, commit attempt n
+        W->>P: charge, key pledge:id:charge:n
+        P-->>W: succeeded or declined
+    end
+    Y->>Y: no pledge still on its way? fix gross, fee, net
+    Y->>P: payout, key payout:campaign:n
+    P-->>Y: paid
+```
+
+- **Not built:** a real provider, refunds of a pledge after its campaign was paid out (a succeeded campaign cannot be cancelled, so the case is unreachable today), a creator-facing payout endpoint, and an event announcing the payout.
 - **Webhook inbox: MATCHES.** Signature check, stale-timestamp rejection and dedupe by event ID (`PaymentWebhooksController.cs`, `StripeWebhookSignatureVerifier.cs`, `PaymentWebhookIdempotencyStore.cs`, table `processed_payment_webhooks`). The check and insert are a SELECT then an INSERT in one transaction, with the primary key as the backstop.
-- **Tests:** `CampaignExpirationE2ETests`, `RefundSagaE2ETests`, `CampaignTerminationRefundHandlerTests` (idempotent on redelivery, batches), the webhook reconciliation tests.
+- **Tests:** `CampaignExpirationE2ETests`, `RefundSagaE2ETests`, `CampaignTerminationRefundHandlerTests` (idempotent on redelivery, batches), `SaveThenChargeE2ETests` (one charge per saved card, a decline retried as a new attempt, release without any charge), `PayoutE2ETests` (the payout waits for the last charge, the fee comes off, the creator is paid once, a refused payout is retried under a new key), `PayoutDatabaseGuardTests`, the webhook reconciliation tests.
 
 ### Cross-cutting: the outbox: MATCHES
 
@@ -165,7 +190,7 @@ The loop's "See It Built" section describes the reference code ahead of the code
 | ~~Outbox rows stuck in `Processing` are never reclaimed~~ **Closed:** reclaim on lease expiry, lease on the application clock, attempts bounded | outbox | Done |
 | ~~Ledger lacks entry kind, sign check, trigger, refund entries~~ **Closed:** kind, sign CHECK, append-only trigger, negative refund entries, decision on the exact sum | 1.3 | Done |
 | ~~Module tables are not in per-module schemas~~ **Closed:** every module has `HasDefaultSchema`, a `MoveTablesTo<Module>Schema` migration and its own history table, checked by `ModuleSchemaRulesTests` against a real database. Each module also now gets its own database in the local stack | Cross-cutting (schema per module) | Done |
-| No settlement charge-once mechanism | 1.6 | Out of scope while charge-now stands; document the choice |
+| ~~No settlement charge-once mechanism, no creator payout~~ **Closed (opt-in):** save-then-charge with numbered, keyed attempts, and a payout net of the platform fee, both against a fake provider; charge-now stays the default | 1.1, 1.6 | Done; a real provider is the next step |
 | No success/failure outcome email | "Tell people" | Add handlers or remove the stubs |
 | Scavenger untested (outbox crash recovery is covered by `OutboxReclaimE2ETests`) | 1.4 | Add a test |
 
@@ -181,6 +206,8 @@ flowchart LR
 
 - **Outbox stuck rows (new, fixed).** A row left in `Processing` by a crashed worker is now reclaimed once its lease runs out, and the lease is written from the application clock.
 - **Outbox due-clock (new, fixed).** The claim query compared an application-set `ScheduledAtUtc` with the database's `now()`; a database clock slightly behind made just-queued rows unclaimable. It now compares against the application clock. 
+- **Funding model, charge-once settlement and creator payouts (new, built against a fake provider).** See steps 1.1 and 1.6.
+- **Campaign state in Pledges no longer depends on event order (new, fixed).** A "published" event handled before "created" used to be dropped, and the late "created" then stored the campaign as inactive; a redelivered "created" did the same. Now "created" only starts a row inactive and an early lifecycle event leaves a placeholder for it to complete (`CampaignCacheOrderTests`).
 - **Pledge idempotency (new, built).** See step 1.2.
 - **Closing fence (new, built as a simpler variant).** See step 1.5.
 - **Ledger shape (new, built).** See step 1.3.
