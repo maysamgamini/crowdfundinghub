@@ -2,6 +2,7 @@ using CrowdFunding.API.Migrations;
 using CrowdFunding.BuildingBlocks.Infrastructure.Outbox;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -126,6 +127,41 @@ public sealed class CrowdFundingApiFactory : WebApplicationFactory<Program>, IAs
             {
                 await dispatcher.ProcessBatchAsync(cancellationToken);
             }
+        }
+    }
+
+    /// <summary>
+    /// Delivers outbox messages until the Pledges module accepts pledges for the campaign (its published event has
+    /// reached the module's cache), and fails the test with a clear message if that never happens. Waiting for the
+    /// condition the test actually needs is steadier than a fixed number of passes: the shared databases carry whatever
+    /// earlier tests left behind, and other hosts' workers claim batches of their own.
+    /// </summary>
+    public static async Task DeliverUntilPledgeableAsync(IServiceProvider services, Guid campaignId)
+    {
+        var giveUpAt = DateTime.UtcNow.AddSeconds(15);
+
+        while (true)
+        {
+            using (var scope = services.CreateScope())
+            {
+                foreach (var dispatcher in scope.ServiceProvider.GetServices<IHostedService>().OfType<IOutboxDispatcher>())
+                {
+                    await dispatcher.ProcessBatchAsync(CancellationToken.None);
+                }
+
+                var db = scope.ServiceProvider.GetRequiredService<CrowdFunding.Modules.Pledges.Infrastructure.Persistence.DbContexts.PledgesDbContext>();
+                if (await db.ActiveCampaignsCache.AsNoTracking().AnyAsync(x => x.CampaignId == campaignId && x.IsActive))
+                {
+                    return;
+                }
+            }
+
+            if (DateTime.UtcNow > giveUpAt)
+            {
+                throw new TimeoutException($"Campaign '{campaignId}' never reached the Pledges module's cache as active.");
+            }
+
+            await Task.Delay(25);
         }
     }
 }

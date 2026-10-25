@@ -11,4 +11,10 @@ public static class PledgeIndexes
 
     /// <summary>Unique per pledge: a pledge is activated at most once.</summary>
     public const string OneActivationPerPledge = "UX_pledge_activations_one_per_pledge";
+
+    /// <summary>Unique per campaign: a campaign is paid out at most once.</summary>
+    public const string OnePayoutPerCampaign = "UX_payouts_one_per_campaign";
+
+    /// <summary>The amounts of a payout add up: net is gross less fee, and none is negative.</summary>
+    public const string PayoutAmountsAddUp = "CK_payouts_amounts_add_up";
 }

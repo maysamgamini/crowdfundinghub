@@ -43,6 +43,7 @@ public static class PledgesInfrastructureDependencyInjection
         services.AddScoped<IPledgeReadService, PledgeReadService>();
         services.AddScoped<IPledgeTransactionExecutor, PledgeTransactionExecutor>();
         services.AddScoped<IPledgeSettlementStore, PledgeSettlementStore>();
+        services.AddScoped<IPayoutStore, PayoutStore>();
         services.AddOptions<PaymentOptions>().BindConfiguration(PaymentOptions.SectionName);
         services.AddSingleton<IPaymentSettings>(sp => sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PaymentOptions>>().Value);
         services.AddSingleton<FakePaymentProvider>();

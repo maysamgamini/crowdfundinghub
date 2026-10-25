@@ -183,9 +183,91 @@ namespace CrowdFunding.Modules.Pledges.Infrastructure.Persistence.Migrations
                     b.ToTable("charge_attempts", "pledges");
                 });
 
+            modelBuilder.Entity("CrowdFunding.Modules.Pledges.Domain.Aggregates.Payout", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CampaignId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<int>("Failures")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("FeeAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal?>("GrossAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("LastFailureCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<decimal?>("NetAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime?>("NextAttemptAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("PaidAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("PlatformFeeBps")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ProviderPayoutId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CampaignId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_payouts_one_per_campaign");
+
+                    b.HasIndex("NextAttemptAtUtc")
+                        .HasDatabaseName("IX_payouts_open")
+                        .HasFilter("\"Status\" IN ('Pending', 'Ready')");
+
+                    b.ToTable("payouts", "pledges", t =>
+                        {
+                            t.HasCheckConstraint("CK_payouts_amounts_add_up", "(\"GrossAmount\" IS NULL AND \"FeeAmount\" IS NULL AND \"NetAmount\" IS NULL) OR (\"GrossAmount\" >= 0 AND \"FeeAmount\" >= 0 AND \"FeeAmount\" <= \"GrossAmount\" AND \"NetAmount\" = \"GrossAmount\" - \"FeeAmount\")");
+                        });
+                });
+
             modelBuilder.Entity("CrowdFunding.Modules.Pledges.Domain.Aggregates.Pledge", b =>
                 {
                     b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BackerId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("CampaignId")
@@ -198,9 +280,6 @@ namespace CrowdFunding.Modules.Pledges.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTime?>("ChargeLeaseUntilUtc")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("BackerId")
-                        .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -264,11 +343,11 @@ namespace CrowdFunding.Modules.Pledges.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("BackerId");
+
                     b.HasIndex("ChargeLeaseUntilUtc")
                         .HasDatabaseName("ix_pledges_charging_lease")
                         .HasFilter("\"Status\" = 'Charging'");
-
-                    b.HasIndex("BackerId");
 
                     b.HasIndex("ExternalPaymentIntentId")
                         .IsUnique()
@@ -278,17 +357,17 @@ namespace CrowdFunding.Modules.Pledges.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_pledges_due_for_charge")
                         .HasFilter("\"Status\" = 'ToCharge'");
 
+                    b.HasIndex("BackerId", "IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_pledges_BackerId_IdempotencyKey")
+                        .HasFilter("\"IdempotencyKey\" IS NOT NULL");
+
                     b.HasIndex("CampaignId", "BackerId")
                         .IsUnique()
                         .HasDatabaseName("UX_pledges_one_live_pledge_per_backer")
                         .HasFilter("\"Status\" IN ('Pending', 'Active', 'ToCharge', 'Charging', 'Succeeded')");
 
                     b.HasIndex("CampaignId", "CreatedAtUtc");
-
-                    b.HasIndex("BackerId", "IdempotencyKey")
-                        .IsUnique()
-                        .HasDatabaseName("UX_pledges_BackerId_IdempotencyKey")
-                        .HasFilter("\"IdempotencyKey\" IS NOT NULL");
 
                     b.ToTable("pledges", "pledges");
                 });
@@ -302,13 +381,13 @@ namespace CrowdFunding.Modules.Pledges.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("ActivatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("PledgeId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("PaymentMethodReference")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("PledgeId")
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 

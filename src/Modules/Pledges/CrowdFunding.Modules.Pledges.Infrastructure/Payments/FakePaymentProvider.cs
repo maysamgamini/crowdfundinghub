@@ -18,7 +18,7 @@ namespace CrowdFunding.Modules.Pledges.Infrastructure.Payments;
 /// <item><c>pm_auth_required</c>: every charge is declined with <c>authentication_required</c> (the bank wants the cardholder).</item>
 /// <item><c>pm_timeout_once</c>: the first call charges the card and then fails to answer (a timeout), so the caller does not know; the same key later returns the stored success.</item>
 /// </list>
-/// Tests also steer refunds with <see cref="FailRefundsWith"/> and read the call counters.
+/// Tests also steer refunds and payouts with <see cref="FailRefundsWith"/> and <see cref="FailPayoutsWith"/> and read the call counters.
 /// </remarks>
 public sealed class FakePaymentProvider : IPaymentProvider
 {
@@ -27,7 +27,11 @@ public sealed class FakePaymentProvider : IPaymentProvider
     private readonly ConcurrentDictionary<string, SetupIntentResult> _setupsByKey = new();
     private readonly ConcurrentDictionary<string, int> _distinctChargeKeysPerMethod = new();
     private readonly ConcurrentDictionary<string, byte> _timedOutKeys = new();
+    private readonly ConcurrentDictionary<string, PayoutResult> _payoutsByKey = new();
+    private readonly ConcurrentDictionary<string, decimal> _payoutAmountsByKey = new();
     private string? _failureCodeForNewRefunds;
+    private string? _failureCodeForNewPayouts;
+    private int _payoutCalls;
     private int _refundCalls;
     private int _chargeCalls;
 
@@ -45,6 +49,20 @@ public sealed class FakePaymentProvider : IPaymentProvider
 
     /// <summary>Every idempotency key a charge was answered for, so a test can see which attempts reached the provider.</summary>
     public IReadOnlyCollection<string> ChargeKeys => _chargesByKey.Keys.ToArray();
+
+    /// <summary>How many payout requests reached the provider, including repeats of a key it already knew.</summary>
+    public int PayoutCalls => Volatile.Read(ref _payoutCalls);
+
+    /// <summary>How many different payouts the provider actually performed. A creator paid twice would show up here as two.</summary>
+    public int PayoutsPerformed => _payoutsByKey.Count(entry => entry.Value.Outcome == PayoutOutcome.Succeeded);
+
+    /// <summary>The amount of every payout the provider performed, by idempotency key.</summary>
+    public IReadOnlyDictionary<string, decimal> PayoutAmounts
+        => _payoutsByKey.Where(entry => entry.Value.Outcome == PayoutOutcome.Succeeded)
+            .ToDictionary(entry => entry.Key, entry => _payoutAmountsByKey[entry.Key]);
+
+    /// <summary>Makes every payout the provider has not seen before fail with this code (null turns that off).</summary>
+    public void FailPayoutsWith(string? failureCode) => _failureCodeForNewPayouts = failureCode;
 
     /// <summary>Makes every refund the provider has not seen before fail with this code (null turns that off).</summary>
     public void FailRefundsWith(string? failureCode) => _failureCodeForNewRefunds = failureCode;
@@ -93,6 +111,30 @@ public sealed class FakePaymentProvider : IPaymentProvider
         var result = _refundsByKey.GetOrAdd(idempotencyKey, _ => _failureCodeForNewRefunds is { } code
             ? new RefundResult(RefundOutcome.Failed, null, code)
             : new RefundResult(RefundOutcome.Succeeded, $"re_mock_{Guid.NewGuid():N}", null));
+
+        return Task.FromResult(result);
+    }
+
+    /// <inheritdoc/>
+    public Task<PayoutResult> PayoutAsync(
+        string destinationReference,
+        decimal amount,
+        string currency,
+        string idempotencyKey,
+        CancellationToken cancellationToken)
+    {
+        Interlocked.Increment(ref _payoutCalls);
+
+        var result = _payoutsByKey.GetOrAdd(idempotencyKey, key =>
+        {
+            if (_failureCodeForNewPayouts is { } code)
+            {
+                return new PayoutResult(PayoutOutcome.Failed, null, code);
+            }
+
+            _payoutAmountsByKey[key] = amount;
+            return new PayoutResult(PayoutOutcome.Succeeded, $"po_mock_{Guid.NewGuid():N}", null);
+        });
 
         return Task.FromResult(result);
     }

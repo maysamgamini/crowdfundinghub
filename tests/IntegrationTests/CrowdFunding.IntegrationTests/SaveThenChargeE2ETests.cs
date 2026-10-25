@@ -121,7 +121,7 @@ public sealed class SaveThenChargeE2ETests
 
         var deadline = DateTime.UtcNow.AddSeconds(8);
         var campaignId = await SeedCampaignAsync(services, goal: 150m, deadlineIn: deadline - DateTime.UtcNow);
-        await DeliverAsync(services);
+        await CrowdFundingApiFactory.DeliverUntilPledgeableAsync(services, campaignId);
 
         var adminEmail = ApiTestExtensions.UniqueEmail("stc-admin");
         await AdminSeeder.RunAsync(services, adminEmail, ApiTestExtensions.DefaultPassword, "Admin");
@@ -177,7 +177,7 @@ public sealed class SaveThenChargeE2ETests
 
         var deadline = DateTime.UtcNow.AddSeconds(6);
         var campaignId = await SeedCampaignAsync(services, goal: 10_000m, deadlineIn: deadline - DateTime.UtcNow);
-        await DeliverAsync(services);
+        await CrowdFundingApiFactory.DeliverUntilPledgeableAsync(services, campaignId);
 
         var adminEmail = ApiTestExtensions.UniqueEmail("stc-fail-admin");
         await AdminSeeder.RunAsync(services, adminEmail, ApiTestExtensions.DefaultPassword, "Admin");

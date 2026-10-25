@@ -22,4 +22,7 @@ public interface IPaymentSettings
 
     /// <summary>How long a worker holds a charge attempt before another may resume it.</summary>
     TimeSpan ChargeLease { get; }
+
+    /// <summary>The wait before a payout the provider refused is tried again.</summary>
+    TimeSpan PayoutRetryDelay { get; }
 }

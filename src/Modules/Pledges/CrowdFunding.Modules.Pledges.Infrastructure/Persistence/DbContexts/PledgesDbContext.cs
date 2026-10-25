@@ -18,6 +18,7 @@ public sealed class PledgesDbContext : DbContext
     public DbSet<Pledge> Pledges => Set<Pledge>();
     public DbSet<ChargeAttempt> ChargeAttempts => Set<ChargeAttempt>();
 
+    public DbSet<Payout> Payouts => Set<Payout>();
     public DbSet<PledgeActivation> PledgeActivations => Set<PledgeActivation>();
     public DbSet<ActiveCampaignCache> ActiveCampaignsCache => Set<ActiveCampaignCache>();
     public DbSet<ProcessedPaymentWebhook> ProcessedPaymentWebhooks => Set<ProcessedPaymentWebhook>();

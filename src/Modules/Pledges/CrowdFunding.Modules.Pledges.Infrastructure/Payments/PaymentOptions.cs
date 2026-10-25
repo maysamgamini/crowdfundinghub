@@ -15,6 +15,9 @@ public sealed class PaymentOptions : IPaymentSettings
 
     public TimeSpan ChargeLease { get; init; } = TimeSpan.FromMinutes(2);
 
+    /// <summary>The wait before a payout the provider refused is tried again.</summary>
+    public TimeSpan PayoutRetryDelay { get; init; } = TimeSpan.FromHours(1);
+
     /// <summary>How often the settlement worker looks for pledges that are due to be charged.</summary>
     public TimeSpan SettlementPollInterval { get; init; } = TimeSpan.FromSeconds(30);
 

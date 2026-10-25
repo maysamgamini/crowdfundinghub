@@ -44,7 +44,7 @@ public sealed class PledgeActivationGuardTests
             await executor.ExecuteAsync(ct => repository.AddAsync(campaign, ct), CancellationToken.None);
         }
 
-        await _factory.ProcessOutboxMessagesAsync();
+        await CrowdFundingApiFactory.DeliverUntilPledgeableAsync(_factory.Services, campaign.Id);
 
         var (_, backerToken) = await client.RegisterAndLoginAsync(ApiTestExtensions.UniqueEmail($"{label}-backer"), "Backer");
         client.SetBearerToken(backerToken);

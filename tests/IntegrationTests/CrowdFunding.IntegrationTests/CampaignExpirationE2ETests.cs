@@ -61,7 +61,7 @@ public sealed class CampaignExpirationE2ETests
         }
 
         // Replicates the campaign (Created + Published) into Pledges' active_campaigns_cache.
-        await _factory.ProcessOutboxMessagesAsync();
+        await CrowdFundingApiFactory.DeliverUntilPledgeableAsync(_factory.Services, campaignId);
 
         using var client = _factory.CreateClient();
         var (_, backerToken) = await client.RegisterAndLoginAsync(ApiTestExtensions.UniqueEmail("expiration-backer"), "Expiration Backer");

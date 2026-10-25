@@ -40,6 +40,18 @@ public interface IPaymentProvider
         string currency,
         string idempotencyKey,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Pays money out to a creator. A repeated <paramref name="idempotencyKey"/> returns the stored result, success
+    /// or failure alike, so a retry of the same attempt never pays twice. A call that cannot be completed throws
+    /// <see cref="PaymentProviderException"/>: the answer is unknown, and the caller retries with the SAME key.
+    /// </summary>
+    Task<PayoutResult> PayoutAsync(
+        string destinationReference,
+        decimal amount,
+        string currency,
+        string idempotencyKey,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>The provider's answer to starting a card save.</summary>
@@ -64,6 +76,18 @@ public enum ChargeOutcome
 public sealed record RefundResult(RefundOutcome Outcome, string? ProviderRefundId, string? FailureCode);
 
 public enum RefundOutcome
+{
+    Succeeded = 1,
+    Failed = 2,
+}
+
+/// <summary>What the provider answered to a payout.</summary>
+/// <param name="Outcome">Whether the payout went through.</param>
+/// <param name="ProviderPayoutId">The provider's id for the payout, when there is one.</param>
+/// <param name="FailureCode">The provider's reason when the payout did not go through.</param>
+public sealed record PayoutResult(PayoutOutcome Outcome, string? ProviderPayoutId, string? FailureCode);
+
+public enum PayoutOutcome
 {
     Succeeded = 1,
     Failed = 2,

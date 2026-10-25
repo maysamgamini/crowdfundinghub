@@ -49,7 +49,6 @@ public sealed class ActiveCampaignCacheRepository : IActiveCampaignCacheReposito
             existing.OwnerId = ownerId;
             existing.Title = title;
             existing.Currency = currency;
-            existing.IsActive = isActive;
             existing.DeadlineUtc = deadlineUtc;
             existing.UpdatedAtUtc = updatedAtUtc;
         }
@@ -62,6 +61,20 @@ public sealed class ActiveCampaignCacheRepository : IActiveCampaignCacheReposito
 
         if (existing is null)
         {
+            // The "created" event has not been handled yet (events can arrive out of order). Keep what this event says
+            // instead of dropping it: a placeholder that accepts no pledges (its deadline is already behind it) until
+            // "created" fills in the rest. Without this the later "created" would store the campaign as inactive and
+            // nothing would ever make it active again.
+            _dbContext.ActiveCampaignsCache.Add(new ActiveCampaignCache
+            {
+                CampaignId = campaignId,
+                OwnerId = Guid.Empty,
+                Title = string.Empty,
+                Currency = string.Empty,
+                IsActive = isActive,
+                DeadlineUtc = updatedAtUtc,
+                UpdatedAtUtc = updatedAtUtc,
+            });
             return;
         }
 

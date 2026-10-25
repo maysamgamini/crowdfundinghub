@@ -12,4 +12,6 @@ internal sealed class FakePaymentSettings(FundingModel fundingModel = FundingMod
     public TimeSpan ChargeRetryDelay { get; init; } = TimeSpan.FromHours(24);
 
     public TimeSpan ChargeLease { get; init; } = TimeSpan.FromMinutes(2);
+
+    public TimeSpan PayoutRetryDelay { get; init; } = TimeSpan.FromHours(1);
 }

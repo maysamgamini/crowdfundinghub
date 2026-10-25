@@ -10,7 +10,11 @@ namespace CrowdFunding.Modules.Pledges.Application.Abstractions.Persistence;
 /// </summary>
 public interface IActiveCampaignCacheRepository
 {
-    /// <summary>Inserts or refreshes the replicated row for a campaign.</summary>
+    /// <summary>
+    /// Inserts or refreshes the replicated row for a campaign. <paramref name="isActive"/> is only the starting value
+    /// of a new row: an existing row keeps its flag, because a later event (published, cancelled, ended) may have
+    /// set it already and this event can arrive after it (a redelivery, or a batch handled out of order).
+    /// </summary>
     Task UpsertAsync(
         Guid campaignId,
         Guid ownerId,

@@ -11,8 +11,8 @@ namespace CrowdFunding.Modules.Pledges.Infrastructure.Payments;
 
 /// <summary>
 /// The settlement worker. When a campaign is funded its pledges wait in the queue; this service claims the ones that
-/// are due, a batch at a time, and charges each through <see cref="PledgeChargeService"/>. It does nothing in the
-/// charge-now funding model, where there is nothing to settle.
+/// are due, a batch at a time, and charges each through <see cref="PledgeChargeService"/> (save-then-charge model only). It also pays
+/// the creators of succeeded campaigns through <see cref="PayoutService"/>, in either model.
 /// </summary>
 public sealed class SettlementBackgroundService : BackgroundService, IOutboxDispatcher
 {
@@ -55,13 +55,16 @@ public sealed class SettlementBackgroundService : BackgroundService, IOutboxDisp
         {
             await using var scope = _serviceProvider.CreateAsyncScope();
 
-            if (scope.ServiceProvider.GetRequiredService<IPaymentSettings>().FundingModel != FundingModel.SaveThenCharge)
-            {
-                return 0;
-            }
+            // Charging only exists in the save-then-charge model; paying creators happens in both.
+            var claimed = scope.ServiceProvider.GetRequiredService<IPaymentSettings>().FundingModel == FundingModel.SaveThenCharge
+                ? await scope.ServiceProvider.GetRequiredService<PledgeChargeService>()
+                    .ChargeDueAsync(_options.SettlementBatchSize, cancellationToken)
+                : 0;
 
-            return await scope.ServiceProvider.GetRequiredService<PledgeChargeService>()
-                .ChargeDueAsync(_options.SettlementBatchSize, cancellationToken);
+            await scope.ServiceProvider.GetRequiredService<PayoutService>()
+                .PayDueAsync(_options.SettlementBatchSize, cancellationToken);
+
+            return claimed;
         }
         finally
         {

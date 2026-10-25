@@ -17,6 +17,9 @@ namespace CrowdFunding.Modules.Pledges.Application.Features.ActiveCampaigns.Even
 /// pledges against a local, sub-millisecond read model instead of a synchronous, in-process call
 /// into Campaigns — see TICKET-023. A campaign is replicated inactive at creation time (Draft
 /// cannot accept pledges), flipped active on publish, and flipped back inactive on cancellation.
+/// The events may arrive in any order (a redelivery, or a batch handled out of order), so no event undoes what a
+/// later one set: "created" only starts the row inactive, and a "published" that arrives first leaves a placeholder
+/// for "created" to complete.
 /// </summary>
 public sealed class ReplicatedCampaignEventHandlers :
     IEventHandler<CampaignCreatedApplicationEvent>,

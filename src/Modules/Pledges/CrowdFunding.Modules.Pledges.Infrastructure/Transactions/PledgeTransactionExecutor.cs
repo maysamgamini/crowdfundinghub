@@ -123,6 +123,16 @@ public sealed class PledgeTransactionExecutor : IPledgeTransactionExecutor
             _dbContext.ChangeTracker.Clear();
             throw new PledgeAlreadyActivatedException(ex);
         }
+        catch (DbUpdateException ex) when (IsOnePayoutViolation(ex))
+        {
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+            }
+
+            _dbContext.ChangeTracker.Clear();
+            throw new PayoutAlreadyExistsException(ex);
+        }
         catch
         {
             if (transaction is not null)
@@ -153,6 +163,13 @@ public sealed class PledgeTransactionExecutor : IPledgeTransactionExecutor
         {
             SqlState: PostgresErrorCodes.UniqueViolation,
             ConstraintName: PledgeIndexes.OneActivationPerPledge
+        };
+
+    private static bool IsOnePayoutViolation(DbUpdateException exception)
+        => exception.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation,
+            ConstraintName: PledgeIndexes.OnePayoutPerCampaign
         };
 
     private static bool IsIdempotencyKeyViolation(DbUpdateException exception)
