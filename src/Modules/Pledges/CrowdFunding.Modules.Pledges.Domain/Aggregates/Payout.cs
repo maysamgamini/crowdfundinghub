@@ -1,3 +1,6 @@
+using CrowdFunding.BuildingBlocks.Domain.Common;
+using CrowdFunding.Modules.Pledges.Domain.Events;
+
 namespace CrowdFunding.Modules.Pledges.Domain.Aggregates;
 
 /// <summary>
@@ -10,7 +13,7 @@ namespace CrowdFunding.Modules.Pledges.Domain.Aggregates;
 /// (<see cref="PayoutStatus.Ready"/>) and only afterwards is the provider asked, so a retry after a timeout sends
 /// the same amount under the same key.
 /// </remarks>
-public sealed class Payout
+public sealed class Payout : BaseEntity
 {
     public Guid Id { get; private set; }
 
@@ -62,15 +65,19 @@ public sealed class Payout
     /// <summary>The idempotency key for one payout attempt; a retry of the same attempt sends the same key.</summary>
     public static string KeyFor(Guid campaignId, int attemptNumber) => $"payout:{campaignId:N}:{attemptNumber}";
 
-    /// <summary>Fixes the amounts from what was charged. The fee is rounded to the cent, away from zero.</summary>
-    public void Prepare(decimal grossAmount, int platformFeeBps)
+    /// <summary>
+    /// Fixes the amounts from the pledges that were really charged. The fee is the sum of the platform fee of each
+    /// pledge (<see cref="PlatformFee.ForPledge"/>), the same fee that was metered when each pledge was confirmed.
+    /// </summary>
+    public void Prepare(IReadOnlyCollection<decimal> chargedAmounts, int platformFeeBps)
     {
         if (Status != PayoutStatus.Pending)
         {
             throw new InvalidOperationException($"Only a pending payout can be prepared. Current status: '{Status}'.");
         }
 
-        var fee = Math.Round(grossAmount * platformFeeBps / 10_000m, 2, MidpointRounding.AwayFromZero);
+        var grossAmount = chargedAmounts.Sum();
+        var fee = chargedAmounts.Sum(amount => PlatformFee.ForPledge(amount, platformFeeBps));
 
         GrossAmount = grossAmount;
         FeeAmount = fee;
@@ -91,6 +98,8 @@ public sealed class Payout
         PaidAtUtc = nowUtc;
         NextAttemptAtUtc = null;
         LastFailureCode = null;
+
+        AddDomainEvent(new PayoutPaidDomainEvent(Id, CampaignId, OwnerId, GrossAmount!.Value, FeeAmount!.Value, NetAmount!.Value, Currency));
     }
 
     public void RecordFailure(string failureCode, DateTime nextAttemptAtUtc)

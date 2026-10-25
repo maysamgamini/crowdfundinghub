@@ -61,8 +61,9 @@ public sealed class SettlementBackgroundService : BackgroundService, IOutboxDisp
                     .ChargeDueAsync(_options.SettlementBatchSize, cancellationToken)
                 : 0;
 
-            await scope.ServiceProvider.GetRequiredService<PayoutService>()
-                .PayDueAsync(_options.SettlementBatchSize, cancellationToken);
+            var payouts = scope.ServiceProvider.GetRequiredService<PayoutService>();
+            await payouts.PayDueAsync(_options.SettlementBatchSize, cancellationToken);
+            await payouts.RecordRefundsAfterPayoutAsync(_options.SettlementBatchSize, cancellationToken);
 
             return claimed;
         }

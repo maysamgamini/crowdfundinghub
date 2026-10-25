@@ -95,9 +95,9 @@ A retention task clears a pledge's idempotency key after `Retention:IdempotencyK
 
 **Charging is safe to repeat.** `PledgeChargeService` charges through numbered attempts. The attempt is committed before the provider is called, the provider key is `pledge:<id>:charge:<n>`, a timeout or a dead worker resumes the same attempt with the same key, and a decline starts attempt n + 1 later. The database allows one successful attempt per pledge.
 
-**Creators are paid once.** When a campaign succeeds, a `Payout` is recorded (unique per campaign). `PayoutService` waits until every pledge has settled, fixes gross, fee (`PlatformFeeBps`) and net, then asks the provider to pay out under the key `payout:<campaign>:<n>`. A refused payout is retried later under the next number.
+**Creators are paid once.** When a campaign succeeds, a `Payout` is recorded (unique per campaign). `PayoutService` waits until every pledge has settled, fixes gross, fee (the sum of `PlatformFee.ForPledge` over the charged pledges, `PlatformFeeBps`) and net, writes a ledger line per charged pledge and fee (`payout_ledger_entries`, append-only), then asks the provider to pay out under the key `payout:<campaign>:<n>`. A refused payout is retried later under the next number. A paid payout publishes `PayoutPaidApplicationEvent`; a pledge refunded after the payout counted it becomes a `ChargeRefunded` line and the balance shows what the creator owes back. The creator reads all of it at `GET /api/campaigns/{id}/payout`.
 
-**Not built:** a real payment provider (the provider is `FakePaymentProvider`), a creator-facing payout endpoint, and an event announcing a payout. See `educational/03-engineering-spec-and-roadmap/design-to-code-mapping-round1.md`.
+**Mocked:** the payment provider (`FakePaymentProvider`). **Not built:** collecting back from the creator what the ledger says they owe after a late refund. See `educational/03-engineering-spec-and-roadmap/design-to-code-mapping-round1.md`.
 
 ## Data and messaging
 

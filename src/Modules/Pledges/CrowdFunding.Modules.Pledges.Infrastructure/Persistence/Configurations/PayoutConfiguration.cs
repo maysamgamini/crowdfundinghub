@@ -8,10 +8,14 @@ public sealed class PayoutConfiguration : IEntityTypeConfiguration<Payout>
 {
     public void Configure(EntityTypeBuilder<Payout> builder)
     {
+        // A CHECK passes when its expression is NULL, so each status says outright which amounts it must have:
+        // a pending payout has none yet, a ready or paid one has all three and they add up, and an empty one is all zero.
         builder.ToTable("payouts", table => table.HasCheckConstraint(
             PledgeIndexes.PayoutAmountsAddUp,
-            "(\"GrossAmount\" IS NULL AND \"FeeAmount\" IS NULL AND \"NetAmount\" IS NULL) OR " +
-            "(\"GrossAmount\" >= 0 AND \"FeeAmount\" >= 0 AND \"FeeAmount\" <= \"GrossAmount\" AND \"NetAmount\" = \"GrossAmount\" - \"FeeAmount\")"));
+            "(\"Status\" = 'Pending' AND \"GrossAmount\" IS NULL AND \"FeeAmount\" IS NULL AND \"NetAmount\" IS NULL) OR " +
+            "(\"Status\" IN ('Ready', 'Paid') AND \"GrossAmount\" IS NOT NULL AND \"FeeAmount\" IS NOT NULL AND \"NetAmount\" IS NOT NULL " +
+            "AND \"GrossAmount\" > 0 AND \"FeeAmount\" >= 0 AND \"FeeAmount\" <= \"GrossAmount\" AND \"NetAmount\" = \"GrossAmount\" - \"FeeAmount\") OR " +
+            "(\"Status\" = 'NothingToPay' AND \"GrossAmount\" = 0 AND \"FeeAmount\" = 0 AND \"NetAmount\" = 0)"));
 
         builder.HasKey(x => x.Id);
 

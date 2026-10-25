@@ -18,6 +18,25 @@ public interface IPayoutStore
     /// <summary>How many pledges of the campaign are still on their way to being charged (saved, queued or in flight).</summary>
     Task<int> CountUnsettledPledgesAsync(Guid campaignId, CancellationToken cancellationToken);
 
-    /// <summary>The sum of the pledges that were really charged.</summary>
-    Task<decimal> SumChargedAsync(Guid campaignId, CancellationToken cancellationToken);
+    /// <summary>Each pledge of the campaign that was really charged, with its amount.</summary>
+    Task<IReadOnlyList<ChargedPledge>> GetChargedPledgesAsync(Guid campaignId, CancellationToken cancellationToken);
+
+    /// <summary>Stages lines of a payout's append-only ledger.</summary>
+    Task AddLedgerEntriesAsync(IEnumerable<PayoutLedgerEntry> entries, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Pledges that were counted in a payout and have been refunded since, and whose refund the payout's ledger
+    /// does not hold yet.
+    /// </summary>
+    Task<IReadOnlyList<RefundedAfterPayout>> GetRefundedAfterPayoutAsync(int limit, CancellationToken cancellationToken);
+
+    Task<Payout?> GetByCampaignAsync(Guid campaignId, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<PayoutLedgerEntry>> GetLedgerAsync(Guid payoutId, CancellationToken cancellationToken);
 }
+
+/// <summary>A pledge that was charged, as the payout sees it.</summary>
+public sealed record ChargedPledge(Guid PledgeId, decimal Amount);
+
+/// <summary>A pledge counted in a payout that was refunded afterwards.</summary>
+public sealed record RefundedAfterPayout(Guid PayoutId, Guid PledgeId, decimal Amount, decimal PlatformFee, string Currency);

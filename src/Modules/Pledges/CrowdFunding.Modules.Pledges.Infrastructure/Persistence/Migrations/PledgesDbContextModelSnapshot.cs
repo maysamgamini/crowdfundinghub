@@ -258,7 +258,54 @@ namespace CrowdFunding.Modules.Pledges.Infrastructure.Persistence.Migrations
 
                     b.ToTable("payouts", "pledges", t =>
                         {
-                            t.HasCheckConstraint("CK_payouts_amounts_add_up", "(\"GrossAmount\" IS NULL AND \"FeeAmount\" IS NULL AND \"NetAmount\" IS NULL) OR (\"GrossAmount\" >= 0 AND \"FeeAmount\" >= 0 AND \"FeeAmount\" <= \"GrossAmount\" AND \"NetAmount\" = \"GrossAmount\" - \"FeeAmount\")");
+                            t.HasCheckConstraint("CK_payouts_amounts_add_up", "(\"Status\" = 'Pending' AND \"GrossAmount\" IS NULL AND \"FeeAmount\" IS NULL AND \"NetAmount\" IS NULL) OR (\"Status\" IN ('Ready', 'Paid') AND \"GrossAmount\" IS NOT NULL AND \"FeeAmount\" IS NOT NULL AND \"NetAmount\" IS NOT NULL AND \"GrossAmount\" > 0 AND \"FeeAmount\" >= 0 AND \"FeeAmount\" <= \"GrossAmount\" AND \"NetAmount\" = \"GrossAmount\" - \"FeeAmount\") OR (\"Status\" = 'NothingToPay' AND \"GrossAmount\" = 0 AND \"FeeAmount\" = 0 AND \"NetAmount\" = 0)");
+                        });
+                });
+
+            modelBuilder.Entity("CrowdFunding.Modules.Pledges.Domain.Aggregates.PayoutLedgerEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("PayoutId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("PledgeId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PayoutId", "Kind")
+                        .IsUnique()
+                        .HasDatabaseName("UX_payout_ledger_one_line_per_payout")
+                        .HasFilter("\"PledgeId\" IS NULL");
+
+                    b.HasIndex("PayoutId", "Kind", "PledgeId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_payout_ledger_one_line_per_pledge")
+                        .HasFilter("\"PledgeId\" IS NOT NULL");
+
+                    b.ToTable("payout_ledger_entries", "pledges", t =>
+                        {
+                            t.HasCheckConstraint("CK_payout_ledger_sign_matches_kind", "(\"Kind\" IN ('Charge', 'FeeReturned') AND \"Amount\" > 0) OR (\"Kind\" IN ('PlatformFee', 'PaidOut', 'ChargeRefunded') AND \"Amount\" < 0)");
                         });
                 });
 
@@ -452,6 +499,15 @@ namespace CrowdFunding.Modules.Pledges.Infrastructure.Persistence.Migrations
                     b.HasIndex("PaymentIntentId");
 
                     b.ToTable("processed_payment_webhooks", "pledges");
+                });
+
+            modelBuilder.Entity("CrowdFunding.Modules.Pledges.Domain.Aggregates.PayoutLedgerEntry", b =>
+                {
+                    b.HasOne("CrowdFunding.Modules.Pledges.Domain.Aggregates.Payout", null)
+                        .WithMany()
+                        .HasForeignKey("PayoutId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("CrowdFunding.Modules.Pledges.Domain.Aggregates.Pledge", b =>

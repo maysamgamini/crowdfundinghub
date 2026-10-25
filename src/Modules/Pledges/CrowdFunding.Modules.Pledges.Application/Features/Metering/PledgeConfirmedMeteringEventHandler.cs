@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using CrowdFunding.BuildingBlocks.Application.Events;
 using CrowdFunding.BuildingBlocks.Application.Metering;
 using CrowdFunding.Modules.Pledges.Contracts.Events.PledgePaymentConfirmed;
+using CrowdFunding.Modules.Pledges.Domain.Aggregates;
 
 namespace CrowdFunding.Modules.Pledges.Application.Features.Metering;
 
@@ -32,7 +33,8 @@ public sealed class PledgeConfirmedMeteringEventHandler : IEventHandler<PledgePa
     public Task Handle(PledgePaymentConfirmedApplicationEvent notification, CancellationToken cancellationToken)
     {
         var grossAmountCents = (long)Math.Round(notification.Amount * 100m, MidpointRounding.AwayFromZero);
-        var platformFeeCents = grossAmountCents * _feeOptions.PlatformFeeBps / 10_000;
+        // The same fee a payout adds up, so the metered fees of a campaign sum to its payout fee.
+        var platformFeeCents = (long)Math.Round(PlatformFee.ForPledge(notification.Amount, _feeOptions.PlatformFeeBps) * 100m, MidpointRounding.AwayFromZero);
         var processingFeeCents = _feeOptions.ProcessingFeeFixedCents + (grossAmountCents * _feeOptions.ProcessingFeeBps / 10_000);
         var netAmountCents = grossAmountCents - platformFeeCents - processingFeeCents;
 

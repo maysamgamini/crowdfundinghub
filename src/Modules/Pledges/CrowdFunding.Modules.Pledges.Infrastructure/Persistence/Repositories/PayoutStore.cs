@@ -41,8 +41,44 @@ public sealed class PayoutStore : IPayoutStore
     public Task<int> CountUnsettledPledgesAsync(Guid campaignId, CancellationToken cancellationToken)
         => _dbContext.Pledges.CountAsync(x => x.CampaignId == campaignId && StillOnTheWay.Contains(x.Status), cancellationToken);
 
-    public async Task<decimal> SumChargedAsync(Guid campaignId, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<ChargedPledge>> GetChargedPledgesAsync(Guid campaignId, CancellationToken cancellationToken)
         => await _dbContext.Pledges
             .Where(x => x.CampaignId == campaignId && x.Status == PledgeStatus.Succeeded)
-            .SumAsync(x => (decimal?)x.Money.Amount, cancellationToken) ?? 0m;
+            .Select(x => new ChargedPledge(x.Id, x.Money.Amount))
+            .ToListAsync(cancellationToken);
+
+    public async Task AddLedgerEntriesAsync(IEnumerable<PayoutLedgerEntry> entries, CancellationToken cancellationToken)
+        => await _dbContext.PayoutLedgerEntries.AddRangeAsync(entries, cancellationToken);
+
+    public async Task<IReadOnlyList<RefundedAfterPayout>> GetRefundedAfterPayoutAsync(int limit, CancellationToken cancellationToken)
+    {
+        var ledger = _dbContext.PayoutLedgerEntries;
+
+        return await (
+            from charge in ledger
+            where charge.Kind == PayoutLedgerKind.Charge
+            join pledge in _dbContext.Pledges on charge.PledgeId equals pledge.Id
+            where pledge.Status == PledgeStatus.Refunded
+                  && !ledger.Any(x => x.PayoutId == charge.PayoutId && x.PledgeId == charge.PledgeId && x.Kind == PayoutLedgerKind.ChargeRefunded)
+            select new RefundedAfterPayout(
+                charge.PayoutId,
+                pledge.Id,
+                charge.Amount,
+                -(ledger
+                    .Where(x => x.PayoutId == charge.PayoutId && x.PledgeId == charge.PledgeId && x.Kind == PayoutLedgerKind.PlatformFee)
+                    .Sum(x => (decimal?)x.Amount) ?? 0m),
+                charge.Currency))
+            .Take(limit)
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task<Payout?> GetByCampaignAsync(Guid campaignId, CancellationToken cancellationToken)
+        => _dbContext.Payouts.AsNoTracking().FirstOrDefaultAsync(x => x.CampaignId == campaignId, cancellationToken);
+
+    public async Task<IReadOnlyList<PayoutLedgerEntry>> GetLedgerAsync(Guid payoutId, CancellationToken cancellationToken)
+        => await _dbContext.PayoutLedgerEntries.AsNoTracking()
+            .Where(x => x.PayoutId == payoutId)
+            .OrderBy(x => x.CreatedAtUtc)
+            .ThenBy(x => x.Kind)
+            .ToListAsync(cancellationToken);
 }

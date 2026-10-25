@@ -64,14 +64,58 @@ public sealed class PayoutService
                     "The payment provider did not complete the payout for campaign {CampaignId}. It will be retried with the same key.",
                     payout.CampaignId);
             }
-            catch (ConcurrencyConflictException)
+            catch (Exception exception) when (exception is ConcurrencyConflictException or PayoutLedgerLineAlreadyExistsException)
             {
-                // Another worker changed this payout first; the next pass sees the result.
+                // Another worker changed this payout first (its ledger lines or its row); the next pass sees the result.
                 _logger.LogInformation("Payout for campaign {CampaignId} was changed by another worker.", payout.CampaignId);
             }
         }
 
         return due.Count;
+    }
+
+    /// <summary>
+    /// Records, in the payout ledger, every pledge that was counted in a payout and has been refunded since (a late
+    /// payment refunded after the amounts were fixed, for example). The payout amount is never changed after it is
+    /// fixed; the ledger then shows what the creator owes back. Safe to repeat: each line is written once.
+    /// </summary>
+    public async Task<int> RecordRefundsAfterPayoutAsync(int batchSize, CancellationToken cancellationToken)
+    {
+        var refunded = await _payoutStore.GetRefundedAfterPayoutAsync(batchSize, cancellationToken);
+
+        foreach (var refund in refunded)
+        {
+            try
+            {
+                await _transactionExecutor.ExecuteAsync(async ct =>
+                {
+                    var now = _dateTimeProvider.UtcNow;
+                    var lines = new List<PayoutLedgerEntry>
+                    {
+                        PayoutLedgerEntry.ChargeRefunded(refund.PayoutId, refund.PledgeId, refund.Amount, refund.Currency, now),
+                    };
+
+                    if (refund.PlatformFee > 0)
+                    {
+                        lines.Add(PayoutLedgerEntry.FeeReturned(refund.PayoutId, refund.PledgeId, refund.PlatformFee, refund.Currency, now));
+                    }
+
+                    await _payoutStore.AddLedgerEntriesAsync(lines, ct);
+                }, cancellationToken);
+
+                _logger.LogWarning(
+                    "Pledge {PledgeId} was refunded after payout {PayoutId} counted it; the creator owes {Amount} back.",
+                    refund.PledgeId,
+                    refund.PayoutId,
+                    refund.Amount - refund.PlatformFee);
+            }
+            catch (PayoutLedgerLineAlreadyExistsException)
+            {
+                // Another worker wrote the same lines first; nothing more to do.
+            }
+        }
+
+        return refunded.Count;
     }
 
     private async Task ProcessAsync(Payout payout, CancellationToken cancellationToken)
@@ -84,12 +128,28 @@ public sealed class PayoutService
                 return;
             }
 
-            var gross = await _payoutStore.SumChargedAsync(payout.CampaignId, cancellationToken);
+            var charged = await _payoutStore.GetChargedPledgesAsync(payout.CampaignId, cancellationToken);
 
             await _transactionExecutor.ExecuteAsync(async ct =>
             {
-                payout.Prepare(gross, _feeOptions.PlatformFeeBps);
+                var now = _dateTimeProvider.UtcNow;
+                payout.Prepare(charged.Select(x => x.Amount).ToArray(), _feeOptions.PlatformFeeBps);
                 await _payoutStore.UpdateAsync(payout, ct);
+
+                // The ledger gets one charge line, and one fee line, for each pledge the amounts were built from.
+                var lines = new List<PayoutLedgerEntry>();
+                foreach (var pledge in charged)
+                {
+                    lines.Add(PayoutLedgerEntry.Charge(payout.Id, pledge.PledgeId, pledge.Amount, payout.Currency, now));
+
+                    var fee = PlatformFee.ForPledge(pledge.Amount, _feeOptions.PlatformFeeBps);
+                    if (fee > 0)
+                    {
+                        lines.Add(PayoutLedgerEntry.PlatformFee(payout.Id, pledge.PledgeId, fee, payout.Currency, now));
+                    }
+                }
+
+                await _payoutStore.AddLedgerEntriesAsync(lines, ct);
             }, cancellationToken);
         }
 
@@ -112,6 +172,9 @@ public sealed class PayoutService
             if (result.Outcome == PayoutOutcome.Succeeded)
             {
                 payout.MarkPaid(result.ProviderPayoutId!, now);
+                await _payoutStore.AddLedgerEntriesAsync(
+                    [PayoutLedgerEntry.PaidOut(payout.Id, payout.NetAmount!.Value, payout.Currency, now)],
+                    ct);
             }
             else
             {

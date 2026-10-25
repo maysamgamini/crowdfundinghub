@@ -5,6 +5,7 @@ using CrowdFunding.BuildingBlocks.Application.Exceptions;
 using CrowdFunding.BuildingBlocks.Domain.Common;
 using CrowdFunding.BuildingBlocks.Infrastructure.Persistence;
 using CrowdFunding.Modules.Pledges.Application.Abstractions.Transactions;
+using CrowdFunding.Modules.Pledges.Contracts.Events.PayoutPaid;
 using CrowdFunding.Modules.Pledges.Contracts.Events.PledgePaymentConfirmed;
 using CrowdFunding.Modules.Pledges.Contracts.Events.PledgePaymentFailed;
 using CrowdFunding.Modules.Pledges.Contracts.Events.PledgeRefunded;
@@ -134,6 +135,16 @@ public sealed class PledgeTransactionExecutor : IPledgeTransactionExecutor
             _dbContext.ChangeTracker.Clear();
             throw new PledgeAlreadyActivatedException(ex);
         }
+        catch (DbUpdateException ex) when (IsPayoutLedgerLineViolation(ex))
+        {
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+            }
+
+            _dbContext.ChangeTracker.Clear();
+            throw new PayoutLedgerLineAlreadyExistsException(ex);
+        }
         catch (DbUpdateException ex) when (IsOnePayoutViolation(ex))
         {
             if (transaction is not null)
@@ -174,6 +185,13 @@ public sealed class PledgeTransactionExecutor : IPledgeTransactionExecutor
         {
             SqlState: PostgresErrorCodes.UniqueViolation,
             ConstraintName: PledgeIndexes.OneActivationPerPledge
+        };
+
+    private static bool IsPayoutLedgerLineViolation(DbUpdateException exception)
+        => exception.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation,
+            ConstraintName: PledgeIndexes.OnePayoutLedgerLinePerPledge or PledgeIndexes.OnePayoutLedgerLinePerPayout
         };
 
     private static bool IsOnePayoutViolation(DbUpdateException exception)
@@ -219,6 +237,10 @@ public sealed class PledgeTransactionExecutor : IPledgeTransactionExecutor
                     @event.Amount,
                     @event.Currency,
                     @event.RewardTierReservationId),
+                DateTime.UtcNow),
+            PayoutPaidDomainEvent @event => OutboxMessage.Create(
+                new PayoutPaidApplicationEvent(
+                    @event.PayoutId, @event.CampaignId, @event.OwnerId, @event.GrossAmount, @event.FeeAmount, @event.NetAmount, @event.Currency),
                 DateTime.UtcNow),
             PledgePaymentFailedDomainEvent @event => OutboxMessage.Create(
                 new PledgePaymentFailedApplicationEvent(

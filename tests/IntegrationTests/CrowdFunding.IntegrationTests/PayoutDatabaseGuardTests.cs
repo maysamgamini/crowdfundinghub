@@ -4,6 +4,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
+#pragma warning disable EF1002 // the values are literals in the test, never user input
+
 namespace CrowdFunding.IntegrationTests;
 
 /// <summary>
@@ -48,6 +50,28 @@ public sealed class PayoutDatabaseGuardTests
 
         var exception = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync(
             "UPDATE pledges.payouts SET \"GrossAmount\" = 100, \"FeeAmount\" = 5, \"NetAmount\" = 100 WHERE \"CampaignId\" = {0}",
+            campaignId));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, exception.SqlState);
+        Assert.Equal(PledgeIndexes.PayoutAmountsAddUp, exception.ConstraintName);
+    }
+
+    [Theory]
+    [InlineData("Ready", "100", "NULL", "NULL")]
+    [InlineData("Paid", "100", "5", "NULL")]
+    [InlineData("Ready", "NULL", "NULL", "NULL")]
+    [InlineData("Pending", "100", "5", "95")]
+    public async Task AnAmountMissingWhereTheStatusNeedsOne_IsRefusedByTheDatabase(string status, string gross, string fee, string net)
+    {
+        var campaignId = Guid.NewGuid();
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<PledgesDbContext>();
+        db.Payouts.Add(Payout.Create(campaignId, Guid.NewGuid(), "USD", DateTime.UtcNow));
+        await db.SaveChangesAsync();
+
+        // A CHECK passes when its expression is NULL, so a missing amount must be refused on purpose.
+        var exception = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync(
+            $"UPDATE pledges.payouts SET \"Status\" = '{status}', \"GrossAmount\" = {gross}, \"FeeAmount\" = {fee}, \"NetAmount\" = {net} WHERE \"CampaignId\" = {{0}}",
             campaignId));
 
         Assert.Equal(PostgresErrorCodes.CheckViolation, exception.SqlState);
