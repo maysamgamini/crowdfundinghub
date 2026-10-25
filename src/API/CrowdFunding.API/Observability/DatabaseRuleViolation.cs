@@ -13,10 +13,13 @@ namespace CrowdFunding.API.Observability;
 public static class DatabaseRuleViolation
 {
     // Friendly text for the constraints a client can plausibly hit. Anything else gets the generic text for its kind.
+    /// <summary>The constraint names that have their own sentence. A test checks each one exists in a module model.</summary>
+    public static IReadOnlyCollection<string> KnownConstraintNames => KnownConstraints.Keys;
+
     private static readonly Dictionary<string, string> KnownConstraints = new(StringComparer.Ordinal)
     {
         ["CK_reward_tiers_never_oversold"] = "The reward tier has no slots left.",
-        ["CK_campaign_contributions_ledger_sign_matches_kind"] = "The ledger entry's amount does not match its kind.",
+        ["CK_campaign_pledges_ledger_sign_matches_kind"] = "The ledger entry's amount does not match its kind.",
     };
 
     /// <summary>Finds the PostgreSQL error behind an exception, whether EF wrapped it or raw SQL threw it directly.</summary>

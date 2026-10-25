@@ -55,6 +55,11 @@ public sealed class CampaignLedgerDatabaseGuardTests
 
         Assert.Equal(PostgresErrorCodes.CheckViolation, exception.SqlState);
         Assert.Equal("CK_campaign_pledges_ledger_sign_matches_kind", exception.ConstraintName);
+
+        // The ledger's own sentence, not the generic check one.
+        Assert.Equal(
+            "The ledger entry's amount does not match its kind.",
+            CrowdFunding.API.Observability.DatabaseRuleViolation.Translate(exception)!.Value.Detail);
     }
 
     [Fact]
